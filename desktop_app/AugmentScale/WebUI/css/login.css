@@ -1,0 +1,611 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   login.css — Avatar grid, selection states, segmented PIN OTP input & lock state
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Screen 1: Avatar Profile Login ───────────────────────────────────────── */
+.login-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-5);
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(20, 184, 166, 0.08), transparent 70%),
+    radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.05), transparent 60%);
+}
+
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 820px;
+  width: 100%;
+  text-align: center;
+  min-height: 0;
+}
+
+.login-header {
+  margin-bottom: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition:
+    transform var(--spring-duration-normal) var(--spring-smooth),
+    opacity var(--spring-duration-normal) ease;
+}
+
+/* Two-Step Flow Badge */
+.login-step-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.25rem 0.875rem;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-light);
+  border: 1px solid var(--color-brand-border);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-brand);
+  margin-bottom: var(--space-3);
+  box-shadow: var(--shadow-xs);
+  transition: all var(--spring-duration-fast) ease;
+}
+
+.step-indicator-pill {
+  color: var(--color-brand);
+}
+
+.step-separator {
+  opacity: 0.45;
+}
+
+.step-label {
+  color: var(--text-secondary);
+}
+
+.login-title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-1);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.login-subtitle {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  min-height: 1.5rem;
+}
+
+/* Avatar Grid */
+.avatar-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: var(--space-3);
+  position: relative;
+  min-height: 0;
+  align-items: flex-start;
+}
+
+.avatar-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  background: none;
+  outline: none;
+  border: none;
+  padding: var(--space-2);
+  border-radius: var(--radius-2xl);
+  flex: 1 1 0;
+  min-width: 6.5rem;
+  max-width: 8rem;
+  transition:
+    transform var(--spring-duration-normal) var(--spring-bounce),
+    opacity var(--spring-duration-normal) var(--spring-smooth),
+    box-shadow var(--spring-duration-fast) ease;
+}
+
+.avatar-card:hover .avatar-box {
+  transform: scale(1.08) translateY(-4px);
+  box-shadow: var(--shadow-xl);
+  border-color: var(--color-brand);
+}
+
+.avatar-card:focus-visible .avatar-box {
+  box-shadow: 0 0 0 3px var(--border-focus);
+}
+
+.avatar-box {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--avatar-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--avatar-font-size);
+  font-weight: 700;
+  color: white;
+  margin-bottom: var(--space-2);
+  box-shadow: var(--shadow-md);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--spring-duration-normal) var(--spring-bounce);
+  background: var(--surface-panel);
+}
+
+.avatar-box img.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  border-radius: calc(var(--avatar-radius) - 2px);
+}
+
+.avatar-box::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent);
+  border-radius: var(--avatar-radius) var(--avatar-radius) 0 0;
+  pointer-events: none;
+}
+
+/* ─── Add New Operator Card ───────────────────────────────────────────────── */
+.avatar-card-add-new .avatar-box-add-new {
+  background: var(--surface-panel-sub);
+  border: 2px dashed var(--border-medium);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-card-add-new .avatar-box-add-new::after {
+  display: none;
+}
+
+.avatar-card-add-new:hover .avatar-box-add-new {
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+  background: var(--color-brand-light);
+}
+
+.avatar-card-add-new .avatar-plus-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  transition: transform var(--spring-duration-fast) var(--spring-bounce);
+}
+
+.avatar-card-add-new:hover .avatar-plus-icon {
+  transform: rotate(90deg);
+}
+
+.avatar-hotkey-badge {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  background: rgba(2, 6, 23, 0.9);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: max(0.7rem, 10px);
+  font-weight: 700;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+  transition: opacity var(--spring-duration-fast) ease;
+}
+
+.avatar-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  transition: color var(--spring-duration-fast) ease;
+}
+
+.avatar-role {
+  font-size: max(0.75rem, 10px);
+  color: var(--text-muted);
+  margin-top: 2px;
+  text-align: center;
+  line-height: 1.3;
+  min-height: 2.6em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.avatar-card:hover .avatar-name {
+  color: var(--text-primary);
+}
+
+/* ─── Step 2: enterPin State ──────────────────────────────────────────────── */
+/* The chosen card is highlighted with glowing ring and scale. Other 4 cards fade out softly (~20% opacity + grayscale) */
+.has-selection .avatar-card.unselected,
+#login-screen.has-selection .avatar-card.unselected,
+.login-screen.has-selection .avatar-card.unselected {
+  opacity: 0.2;
+  transform: scale(0.92);
+  filter: grayscale(40%);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all var(--spring-duration-normal) var(--spring-smooth);
+}
+
+.has-selection .avatar-card.unselected:hover,
+#login-screen.has-selection .avatar-card.unselected:hover,
+.login-screen.has-selection .avatar-card.unselected:hover {
+  opacity: 0.75;
+  transform: scale(0.98);
+  filter: grayscale(0%);
+}
+
+.has-selection .avatar-card.selected,
+#login-screen.has-selection .avatar-card.selected,
+.login-screen.has-selection .avatar-card.selected {
+  transform: scale(1.12) translateY(-4px);
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 3;
+}
+
+.has-selection .avatar-card.selected .avatar-box,
+#login-screen.has-selection .avatar-card.selected .avatar-box,
+.login-screen.has-selection .avatar-card.selected .avatar-box {
+  border-color: var(--color-brand);
+  box-shadow:
+    0 0 0 3px var(--color-brand),
+    0 0 0 7px var(--color-brand-border),
+    0 12px 28px -6px rgba(20, 184, 166, 0.45),
+    var(--shadow-xl);
+}
+
+.has-selection .avatar-card.selected .avatar-name,
+#login-screen.has-selection .avatar-card.selected .avatar-name,
+.login-screen.has-selection .avatar-card.selected .avatar-name {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: var(--text-base);
+}
+
+.has-selection .avatar-card.selected .avatar-role,
+#login-screen.has-selection .avatar-card.selected .avatar-role,
+.login-screen.has-selection .avatar-card.selected .avatar-role {
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+/* ─── Segmented PIN Drawer ────────────────────────────────────────────────── */
+.pin-drawer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 380px;
+  margin-top: var(--space-4);
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity var(--spring-duration-normal) ease,
+    transform var(--spring-duration-normal) var(--spring-smooth);
+}
+
+.pin-drawer.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pin-input-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.pin-field-wrapper {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* Backing hidden input overlay */
+.pin-hidden-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.001;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  z-index: 2;
+}
+
+.pin-hidden-input:disabled {
+  cursor: not-allowed;
+}
+
+/* Visual Segmented Boxes (aria-hidden) */
+.pin-boxes {
+  display: flex;
+  gap: var(--space-3);
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  transition: transform var(--spring-duration-fast) ease;
+}
+
+.pin-box {
+  width: 3.25rem;
+  height: 3.75rem;
+  min-width: 2.5rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-medium);
+  background: var(--surface-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--spring-duration-fast) var(--spring-bounce);
+  box-shadow: var(--shadow-xs);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Active box: focus ring & blinking cursor */
+.pin-box.is-active {
+  border-color: var(--border-focus);
+  box-shadow:
+    0 0 0 3px var(--color-brand-border),
+    var(--shadow-sm);
+}
+
+.pin-box.is-active::after {
+  content: '';
+  display: block;
+  width: 2px;
+  height: 22px;
+  background-color: var(--border-focus);
+  border-radius: 1px;
+  animation: pin-cursor-blink 1s ease infinite;
+}
+
+@keyframes pin-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Filled dot */
+.pin-box.is-filled {
+  border-color: var(--color-brand);
+}
+
+.pin-box.is-filled::after {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--color-brand);
+  animation: pin-dot-pop var(--spring-duration-fast) var(--spring-bounce);
+}
+
+@keyframes pin-dot-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Verifying: subtle pulse */
+.pin-boxes.verifying .pin-box {
+  animation: pin-pulse 0.75s ease-in-out infinite;
+  border-color: var(--border-focus);
+}
+
+@keyframes pin-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.96);
+    opacity: 0.65;
+  }
+}
+
+/* Success: flash color for 200ms max */
+.pin-boxes.success .pin-box {
+  border-color: var(--color-success);
+  background-color: var(--status-stable-bg);
+  box-shadow: 0 0 0 3px var(--status-stable-border);
+}
+
+.pin-boxes.success .pin-box.is-filled::after {
+  background-color: var(--color-success);
+}
+
+/* Error: shake & red */
+.pin-boxes.error .pin-box {
+  border-color: var(--color-danger);
+  background-color: var(--status-error-bg);
+  box-shadow: 0 0 0 3px var(--status-error-border);
+}
+
+.pin-boxes.error .pin-box.is-filled::after {
+  background-color: var(--color-danger);
+}
+
+.pin-boxes.shake {
+  animation: pin-shake-anim 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pin-shake-anim {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-8px);
+  }
+  40%,
+  80% {
+    transform: translateX(8px);
+  }
+}
+
+/* Locked State */
+.pin-boxes.locked {
+  opacity: 0.5;
+}
+
+.pin-boxes.locked .pin-box {
+  border-color: var(--border-subtle);
+  background: var(--surface-panel-sub);
+}
+
+/* Status & Error Live Regions */
+.pin-status {
+  margin-top: var(--space-2);
+  min-height: 1.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.pin-error {
+  margin-top: var(--space-1);
+  min-height: 1.25rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-danger);
+  text-align: center;
+}
+
+/* Quiet Secondary Sign In Button & Switch Operator Link */
+.pin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.sign-in-btn.btn-secondary {
+  height: 40px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel-sub);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border-medium);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: all var(--spring-duration-fast) ease;
+}
+
+.sign-in-btn.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-active);
+  border-color: var(--border-focus);
+}
+
+.sign-in-btn.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.back-to-operators-btn {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color var(--spring-duration-fast) ease;
+}
+
+.back-to-operators-btn:hover {
+  color: var(--text-primary);
+}
+
+/* Footer Hint */
+.login-footer-hint {
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+  white-space: nowrap;
+}
+
+.login-footer-hint .kbd-key {
+  font-family: var(--font-mono);
+  background: var(--surface-panel-sub);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-xs);
+  padding: 0.0625rem 0.375rem;
+  font-size: max(0.7rem, 10px);
+  font-weight: 600;
+  color: var(--text-secondary);
+  box-shadow: 0 1px 0 var(--border-medium);
+}

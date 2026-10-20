@@ -1,0 +1,86 @@
+{
+  "organization": {
+    "name": "Meghna Ship Recycling",
+    "address": "Sitakunda, Chattogram, Bangladesh",
+    "phone": "+880 1810 000000",
+    "email": "weighbridge@example.com"
+  },
+  "site": {
+    "name": "Main Yard",
+    "timezone": "Asia/Dhaka",
+    "address": "Sitakunda, Chattogram"
+  },
+  "weighbridge": {
+    "name": "Weighbridge 1",
+    "maxCapacityKg": 60000,
+    "minDivisionKg": 5
+  },
+  "scaleConnection": {
+    "portName": "COM1",
+    "baudRate": 9600,
+    "dataBits": 8,
+    "parity": "None",
+    "stopBits": 1,
+    "protocolFormat": "yaohua_format_1",
+    "stabilityWindowMs": 500,
+    "stabilityToleranceKg": 10,
+    "simulatorTargetKg": 735
+  },
+  "operators": [
+    {
+      "id": "mr",
+      "code": "MR",
+      "displayName": "MD. RAJU",
+      "firstName": "Raju",
+      "role": "Supervisor",
+      "shift": "Shift A",
+      "avatar": "avatars/frame-9.svg",
+      "color": "#4C7875",
+      "pin": "1234"
+    },
+    {
+      "id": "ak",
+      "code": "AK",
+      "displayName": "AKHTER K.",
+      "firstName": "Akhter",
+      "role": "Senior Operator",
+      "shift": "Shift A",
+      "avatar": "avatars/frame-4.svg",
+      "color": "#FB9550",
+      "pin": "1234"
+    },
+    {
+      "id": "sh",
+      "code": "SH",
+      "displayName": "SHAFIQ H.",
+      "firstName": "Shafiq",
+      "role": "Operator",
+      "shift": "Shift B",
+      "avatar": "avatars/frame-3.svg",
+      "color": "#475569",
+      "pin": "1234"
+    },
+    {
+      "id": "rh",
+      "code": "RH",
+      "displayName": "RAHIM A.",
+      "firstName": "Rahim",
+      "role": "Operator",
+      "shift": "Shift C",
+      "avatar": "avatars/frame-1.svg",
+      "color": "#F2C2B6",
+      "pin": "1234"
+    },
+    {
+      "id": "kh",
+      "code": "KH",
+      "displayName": "KAMAL H.",
+      "firstName": "Kamal",
+      "role": "Relief Operator",
+      "shift": "Shift B",
+      "avatar": "avatars/frame-5.svg",
+      "color": "#526E7E",
+      "pin": "1234"
+    }
+  ]
+}

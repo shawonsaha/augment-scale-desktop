@@ -1,0 +1,154 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+         SCREEN 2: MODERNIZED DASHBOARD (Instrument Panel Command Center)
+         ═══════════════════════════════════════════════════════════════════════ -->
+<main class="screen" id="dashboard-screen">
+  <div class="dashboard-screen">
+    <!-- Row 1: Weight display + First Weigh card side-by-side in top band -->
+    <section class="dashboard-top-band">
+      <!-- HUD slot — populated by hud.js mountHud() -->
+      <div class="hud-slot" id="dashboard-hud-slot"></div>
+
+      <!-- First Weigh Card with Stacked Direction Buttons -->
+      <section
+        class="first-weigh-side-card"
+        id="card-action-first-weigh"
+        role="region"
+        aria-label="First Weigh"
+      >
+        <div class="first-weigh-side-title">First Weigh</div>
+        <div class="first-weigh-buttons">
+          <!-- IN Button (Press I) -->
+          <button
+            type="button"
+            class="action-dir-btn action-dir-btn-in fw-dir-btn"
+            id="dashboard-btn-in"
+            title="Inbound Weight (Loaded truck now) — Press I"
+            aria-label="Inbound First Weigh (Press I)"
+          >
+            <kbd class="action-dir-kbd">I</kbd>
+            <div class="action-dir-text">
+              <span class="action-dir-title">IN</span>
+              <span class="action-dir-sub">Loaded truck now</span>
+            </div>
+          </button>
+
+          <!-- OUT Button (Press O) -->
+          <button
+            type="button"
+            class="action-dir-btn action-dir-btn-out fw-dir-btn"
+            id="dashboard-btn-out"
+            title="Outbound Weight (Empty truck now) — Press O"
+            aria-label="Outbound First Weigh (Press O)"
+          >
+            <kbd class="action-dir-kbd action-dir-kbd--letter-o">O</kbd>
+            <div class="action-dir-text">
+              <span class="action-dir-title">OUT</span>
+              <span class="action-dir-sub">Empty truck now</span>
+            </div>
+          </button>
+        </div>
+      </section>
+    </section>
+
+    <!-- Row 2: Active Pending Tickets Table (Fills remaining height) -->
+    <section class="tickets-section">
+      <div class="tickets-section-header">
+        <div class="tickets-title-group">
+          <h3 class="tickets-title">Active Pending Tickets</h3>
+          <span class="tickets-count-badge" id="tickets-count-badge">3 Pending</span>
+          <span class="tickets-keyboard-hint"
+            >Navigate with <kbd class="kbd-hint">↑</kbd> <kbd class="kbd-hint">↓</kbd> • Open with
+            <kbd class="kbd-hint">Enter</kbd> • <kbd class="kbd-hint">Backspace</kbd> to
+            delete</span
+          >
+        </div>
+
+        <div class="tickets-search-box">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="text"
+            class="tickets-search-input"
+            id="tickets-search-input"
+            placeholder="Type ticket no. or truck no. (F)"
+          />
+        </div>
+      </div>
+
+      <div class="tickets-table-container">
+        <table class="tickets-table" id="pending-tickets-table">
+          <thead>
+            <tr>
+              <th class="col-ticket-id">Ticket ID</th>
+              <th class="col-truck-no">Truck Reg No</th>
+              <th class="col-driver">Driver</th>
+              <th class="col-operator">First Weigh By</th>
+              <th class="col-material">Material</th>
+              <th class="col-weight">First Weight</th>
+              <th class="col-waiting">Waiting</th>
+              <th class="col-action">Action</th>
+              <th class="th-delete col-delete" aria-label="Delete"></th>
+            </tr>
+          </thead>
+          <tbody id="pending-tickets-tbody">
+            <!-- Dynamically populated by dashboard.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer Stats Bar -->
+    <footer class="dashboard-footer">
+      <div class="shift-stats-list">
+        <div class="shift-stat-item">
+          <span>Weighed Today:</span>
+          <span class="shift-stat-val">42 Trucks</span>
+        </div>
+        <div class="shift-stat-item">
+          <span>Total Tonnage:</span>
+          <span class="shift-stat-val">842.60 MT</span>
+        </div>
+        <div class="shift-stat-item">
+          <span>Avg Turnaround:</span>
+          <span class="shift-stat-val">3.2 mins</span>
+        </div>
+      </div>
+
+      <div class="footer-center-controls" id="footer-sim-wrapper" style="display: none">
+        <button class="footer-sim-btn" id="btn-footer-sim-dock">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+            />
+          </svg>
+          <span>Simulator Test Bench (<kbd class="kbd-hint">~</kbd>)</span>
+        </button>
+      </div>
+
+      <div style="font-family: var(--font-mono); font-size: var(--text-sm)" id="system-clock">
+        10:45:12 AM
+      </div>
+    </footer>
+  </div>
+</main>

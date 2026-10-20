@@ -1,0 +1,135 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+         SCREEN: HISTORY LEDGER (completed + voided + pending + deleted)
+         ═══════════════════════════════════════════════════════════════════════ -->
+<main class="screen" id="history-screen">
+  <div class="history-screen">
+    <!-- Filter bar -->
+    <section class="hist-filter-bar" aria-label="History filters">
+      <div class="hist-search">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <input
+          type="text"
+          id="hist-search-input"
+          placeholder="Search ticket, plate, driver, client…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <kbd class="hist-search-kbd">/</kbd>
+      </div>
+
+      <div class="hist-filter-group">
+        <select id="hist-date-filter" class="hist-select" aria-label="Date range">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="7days">Last 7 days</option>
+          <option value="30days">Last 30 days</option>
+          <option value="custom">Custom range…</option>
+        </select>
+        <input
+          type="date"
+          id="hist-date-from"
+          class="hist-date-input"
+          hidden
+          aria-label="From date"
+        />
+        <input type="date" id="hist-date-to" class="hist-date-input" hidden aria-label="To date" />
+      </div>
+
+      <div class="hist-stage-group" role="group" aria-label="Weigh stage">
+        <button type="button" class="hist-chip is-active" data-stage="all">All stages</button>
+        <button type="button" class="hist-chip" data-stage="first">First only</button>
+        <button type="button" class="hist-chip" data-stage="complete">Complete</button>
+      </div>
+
+      <select id="hist-status-filter" class="hist-select" aria-label="Ticket status">
+        <option value="all">All statuses</option>
+        <option value="pending">Pending</option>
+        <option value="completed">Completed</option>
+        <option value="voided">Voided</option>
+        <option value="deleted">Deleted</option>
+      </select>
+
+      <div class="hist-more-wrap">
+        <button
+          type="button"
+          class="hist-more-btn"
+          id="hist-more-btn"
+          aria-expanded="false"
+          aria-controls="hist-more-popover"
+        >
+          More
+          <span class="hist-more-count" id="hist-more-count" hidden>0</span>
+        </button>
+        <div class="hist-more-popover" id="hist-more-popover" hidden>
+          <div class="hist-more-body" id="hist-more-body"></div>
+          <div class="hist-more-footer">
+            <button type="button" class="hist-more-clear" id="hist-more-clear">Clear all</button>
+            <button type="button" class="hist-more-apply" id="hist-more-apply">
+              Apply filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <span class="hist-keyboard-hint">
+        <kbd>↑</kbd><kbd>↓</kbd> rows · <kbd>PgUp</kbd><kbd>PgDn</kbd> pages ·
+        <kbd>Enter</kbd> detail · <kbd>Alt+R</kbd> reprint
+      </span>
+    </section>
+
+    <!-- Table + detail panel -->
+    <section class="hist-body">
+      <div class="hist-main">
+        <div class="hist-table-container" id="history-table-container">
+          <table class="hist-table">
+            <thead>
+              <tr>
+                <th class="hist-col-id">Ticket</th>
+                <th class="hist-col-truck">Truck</th>
+                <th class="hist-col-weight">Gross</th>
+                <th class="hist-col-weight">Tare</th>
+                <th class="hist-col-net">Net</th>
+                <th class="hist-col-status">Status</th>
+                <th class="hist-col-prints">Prints</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+
+        <footer class="hist-footer">
+          <div class="hist-pager">
+            <button type="button" class="hist-page-btn" id="hist-prev" aria-label="Previous page">
+              ◀
+            </button>
+            <span class="hist-range" id="hist-range">0–0 of 0</span>
+            <button type="button" class="hist-page-btn" id="hist-next" aria-label="Next page">
+              ▶
+            </button>
+          </div>
+          <div class="hist-summary" id="hist-summary">0 tickets</div>
+        </footer>
+      </div>
+
+      <aside
+        class="hist-detail-panel"
+        id="history-detail"
+        hidden
+        aria-label="Ticket details"
+      ></aside>
+    </section>
+  </div>
+</main>

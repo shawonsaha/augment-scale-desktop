@@ -1,0 +1,346 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   modals.css — Modal overlay, print/certificate modal, toast notifications,
+                keyboard shortcuts modal, keyboard hint keycaps
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Screen 5: Ticket & Certificate Modal ────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  opacity: 0;
+  transition: opacity var(--spring-duration-normal) var(--spring-smooth);
+}
+
+.modal-overlay.open {
+  display: flex;
+  opacity: 1;
+}
+
+.modal-content {
+  background: var(--surface-panel);
+  border-radius: var(--radius-3xl);
+  border: 1.5px solid var(--border-subtle);
+  box-shadow: var(--shadow-2xl);
+  max-width: 580px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.95) translateY(10px);
+  transition: transform var(--spring-duration-normal) var(--spring-bounce);
+}
+
+.modal-overlay.open .modal-content {
+  transform: scale(1) translateY(0);
+}
+
+.modal-header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.modal-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.modal-close-btn:hover {
+  background: var(--surface-panel-sub);
+  color: var(--text-primary);
+}
+
+/* Ticket Print Document Layout — Ink-Optimized B&W for Pre-Printed Stationery */
+.ticket-document {
+  padding: 18px 24px 20px 24px;
+  background: #ffffff;
+  color: #000000;
+  margin: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid #cbd5e1;
+  font-family: Arial, Helvetica, sans-serif;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+/* Subtle preview indicator representing pre-printed paper header clearance */
+.ticket-preprinted-notice {
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  border: 1px dashed #94a3b8;
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Metadata Table — Compact B&W 4-column Key-Value Grid */
+.ticket-meta-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  border: 1px solid #000000;
+  font-size: 11px;
+}
+
+.ticket-meta-table th.meta-th {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #000000;
+  padding: 5px 8px;
+  text-align: left;
+  font-weight: 700;
+  font-family: Arial, Helvetica, sans-serif;
+  width: 18%;
+  white-space: nowrap;
+}
+
+.ticket-meta-table td.meta-td {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #000000;
+  padding: 5px 8px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: pre-line;
+}
+
+/* Weights Table — Pure B&W 4-column Table with Mandatory 12H Timestamps */
+.ticket-weights-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  border: 1px solid #000000;
+}
+
+.ticket-weights-table th {
+  background: #ffffff;
+  color: #000000;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  border: 1px solid #000000;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.ticket-weights-table td {
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid #000000;
+  font-family: var(--font-mono, monospace);
+  color: #000000;
+  background: #ffffff;
+}
+
+.ticket-weights-table td.wt-name {
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.ticket-weights-table td.wt-val {
+  text-align: right;
+}
+
+.ticket-weights-table td.wt-unit {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.ticket-weights-table td.wt-time {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Highlight Row for NET WEIGHT: Ink-Conservative B&W Bold Only */
+.ticket-weights-table tr.highlight td {
+  background: #ffffff !important;
+  font-weight: 800;
+  font-size: 12px;
+  color: #000000 !important;
+}
+
+.ticket-weights-table tr.highlight td.wt-name {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* Footer: Authorized Signature & Powered by augmentlab.net */
+.ticket-footer-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding-top: 6px;
+}
+
+.ticket-signature-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.signature-line {
+  width: 170px;
+  text-align: left;
+  border-top: 1px solid #000000;
+  font-size: 11px;
+  padding-top: 4px;
+  font-weight: 600;
+  color: #000000;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.ticket-powered-by {
+  font-size: 9px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #000000;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.modal-actions {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  background: var(--surface-panel-sub);
+  border-radius: 0 0 var(--radius-3xl) var(--radius-3xl);
+}
+
+/* ─── Toast Notifications ─────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3) var(--space-5);
+  box-shadow: var(--shadow-xl);
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  pointer-events: auto;
+  animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ─── Keyboard Shortcuts Modal ────────────────────────────────────────────── */
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-6);
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-panel-sub);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+
+/* ─── Keyboard Hints & Keycaps ────────────────────────────────────────────── */
+.kbd-key,
+.kbd-hint,
+.shortcut-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-panel-sub);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+  vertical-align: middle;
+}
+
+body.dark-mode .kbd-key,
+body.dark-mode .kbd-hint,
+body.dark-mode .shortcut-kbd {
+  background: var(--primitive-slate-800);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+}
+
+.avatar-hotkey-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: rgba(2, 6, 23, 0.9);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}

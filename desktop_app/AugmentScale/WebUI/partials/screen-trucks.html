@@ -1,0 +1,191 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+         SCREEN: REGISTERED VEHICLES (master data, add/edit/archive)
+         ═══════════════════════════════════════════════════════════════════════ -->
+<main class="screen" id="trucks-screen">
+  <div class="trucks-screen">
+    <section class="trucks-header">
+      <div class="trucks-title-group">
+        <h2 class="trucks-title">Registered Vehicles</h2>
+        <span class="trucks-count-badge" id="trucks-count-badge">0 active</span>
+        <span class="trucks-keyboard-hint">
+          <kbd>↑</kbd><kbd>↓</kbd> rows · <kbd>Enter</kbd> edit · <kbd>Backspace</kbd> archive
+        </span>
+      </div>
+
+      <div class="trucks-toolbar">
+        <label class="trucks-archived-toggle">
+          <input type="checkbox" id="trucks-show-archived" />
+          <span>Show archived</span>
+        </label>
+
+        <div class="trucks-search">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="text"
+            id="trucks-search-input"
+            placeholder="Search plate, driver, client…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+
+        <button type="button" class="trucks-new-btn" id="trucks-new-btn">
+          <span>New Vehicle</span>
+          <kbd class="kbd-hint">Alt+N</kbd>
+        </button>
+      </div>
+    </section>
+
+    <section class="trucks-table-container" id="trucks-table-container">
+      <table class="trucks-table">
+        <thead>
+          <tr>
+            <th class="trucks-col-plate">Plate</th>
+            <th class="trucks-col-driver">Default Driver</th>
+            <th class="trucks-col-phone">Mobile</th>
+            <th class="trucks-col-client">Client</th>
+            <th class="trucks-col-material">Material</th>
+            <th class="trucks-col-last">Last Weighed</th>
+            <th class="trucks-col-trips">Trips</th>
+            <th class="trucks-col-tare">Last Tare</th>
+            <th class="trucks-col-status">Status</th>
+            <th class="trucks-col-action">Action</th>
+          </tr>
+        </thead>
+        <tbody id="trucks-tbody"></tbody>
+      </table>
+    </section>
+
+    <footer class="trucks-footer">
+      <div class="trucks-pager">
+        <button type="button" class="hist-page-btn" id="trucks-prev" aria-label="Previous page">
+          ◀
+        </button>
+        <span class="hist-range" id="trucks-range">0–0 of 0</span>
+        <button type="button" class="hist-page-btn" id="trucks-next" aria-label="Next page">
+          ▶
+        </button>
+      </div>
+      <div class="trucks-summary" id="trucks-summary">0 vehicles</div>
+    </footer>
+  </div>
+</main>
+
+<!-- Add / edit vehicle dialog (same fields as the first-weigh register strip) -->
+<div class="modal-overlay" id="truck-form-modal">
+  <form class="modal-content truck-form" id="truck-form" novalidate>
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="truck-form-title">New Vehicle</h3>
+        <span class="truck-form-sub" id="truck-form-sub"
+          >Master data used to pre-fill first weigh</span
+        >
+      </div>
+      <button type="button" class="modal-close-btn" id="truck-form-close" aria-label="Close">
+        ✕
+      </button>
+    </div>
+
+    <div class="truck-form-body">
+      <div class="truck-form-grid">
+        <label class="truck-field">
+          <span class="truck-field-label"
+            >Truck Registration No <span class="fw-required-star">*</span></span
+          >
+          <input
+            type="text"
+            class="form-input"
+            id="truck-form-plate"
+            placeholder="e.g. DM-T-11-2045"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+
+        <label class="truck-field">
+          <span class="truck-field-label">Default Driver</span>
+          <input
+            type="text"
+            class="form-input"
+            id="truck-form-driver"
+            placeholder="Driver name"
+            autocomplete="off"
+          />
+        </label>
+
+        <label class="truck-field">
+          <span class="truck-field-label">Mobile</span>
+          <input
+            type="tel"
+            class="form-input"
+            id="truck-form-phone"
+            placeholder="+880 …"
+            autocomplete="off"
+          />
+        </label>
+
+        <label class="truck-field">
+          <span class="truck-field-label">Client</span>
+          <input
+            type="text"
+            class="form-input"
+            id="truck-form-client"
+            placeholder="Client name"
+            autocomplete="off"
+            list="truck-client-list"
+          />
+        </label>
+
+        <label class="truck-field">
+          <span class="truck-field-label">Default Material</span>
+          <input
+            type="text"
+            class="form-input"
+            id="truck-form-material"
+            placeholder="Material"
+            autocomplete="off"
+            list="truck-material-list"
+          />
+        </label>
+      </div>
+
+      <datalist id="truck-material-list">
+        <option value="Scrap Iron"></option>
+        <option value="MS Plate"></option>
+        <option value="Pipe"></option>
+        <option value="Steel Coil"></option>
+        <option value="Raw Coal"></option>
+        <option value="Copper / Cable"></option>
+        <option value="Machinery"></option>
+        <option value="Other"></option>
+      </datalist>
+      <datalist id="truck-client-list">
+        <option value="BSRM Steels Ltd"></option>
+        <option value="Abul Khair Steel"></option>
+        <option value="Apex Cement Mills"></option>
+        <option value="GPH Ispat"></option>
+        <option value="Crown Cement"></option>
+      </datalist>
+
+      <p class="truck-form-error" id="truck-form-error" hidden></p>
+    </div>
+
+    <div class="truck-form-footer">
+      <button type="button" class="btn btn-secondary" id="truck-form-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="truck-form-save">Save Vehicle</button>
+    </div>
+  </form>
+</div>

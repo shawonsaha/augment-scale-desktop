@@ -1,0 +1,228 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   print.css — @page size, @media print overrides, B&W ink optimization
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PRE-PRINTED HALF-CUT A4 (A5 LANDSCAPE) PRINT MEDIA STYLESHEET
+   Ink Conservation: 100% Pure Black & White (No colors, fills, or shading)
+   Adjustable Top Offset for pre-printed header clearance on physical paper
+   ═══════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Physical Paper Alignment Variables — easily tweak up/down for on-site calibration */
+  --print-paper-width: 210mm;
+  /* Half-cut A4 Landscape width */
+  --print-paper-height: 148.5mm;
+  /* Half-cut A4 Landscape height */
+  --print-top-offset: 46mm;
+  /* Top clearance for pre-printed colored branding & logo */
+  --print-side-margin: 12mm;
+  /* Side clearance inside paper boundary */
+}
+
+@page {
+  size: A5 landscape;
+  margin: 0;
+}
+
+@media print {
+  /* ── Page Setup ──────────────────────────────────────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── Hide everything outside #app ────────────────────────────────────── */
+  body > *:not(#app) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+  }
+
+  /* ── #app wraps all content — make it a transparent pass-through ─────── */
+  #app {
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Hide all direct children of #app except the print modal */
+  #app > *:not(#print-modal) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+  }
+
+  /* Restore only the print modal */
+  #print-modal {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  #print-modal .modal-content {
+    display: block !important;
+    position: static !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+
+  /* ── Hide modal chrome, toast, simulator dock, and other modals ─────── */
+  #print-modal .modal-header,
+  #print-modal .modal-actions,
+  #print-modal .modal-close-btn,
+  .ticket-preprinted-notice,
+  .ticket-reprint-watermark,
+  .toast-container,
+  .sim-dock,
+  .sim-dock-overlay,
+  #settings-modal,
+  #shortcuts-modal {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* ── Remarks cell: truncate long text to single line with ellipsis ──── */
+  .doc-remarks-cell,
+  #doc-remarks {
+    max-width: 150px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* ── Position the ticket document at top of page ─────────────────────── */
+  /* --print-top-offset: vertical gap to clear the pre-printed header area */
+  /* --print-side-margin: horizontal margins on the pre-printed stationery */
+  .ticket-document {
+    display: block !important;
+    position: relative !important;
+    margin-top: var(--print-top-offset, 46mm) !important;
+    margin-left: var(--print-side-margin, 12mm) !important;
+    margin-right: var(--print-side-margin, 12mm) !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* ── Pure B&W Ink Optimization — Zero shading, crisp thin borders ───── */
+  .ticket-meta-table,
+  .ticket-weights-table {
+    width: 100% !important;
+    border: 1px solid #000000 !important;
+    border-collapse: collapse !important;
+    margin-bottom: 8px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .ticket-meta-table tr,
+  .ticket-weights-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .ticket-meta-table th,
+  .ticket-meta-table td,
+  .ticket-weights-table th,
+  .ticket-weights-table td {
+    border: 1px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+
+  .ticket-meta-table th.meta-th,
+  .ticket-weights-table th {
+    font-weight: 700 !important;
+  }
+
+  .ticket-weights-table tr.highlight td {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-weight: 800 !important;
+  }
+
+  .ticket-footer-row {
+    margin-top: 14px !important;
+    padding-top: 4px !important;
+    margin-bottom: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .signature-line {
+    border-top: 1px solid #000000 !important;
+    font-size: 10px !important;
+    color: #000000 !important;
+  }
+
+  .ticket-powered-by {
+    font-size: 8px !important;
+    color: #000000 !important;
+    font-weight: 700 !important;
+  }
+}

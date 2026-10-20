@@ -1,0 +1,326 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+         ALWAYS-ON TELEMETRY BAR (Operator operational instrument panel)
+         ═══════════════════════════════════════════════════════════════════════ -->
+<header class="telemetry-bar" id="telemetry-bar">
+  <div class="telemetry-left">
+    <div class="app-branding">
+      <svg
+        class="brand-icon-svg"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+        <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+        <path d="M7 21h10" />
+        <path d="M12 3v18" />
+        <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+      </svg>
+      <span class="brand-title">Augment Scale</span>
+    </div>
+
+    <!-- Clean Scale Connection Status (Plain language for operators) -->
+    <div class="telemetry-item" id="scale-status-pill">
+      <div class="telemetry-dot pulse" id="scale-status-dot"></div>
+      <span id="scale-status-text">Connected</span>
+    </div>
+
+    <!-- Synthetic Weight Indicator (set by the C# bridge when a simulator feeds the reader) -->
+    <div class="dev-mode-pill" id="sim-mode-pill" style="display: none"
+         title="Simulated scale reading - development only">
+      <span class="dev-mode-dot"></span>
+      <span>SIM</span>
+    </div>
+
+    <!-- Robust Cloud Sync Visualizer with Relative Time & Error State -->
+    <div class="sync-container" style="position: relative">
+      <div
+        class="telemetry-item sync-pill synced"
+        id="sync-status-pill"
+        title="Cloud Sync Health • Click for details"
+        role="button"
+        tabindex="0"
+      >
+        <div class="telemetry-dot" id="sync-status-dot"></div>
+        <span class="sync-icon" id="sync-status-icon">↑↓</span>
+        <span class="sync-text" id="sync-status-text">Synced</span>
+        <span class="sync-time-detail" id="sync-time-detail">just now</span>
+      </div>
+
+      <!-- Sync Details Popover -->
+      <div
+        class="sync-popover"
+        id="sync-popover"
+        role="dialog"
+        aria-label="Cloud Synchronization Health"
+      >
+        <div class="sync-popover-header">
+          <div class="sync-popover-title">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+            </svg>
+            <span>Cloud Sync Health</span>
+          </div>
+          <span class="sync-popover-badge synced" id="popover-status-badge">● Synced</span>
+        </div>
+        <div class="sync-metrics-list">
+          <div class="sync-metric-row">
+            <span>Last Successful Sync:</span>
+            <span class="sync-metric-val" id="popover-last-sync">Just now</span>
+          </div>
+          <div class="sync-metric-row">
+            <span>Pending Outbox Queue:</span>
+            <span class="sync-metric-val" id="popover-pending-count">0 items</span>
+          </div>
+          <div class="sync-metric-row">
+            <span>Cloud Destination:</span>
+            <span class="sync-metric-val">Supabase Cloud</span>
+          </div>
+          <div class="sync-metric-row">
+            <span>Sync Protocol:</span>
+            <span class="sync-metric-val">Two-way HTTPS / Edge</span>
+          </div>
+        </div>
+        <div class="sync-popover-actions">
+          <button class="sync-action-btn primary" id="btn-sync-now">↻ Sync Now</button>
+          <button class="sync-action-btn" id="btn-toggle-sim-sync">Simulate Failure</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Primary navigation lives in the persistent app chrome (one definition,
+       visible on dashboard/history/trucks only). Router owns active state. -->
+  <nav class="app-nav" id="app-nav" aria-label="Primary" hidden>
+    <button
+      type="button"
+      class="app-nav-tab is-active"
+      data-screen="dashboard-screen"
+      data-nav-chord="dashboard"
+      aria-current="page"
+      title="Dashboard"
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <rect width="7" height="7" x="3" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="14" rx="1" />
+        <rect width="7" height="7" x="3" y="14" rx="1" />
+      </svg>
+      <span class="app-nav-label">Dashboard</span>
+    </button>
+    <button
+      type="button"
+      class="app-nav-tab"
+      data-screen="history-screen"
+      data-nav-chord="history"
+      title="History"
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+      <span class="app-nav-label">History</span>
+    </button>
+    <button
+      type="button"
+      class="app-nav-tab"
+      data-screen="trucks-screen"
+      data-nav-chord="trucks"
+      title="Trucks"
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M14 18V6a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h1" />
+        <path d="M14 9h4l3 3v5a1 1 0 0 1-1 1h-1" />
+        <circle cx="7" cy="18" r="2" />
+        <circle cx="17" cy="18" r="2" />
+        <path d="M9 18h6" />
+      </svg>
+      <span class="app-nav-label">Trucks</span>
+    </button>
+  </nav>
+
+  <div class="telemetry-right">
+    <!-- Developer Mode Active Indicator Pill -->
+    <div class="dev-mode-pill" id="dev-mode-pill" style="display: none">
+      <span class="dev-mode-dot"></span>
+      <span>DEV MODE</span>
+    </div>
+
+    <!-- Simulator Bench Quick Toggle Button (Shown when Dev Mode & Simulation are enabled) -->
+    <button
+      class="telemetry-btn sim-dock-trigger"
+      id="btn-toggle-sim-dock"
+      title="Toggle Hardware Simulator (~)"
+      aria-label="Simulator Bench"
+      style="display: none"
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+        />
+      </svg>
+      <span class="telemetry-label-hide-sm">Simulator</span>
+    </button>
+
+    <!-- Active Operator Pill (Shown when logged in) -->
+    <div class="operator-pill" id="active-operator-pill" style="display: none">
+      <div class="operator-avatar-chip">
+        <img id="pill-operator-img" src="avatars/frame-9.svg" alt="Operator Avatar" />
+      </div>
+      <span id="pill-operator-name">MD. RAJU</span>
+    </div>
+
+    <!-- Shortcuts Help Button -->
+    <button
+      class="telemetry-btn"
+      id="btn-shortcuts-help"
+      title="Keyboard Shortcuts (?)"
+      aria-label="Shortcuts"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="20" height="16" x="2" y="4" rx="2" />
+        <path d="M6 8h.001" />
+        <path d="M10 8h.001" />
+        <path d="M14 8h.001" />
+        <path d="M18 8h.001" />
+        <path d="M8 12h.001" />
+        <path d="M12 12h.001" />
+        <path d="M16 12h.001" />
+        <path d="M7 16h10" />
+      </svg>
+    </button>
+
+    <!-- Dark / Light Mode Switcher -->
+    <button
+      class="telemetry-btn"
+      id="btn-theme-toggle"
+      title="Toggle Night / Day Mode"
+      aria-label="Toggle Theme"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        id="theme-toggle-icon"
+      >
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+      </svg>
+    </button>
+
+    <!-- System Settings & Diagnostics (Gear Icon) -->
+    <button
+      class="telemetry-btn"
+      id="btn-settings-toggle"
+      title="Settings &amp; Developer Mode"
+      aria-label="Settings"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+        />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    </button>
+
+    <!-- Lock / Sign Out Button (Hidden on login screen) -->
+    <button
+      class="telemetry-btn"
+      id="btn-lock-workstation"
+      title="Lock Workstation (Ctrl+L)"
+      aria-label="Lock"
+      style="display: none"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+    </button>
+  </div>
+</header>

@@ -1,0 +1,329 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN 3: FIRST WEIGHT WORKFLOW (Shared HUD, Dual-Card, Action Bar)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<main class="screen" id="first-weigh-screen">
+  <div class="fw-screen">
+    <!-- Band 1: HUD + Direction Selection Card (~28% height) -->
+    <section class="dashboard-top-band fw-top-band" aria-label="Live scale and weight direction">
+      <!-- HUD slot — populated by hud.js mountHud() -->
+      <div class="hud-slot" id="first-weigh-hud-slot"></div>
+
+      <!-- Direction Selection Card -->
+      <section
+        class="fw-direction-card"
+        id="fw-direction-card"
+        role="region"
+        aria-label="Weight Direction Selection"
+      >
+        <div class="fw-direction-card-header">
+          <span class="fw-card-label">WEIGHT DIRECTION</span>
+          <span class="fw-card-hint">PRESS <kbd>I</kbd> OR <kbd>O</kbd></span>
+        </div>
+
+        <div class="fw-direction-buttons" role="radiogroup" aria-label="Weight Direction">
+          <!-- Inbound (Gross First) -->
+          <button
+            type="button"
+            class="fw-dir-btn fw-dir-btn--in"
+            id="fw-btn-dir-in"
+            role="radio"
+            aria-checked="false"
+            data-dir="IN"
+            title="Inbound (Gross weight 1st, Tare on return) — Press I"
+          >
+            <span class="fw-dir-badge">I</span>
+            <div class="fw-dir-info">
+              <span class="fw-dir-title">INBOUND</span>
+              <span class="fw-dir-desc">Loaded truck now</span>
+            </div>
+          </button>
+
+          <!-- Outbound (Tare First) -->
+          <button
+            type="button"
+            class="fw-dir-btn fw-dir-btn--out"
+            id="fw-btn-dir-out"
+            role="radio"
+            aria-checked="false"
+            data-dir="OUT"
+            title="Outbound (Empty truck now) — Press O"
+          >
+            <span class="fw-dir-badge fw-dir-badge--letter-o">O</span>
+            <div class="fw-dir-info">
+              <span class="fw-dir-title">OUTBOUND</span>
+              <span class="fw-dir-desc">Empty truck now</span>
+            </div>
+          </button>
+        </div>
+
+        <div class="fw-direction-subtext" id="fw-direction-subtext">
+          Select direction with <kbd>I</kbd> or <kbd>O</kbd> keys or click above
+        </div>
+      </section>
+    </section>
+
+    <!-- Band 2: Cards Row (~48% height, Ticket Details 60% + Weight Preview 40%) -->
+    <section class="fw-cards-row" aria-label="Ticket details and weight capture">
+      <!-- Ticket Details Card (~60% width) -->
+      <div class="fw-ticket-card" id="fw-ticket-card">
+        <div class="fw-ticket-header">
+          <div class="fw-header-left">
+            <span class="fw-card-label">TICKET DETAILS</span>
+          </div>
+          <div class="fw-header-right">
+            <span class="fw-ticket-id-label">NEW TICKET</span>
+            <span class="fw-ticket-id" id="fw-ticket-id">#11353</span>
+          </div>
+        </div>
+
+        <div class="fw-ticket-body">
+          <!-- Required Row: Truck Plate + Material -->
+          <div class="fw-required-row">
+            <!-- Truck Registration -->
+            <div class="fw-field-group fw-field-truck">
+              <label class="fw-field-label" for="fw-truck-input">
+                <span>Truck Registration No <span class="fw-required-star">*</span></span>
+                <span class="fw-label-hint">Plate number</span>
+              </label>
+              <div class="fw-input-wrapper">
+                <input
+                  type="text"
+                  class="form-input fw-input fw-truck-input"
+                  id="fw-truck-input"
+                  placeholder="e.g. DM-T-11-2045"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <div class="fw-suggestion-list" id="fw-truck-suggestions" hidden></div>
+              </div>
+              <div class="fw-pending-notice" id="fw-truck-pending-notice" hidden>
+                <div class="fw-pending-notice-left">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <span id="fw-truck-pending-text">Truck has an open ticket (#11352)</span>
+                </div>
+                <button type="button" class="fw-pending-open-btn" id="fw-btn-open-pending">
+                  <span>Open Ticket</span>
+                  <kbd class="kbd-hint">Ctrl+Enter</kbd>
+                </button>
+              </div>
+            </div>
+
+            <!-- Material / Commodity -->
+            <div class="fw-field-group fw-field-material">
+              <label class="fw-field-label" for="fw-material-input">
+                <span>Material / Commodity <kbd class="kbd-hint fw-key-hint-m">M</kbd></span>
+                <span class="fw-label-hint">Cargo type</span>
+              </label>
+              <div class="fw-input-wrapper">
+                <input
+                  type="text"
+                  class="form-input fw-input"
+                  id="fw-material-input"
+                  placeholder="Type or select material"
+                  autocomplete="off"
+                  spellcheck="false"
+                  tabindex="-1"
+                />
+                <div class="fw-material-dropdown" id="fw-material-dropdown" hidden></div>
+              </div>
+              <!-- Quick-Pick Pills (Ship-wrecking starting list) -->
+              <div class="fw-quick-picks" id="fw-quick-picks" role="toolbar" aria-label="Common materials">
+                <button type="button" class="fw-quick-pick" data-material="Scrap Iron" tabindex="-1">Scrap Iron</button>
+                <button type="button" class="fw-quick-pick" data-material="MS Plate" tabindex="-1">MS Plate</button>
+                <button type="button" class="fw-quick-pick" data-material="Pipe" tabindex="-1">Pipe</button>
+                <button type="button" class="fw-quick-pick active" data-material="Other" tabindex="-1">Other</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="fw-divider">
+            <span class="fw-divider-line"></span>
+            <span class="fw-divider-label">Optional Details</span>
+            <span class="fw-divider-line"></span>
+          </div>
+
+          <!-- Optional Fields Grid (Swapped: Driver Name, Driver Mobile, Client / Party, Challan, Remarks) -->
+          <div class="fw-optional-grid">
+            <div class="fw-field-group">
+              <label class="fw-field-label" for="fw-driver-input">Driver Name</label>
+              <input
+                type="text"
+                class="form-input fw-input"
+                id="fw-driver-input"
+                placeholder="Driver full name"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="fw-field-group">
+              <label class="fw-field-label" for="fw-phone-input">Driver Mobile</label>
+              <input
+                type="text"
+                class="form-input fw-input"
+                id="fw-phone-input"
+                placeholder="+880 1700 000000"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="fw-field-group">
+              <label class="fw-field-label" for="fw-client-input">Client / Party</label>
+              <input
+                type="text"
+                class="form-input fw-input"
+                id="fw-client-input"
+                placeholder="e.g. BSRM Steels Ltd"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="fw-field-group">
+              <label class="fw-field-label" for="fw-challan-input">Challan / Gate Pass</label>
+              <input
+                type="text"
+                class="form-input fw-input"
+                id="fw-challan-input"
+                placeholder="e.g. CH-99412"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="fw-field-group fw-field-remarks">
+              <label class="fw-field-label" for="fw-remarks-input">Remarks / Notes</label>
+              <textarea
+                class="form-input fw-input fw-remarks-textarea"
+                id="fw-remarks-input"
+                placeholder="Cargo condition, bay number, seal #..."
+                autocomplete="off"
+                rows="1"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Register / Update Truck Strip (Pinned to bottom of card, calm suggestion) -->
+          <div class="fw-register-strip" id="fw-register-strip" hidden>
+            <div class="fw-register-strip-info">
+              <span class="fw-register-strip-title" id="fw-register-strip-title">Register truck</span>
+              <span class="fw-register-strip-desc" id="fw-register-strip-desc">New truck, not saved yet</span>
+            </div>
+            <button type="button" class="fw-register-btn" id="fw-btn-register-truck">
+              <span id="fw-register-btn-text">Save Details</span>
+              <kbd class="kbd-hint">Ctrl+S</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weight Preview / Capture Card (~40% width) -->
+      <div class="fw-weight-card sw-weigh-card sw-weigh-card--second" id="fw-weight-card">
+        <div class="sw-weigh-card-header">
+          <span class="sw-card-label" id="fw-weight-label">FIRST WEIGHT</span>
+          <span class="sw-chip sw-chip--neutral" id="fw-weight-chip">SELECT DIRECTION</span>
+        </div>
+        <div class="sw-weigh-card-body">
+          <div class="sw-weigh-card-value">
+            <span class="sw-weight-digits" id="fw-weight-value">------</span>
+            <span class="sw-weight-unit" id="fw-weight-unit">KG</span>
+          </div>
+          <div class="sw-weigh-card-detail" id="fw-weight-detail">
+            Select direction with I or O to begin preview
+          </div>
+        </div>
+        <div class="fw-weight-footer" id="fw-weight-footer">
+          <div class="fw-flow-indicator" id="fw-flow-indicator">
+            <span class="fw-flow-step active" id="fw-flow-first-step">1. First Weigh: Gross (Now)</span>
+            <span class="fw-flow-arrow">→</span>
+            <span class="fw-flow-step" id="fw-flow-second-step">2. Second Weigh: Tare (Return)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Band 3: Status Strip (~8% height, always present) -->
+    <div class="sw-status-strip fw-status-strip" id="fw-status-strip" role="status" aria-live="polite">
+      <div class="sw-status-inner">
+        <span class="sw-status-icon" id="fw-status-icon" aria-hidden="true">ℹ</span>
+        <div class="sw-status-content">
+          <span class="sw-status-text" id="fw-status-text">Select weight direction (IN or OUT) to begin</span>
+          <span class="sw-status-subtext" id="fw-status-subtext" style="display: none;"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Band 4: Action Bar (~12% height, pinned bottom) -->
+    <footer class="sw-action-bar fw-action-bar">
+      <button class="sw-action-btn sw-action-btn--back" id="fw-btn-back" type="button">
+        <span id="fw-back-icon">←</span>
+        <span id="fw-back-text">Back</span>
+        <span class="shortcut-kbd">Esc</span>
+      </button>
+
+      <div class="sw-action-bar-right">
+        <!-- Capture / Recapture Button (Spacebar) -->
+        <button
+          class="sw-action-btn sw-action-btn--capture btn-primary-capture"
+          id="fw-btn-capture"
+          type="button"
+          disabled
+        >
+          <svg
+            class="sw-btn-icon-lock"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span id="fw-btn-capture-text">Waiting for stable…</span>
+          <span class="shortcut-kbd" id="fw-btn-capture-kbd">Space</span>
+        </button>
+
+        <!-- Preview Button (Enter) -->
+        <button
+          class="sw-action-btn sw-action-btn--finalize btn-finalize-neutral"
+          id="fw-btn-preview"
+          type="button"
+          disabled
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>Preview</span>
+          <span class="shortcut-kbd">Enter ↵</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+</main>

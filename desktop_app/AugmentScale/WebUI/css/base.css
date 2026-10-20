@@ -1,0 +1,90 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   base.css — Box-model resets, html/body, button base, app shell, screen toggle
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   WEIGHBRIDGE MODERNIZATION — PROTOTYPE STYLES
+   Apple Design: Spatial Consistency, Springs, Depth, Visual Polish
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Root Type Scale ─────────────────────────────────────────────────────── */
+/* The root font size must NEVER depend on viewport height — only width.
+   Height changes must not resize text (see docs/font-height-scaling-fix.md).
+   Narrow windows may reduce the base slightly; short windows must not. */
+html {
+  font-size: clamp(15px, 1vw, 16px);
+}
+
+/* ─── Base & Resets ───────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: var(--font-sans);
+  background-color: var(--surface-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  transition:
+    background-color var(--spring-duration-normal) var(--spring-smooth),
+    color var(--spring-duration-normal) var(--spring-smooth);
+}
+
+input,
+button,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    transform var(--spring-duration-fast) var(--spring-bounce),
+    background-color var(--spring-duration-fast) ease,
+    box-shadow var(--spring-duration-fast) ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* ─── Layout Shell ────────────────────────────────────────────────────────── */
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.screen {
+  display: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--spring-duration-normal) var(--spring-smooth),
+    transform var(--spring-duration-normal) var(--spring-smooth);
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.screen.active {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}

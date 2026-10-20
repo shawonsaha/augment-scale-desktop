@@ -1,0 +1,71 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+         SCREEN 1: OPERATOR SIGN-IN (Explicit Two-Step Operator & OTP PIN Flow)
+         ═══════════════════════════════════════════════════════════════════════ -->
+<main class="screen active" id="login-screen">
+  <div class="login-screen">
+    <div class="login-container">
+      <div class="login-header">
+        <!-- Two-State Flow Indicator -->
+        <div class="login-step-badge" id="login-step-badge">
+          <span class="step-indicator-pill">Step 1 of 2</span>
+          <span class="step-separator">•</span>
+          <span class="step-label" id="step-label">Select Operator</span>
+        </div>
+
+        <h1 class="login-title" id="login-title">Who's weighing?</h1>
+        <p class="login-subtitle" id="login-subtitle">Press 1–5 or click your profile</p>
+      </div>
+
+      <!-- Avatar Grid (Step 1: pick operator; Step 2: chosen one highlighted, other 4 fade out) -->
+      <div class="avatar-grid" id="avatar-grid">
+        <!-- Populated dynamically by login.js with hotkeys 1-5 -->
+      </div>
+
+      <!-- Segmented PIN Input Drawer (Step 2: enterPin) -->
+      <form class="pin-drawer" id="pin-drawer" onsubmit="return false;" style="display: none">
+        <div class="pin-input-container">
+          <div class="pin-field-wrapper" id="pin-field-wrapper">
+            <input
+              type="password"
+              class="pin-hidden-input"
+              id="pin-input"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="4"
+              autocomplete="off"
+              aria-label="Operator PIN"
+              aria-describedby="pin-status pin-error"
+            />
+            <div class="pin-boxes" id="pin-boxes" aria-hidden="true">
+              <div class="pin-box" data-index="0"></div>
+              <div class="pin-box" data-index="1"></div>
+              <div class="pin-box" data-index="2"></div>
+              <div class="pin-box" data-index="3"></div>
+            </div>
+          </div>
+
+          <!-- Status region for aria-live="polite" ("Verifying") -->
+          <div class="pin-status" id="pin-status" aria-live="polite"></div>
+
+          <!-- Error region with role="alert" ("Wrong PIN. {n} attempts left." / Lock countdown) -->
+          <div class="pin-error" id="pin-error" role="alert"></div>
+        </div>
+
+        <div class="pin-actions">
+          <button type="submit" class="sign-in-btn btn-secondary" id="btn-sign-in" disabled>
+            <span>Sign In</span>
+          </button>
+
+          <button type="button" class="back-to-operators-btn" id="btn-back-to-operators">
+            ← Switch Operator (Esc)
+          </button>
+        </div>
+      </form>
+
+      <!-- Keyboard Hints -->
+      <div class="login-footer-hint" id="login-footer-hint">
+        Press <kbd class="kbd-key">1</kbd>–<kbd class="kbd-key">5</kbd> or click your profile
+      </div>
+    </div>
+  </div>
+</main>

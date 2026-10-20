@@ -1,0 +1,227 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN 4: SECOND WEIGHT WORKFLOW (Shared-HUD, Single-Ticket, Action-Bar)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN 4: SECOND WEIGHT WORKFLOW (Refined Layout, Cards & Status Strip)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<main class="screen" id="second-weigh-screen">
+  <div class="sw-screen">
+    <!-- Band 1: HUD + Ticket Card (~28% height) -->
+    <section class="dashboard-top-band sw-top-band" aria-label="Live scale and ticket info">
+      <!-- HUD slot — populated by hud.js mountHud() -->
+      <div class="hud-slot" id="second-weigh-hud-slot"></div>
+
+      <!-- Ticket Summary Card (Ticket # right, dedicated plate line, middle time/waiting, bottom details) -->
+      <section
+        class="sw-ticket-card"
+        id="sw-ticket-card"
+        role="region"
+        aria-label="Second Weigh Ticket"
+      >
+        <div class="sw-ticket-top-row">
+          <span class="sw-ticket-label">TICKET</span>
+          <span class="sw-ticket-id" id="sw-ticket-id">#11352</span>
+        </div>
+        <div class="sw-ticket-plate-row">
+          <span class="truck-plate-tag sw-plate-chip" id="sw-plate">DM-T-11-2045</span>
+        </div>
+        <div class="sw-ticket-time-row" id="sw-ticket-time">
+          <svg
+            class="sw-time-icon"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span class="sw-ticket-time-text" id="sw-ticket-time-text">13 Oct · 09:14:00 AM · Waiting 24 mins</span>
+        </div>
+        <div class="sw-ticket-detail-row">
+          <div class="sw-ticket-driver" id="sw-driver" title="">Kalam Hossain</div>
+          <div class="sw-ticket-material" id="sw-material" title="">Scrap Iron • BSRM Steels Ltd</div>
+        </div>
+      </section>
+    </section>
+
+    <!-- Band 2: Calculation Row (~42% height, First › Second › Net Payload) -->
+    <section class="sw-calc-row" aria-label="Weight calculation">
+      <!-- FIRST CARD (Recorded input) -->
+      <div class="sw-weigh-card sw-weigh-card--first" id="sw-card-first">
+        <div class="sw-weigh-card-header">
+          <span class="sw-card-label" id="sw-first-label">FIRST · TARE</span>
+          <span class="sw-chip sw-chip--neutral" id="sw-first-chip">RECORDED</span>
+        </div>
+        <div class="sw-weigh-card-body">
+          <div class="sw-weigh-card-value">
+            <span class="sw-weight-digits" id="sw-first-value">12,800</span>
+            <span class="sw-weight-unit" id="sw-first-unit">KG</span>
+          </div>
+          <div class="sw-weigh-card-detail" id="sw-first-detail">13 Oct · 09:14 AM</div>
+        </div>
+        <div class="sw-card-history" id="sw-first-history" hidden>
+          <span class="sw-history-label" id="sw-first-history-label">Last tare</span>
+          <span class="sw-history-value" id="sw-first-history-value">12,780 kg</span>
+          <span class="sw-history-date" id="sw-first-history-date">12 Oct</span>
+        </div>
+      </div>
+
+      <!-- Arrow Connector 1 -->
+      <div class="sw-connector" aria-hidden="true">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </div>
+
+      <!-- SECOND CARD (Live / Locked) -->
+      <div class="sw-weigh-card sw-weigh-card--second sw-card-live" id="sw-card-second">
+        <div class="sw-weigh-card-header">
+          <span class="sw-card-label" id="sw-second-label">SECOND · GROSS</span>
+          <span class="sw-chip sw-chip--live" id="sw-second-badge">● LIVE</span>
+        </div>
+        <div class="sw-weigh-card-body">
+          <div class="sw-weigh-card-value">
+            <span class="sw-weight-digits" id="sw-second-value">18,420</span>
+            <span class="sw-weight-unit" id="sw-second-unit">KG</span>
+          </div>
+          <div class="sw-weigh-card-detail" id="sw-second-detail">Live preview — capture to lock</div>
+        </div>
+        <div class="sw-card-history" id="sw-second-history" hidden>
+          <span class="sw-history-label" id="sw-second-history-label">Last gross</span>
+          <span class="sw-history-value" id="sw-second-history-value">18,150 kg</span>
+          <span class="sw-history-date" id="sw-second-history-date">12 Oct</span>
+        </div>
+      </div>
+
+      <!-- Arrow Connector 2 -->
+      <div class="sw-connector" aria-hidden="true">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </div>
+
+      <!-- NET PAYLOAD CARD (Hero result, ~40% wider) -->
+      <div class="sw-weigh-card sw-weigh-card--net sw-card-net-preview" id="sw-card-net">
+        <div class="sw-weigh-card-header">
+          <span class="sw-card-label" id="sw-net-label">NET PAYLOAD</span>
+          <span class="sw-chip sw-chip--preview" id="sw-net-badge">PREVIEW</span>
+        </div>
+        <div class="sw-weigh-card-body">
+          <div class="sw-weigh-card-value">
+            <span class="sw-weight-digits sw-weight-digits--hero" id="sw-net-value">5,620</span>
+            <span class="sw-weight-unit sw-weight-unit--hero" id="sw-net-unit">KG</span>
+          </div>
+          <div class="sw-weigh-card-detail" id="sw-net-detail">Gross 18,420 − Tare 12,800</div>
+        </div>
+        <div class="sw-card-history" id="sw-net-history" hidden>
+          <span class="sw-history-label" id="sw-net-history-label">Last payload</span>
+          <span class="sw-history-value" id="sw-net-history-value">5,370 kg</span>
+          <span class="sw-history-date" id="sw-net-history-date">12 Oct</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Band 3: Status Strip (~8% height, always present, 2-line comfortable) -->
+    <div class="sw-status-strip" id="sw-status-strip" role="status" aria-live="polite">
+      <div class="sw-status-inner" id="sw-status-inner">
+        <span class="sw-status-icon" id="sw-status-icon" aria-hidden="true">ℹ</span>
+        <div class="sw-status-content">
+          <span class="sw-status-text" id="sw-status-text">Waiting for a stable reading…</span>
+          <span class="sw-status-subtext" id="sw-status-subtext" style="display: none;"></span>
+        </div>
+        <button
+          class="btn-anomaly-override sw-status-override-btn"
+          id="sw-status-override-btn"
+          type="button"
+          hidden
+        >
+          <span>Override Anyway</span>
+          <span class="shortcut-kbd">Shift+Enter</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Band 4: Action Bar (~12% height, pinned bottom) -->
+    <footer class="sw-action-bar">
+      <button class="sw-action-btn sw-action-btn--back" id="sw-btn-back" type="button">
+        ← Back <span class="shortcut-kbd">Esc</span>
+      </button>
+
+      <div class="sw-action-bar-right">
+        <button
+          class="sw-action-btn sw-action-btn--capture btn-primary-capture"
+          id="sw-btn-capture"
+          type="button"
+          disabled
+        >
+          <svg
+            class="sw-btn-icon-lock"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span id="sw-btn-capture-text">Waiting for stable…</span>
+          <span class="shortcut-kbd" id="sw-btn-capture-kbd">Space</span>
+        </button>
+
+        <button
+          class="sw-action-btn sw-action-btn--finalize btn-finalize-neutral"
+          id="sw-btn-finalize"
+          type="button"
+          disabled
+          aria-describedby="sw-finalize-hint"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>Preview</span>
+          <span class="shortcut-kbd">Enter ↵</span>
+        </button>
+        <span class="sw-finalize-hint" id="sw-finalize-hint"></span>
+      </div>
+    </footer>
+  </div>
+</main>

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="AugmentScale.Tests/AugmentScale.Tests.csproj" />
+  <Project Path="AugmentScale/AugmentScale.csproj" />
+  <Project Path="AugmentScale.Protocol/AugmentScale.Protocol.csproj" />
+  <Project Path="AugmentScale.ScaleSimulator/AugmentScale.ScaleSimulator.csproj" />
+</Solution>

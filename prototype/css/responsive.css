@@ -1,0 +1,146 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   responsive.css — Breakpoint overrides: 900px, 768px, 580px
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Responsive Media Queries ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .primary-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sw-calc-row,
+  .fw-cards-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sw-connector {
+    display: none;
+  }
+
+  /* Stacked layout on narrow screens — allow vertical scroll */
+  .sw-screen,
+  .fw-screen {
+    overflow-y: auto;
+    grid-template-rows: auto auto auto auto;
+  }
+
+  .sw-action-bar,
+  .fw-action-bar {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .fw-top-band {
+    flex-direction: column;
+  }
+
+  .fw-direction-card {
+    flex: none;
+    width: 100%;
+  }
+
+  .fw-optional-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fw-field-remarks {
+    grid-column: span 2;
+  }
+
+  @supports not (container-type: size) {
+    .scale-digits {
+      font-size: 3.5rem;
+    }
+  }
+
+  .sim-dock-body {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-time-detail {
+    display: none;
+  }
+
+  .telemetry-btn.sim-dock-trigger {
+    width: 32px;
+    padding: 0;
+  }
+
+  .telemetry-btn.sim-dock-trigger .telemetry-label-hide-sm {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .telemetry-label-hide-sm {
+    display: none;
+  }
+
+  .telemetry-btn.sim-dock-trigger {
+    width: 32px;
+    padding: 0;
+  }
+
+  .sync-text,
+  .sync-time-detail {
+    display: none;
+  }
+}
+
+/* ─── Short Windows (Kiosk Fit) ───────────────────────────────────────────── */
+@media (max-height: 560px) {
+  .login-screen {
+    padding: var(--space-2) var(--space-3);
+  }
+  .login-header {
+    margin-bottom: var(--space-2);
+  }
+  .login-step-badge {
+    margin-bottom: var(--space-1);
+  }
+  .avatar-grid {
+    gap: 0.625rem;
+    margin-bottom: var(--space-2);
+  }
+  .pin-drawer {
+    margin-top: var(--space-2);
+  }
+  .pin-actions {
+    margin-top: var(--space-2);
+  }
+  .login-footer-hint {
+    margin-top: var(--space-2);
+  }
+}
+
+@media (max-height: 500px) {
+  .login-footer-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 580px) {
+  .action-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .action-card-dir-group {
+    margin-left: 0;
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .action-dir-btn {
+    flex: 1;
+  }
+
+  .fw-required-row {
+    grid-template-columns: 1fr;
+  }
+}
