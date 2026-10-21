@@ -6,7 +6,7 @@
 import { state, pendingTickets, deleteTicket } from '../state.js';
 import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
-import { escapeHtml, formatElapsed } from '../utils.js';
+import { escapeHtml, formatElapsed, directionOf } from '../utils.js';
 import { openFirstWeigh } from './first-weigh.js';
 import { openSecondWeighWithTicket } from './second-weigh.js';
 import { mountHud } from '../hud.js';
@@ -274,11 +274,6 @@ export function updateTableRowFocus() {
       r.classList.remove('keyboard-focused');
     }
   });
-}
-
-function directionOf(ticket) {
-  const raw = String(ticket.direction || ticket.weightType || '').toUpperCase();
-  return raw.includes('OUT') ? 'OUT' : 'IN';
 }
 
 export function renderPendingTicketsTable(query = '') {

@@ -164,6 +164,12 @@ export function ensureFullTimestamp(t) {
   return typeof t === 'string' && t.includes('-') ? t : formatDateTime12H();
 }
 
+/** Normalized ticket direction: 'IN' or 'OUT' (handles direction/weightType ticket shapes). */
+export function directionOf(ticket) {
+  const raw = String(ticket?.direction || ticket?.weightType || '').toUpperCase();
+  return raw.includes('OUT') ? 'OUT' : 'IN';
+}
+
 /** Escape text before it is placed in an HTML string (operator-typed truck/driver/material). */
 export function escapeHtml(value) {
   return String(value ?? '').replace(

@@ -1046,6 +1046,14 @@ body.dark-mode .fw-pending-open-btn:hover,
   margin-left: auto;
 }
 
+.sw-ticket-dir {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  align-self: center;
+}
+
 .sw-ticket-plate-row {
   display: flex;
   align-items: center;

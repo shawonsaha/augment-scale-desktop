@@ -9,6 +9,7 @@ import {
   formatDateTime12H,
   formatShortDateWithSeconds,
   formatElapsed,
+  directionOf,
   calcNet,
 } from '../utils.js';
 import hapticAudio from '../audio.js';
@@ -272,11 +273,18 @@ export function openSecondWeighWithTicket(ticket) {
 
   // Populate ticket card (prominent Ticket # & plate, wrapping for driver & material)
   const ticketIdEl = document.getElementById('sw-ticket-id');
+  const directionEl = document.getElementById('sw-ticket-dir');
   const plateEl = document.getElementById('sw-plate');
   const driverEl = document.getElementById('sw-driver');
   const materialEl = document.getElementById('sw-material');
 
   if (ticketIdEl) ticketIdEl.textContent = `#${ticket.id}`;
+  if (directionEl) {
+    const direction = directionOf(ticket);
+    directionEl.textContent = direction;
+    directionEl.classList.toggle('hist-dir--in', direction === 'IN');
+    directionEl.classList.toggle('hist-dir--out', direction === 'OUT');
+  }
   if (plateEl) plateEl.textContent = ticket.truckNo;
   if (driverEl) {
     driverEl.textContent = ticket.driver;
