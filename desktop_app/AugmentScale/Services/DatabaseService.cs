@@ -20,6 +20,12 @@ public sealed class DatabaseService
     private const long FirstTicketNumber = 11353;
     private const long LastHistoricalTicketNumber = 11352;
 
+    private static readonly string[] WebUiTimestampFormats =
+    {
+        "dd-MM-yy hh:mm:ss tt",
+        "dd-MM-yyyy hh:mm:ss tt",
+    };
+
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -1503,6 +1509,11 @@ public sealed class DatabaseService
     private static DateTimeOffset? ParseTimestamp(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
+        if (DateTimeOffset.TryParseExact(value, WebUiTimestampFormats, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces, out var webUiParsed))
+        {
+            return webUiParsed;
+        }
         if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind, out var parsed))
         {

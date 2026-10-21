@@ -5,7 +5,12 @@
  */
 import { state, pendingTickets } from '../state.js';
 import { showScreen } from '../router.js';
-import { formatDateTime12H, formatShortDateWithSeconds, calcNet } from '../utils.js';
+import {
+  formatDateTime12H,
+  formatShortDateWithSeconds,
+  formatElapsed,
+  calcNet,
+} from '../utils.js';
 import hapticAudio from '../audio.js';
 import { showToast } from '../toast.js';
 import { openPrintSlipModal } from '../print.js';
@@ -147,6 +152,32 @@ export function initSecondWeighScreen() {
       });
     });
   }
+
+  setInterval(() => {
+    if (state.currentScreen !== 'second-weigh-screen') return;
+    updateTicketWaiting(state.secondWeigh.selectedTicket);
+  }, 30000);
+}
+
+function updateTicketWaiting(ticket) {
+  if (!ticket) return;
+
+  const shortDate = formatShortDateWithSeconds(ticket.firstWeightTime);
+  const elapsed =
+    formatElapsed(ticket.createdAt || ticket.firstWeightTime) || ticket.timeElapsed || '';
+  const waitingStr = elapsed ? ` · Waiting ${elapsed.replace(/\s*ago\b/i, '')}` : '';
+
+  const ticketTimeTextEl = document.getElementById('sw-ticket-time-text');
+  if (ticketTimeTextEl) {
+    ticketTimeTextEl.textContent = `${shortDate}${waitingStr}`;
+    ticketTimeTextEl.title = `Audit timestamp: ${ticket.firstWeightTime}`;
+  }
+
+  const firstDetail = document.getElementById('sw-first-detail');
+  if (firstDetail) {
+    firstDetail.textContent = `Recorded at ${shortDate}${waitingStr}`;
+    firstDetail.title = `Audit timestamp: ${ticket.firstWeightTime}`;
+  }
 }
 
 /**
@@ -244,7 +275,6 @@ export function openSecondWeighWithTicket(ticket) {
   const plateEl = document.getElementById('sw-plate');
   const driverEl = document.getElementById('sw-driver');
   const materialEl = document.getElementById('sw-material');
-  const ticketTimeTextEl = document.getElementById('sw-ticket-time-text');
 
   if (ticketIdEl) ticketIdEl.textContent = `#${ticket.id}`;
   if (plateEl) plateEl.textContent = ticket.truckNo;
@@ -261,7 +291,6 @@ export function openSecondWeighWithTicket(ticket) {
   // Populate first weight card
   const firstLabel = document.getElementById('sw-first-label');
   const firstValue = document.getElementById('sw-first-value');
-  const firstDetail = document.getElementById('sw-first-detail');
   const secondLabel = document.getElementById('sw-second-label');
 
   const isFirstGross = ticket.firstWeightType === 'Gross';
@@ -269,20 +298,7 @@ export function openSecondWeighWithTicket(ticket) {
   if (secondLabel) secondLabel.textContent = isFirstGross ? 'SECOND · TARE' : 'SECOND · GROSS';
   if (firstValue) firstValue.textContent = ticket.firstWeight.toLocaleString('en-US');
 
-  const shortDate = formatShortDateWithSeconds(ticket.firstWeightTime);
-  const waitingStr = ticket.timeElapsed
-    ? ` · Waiting ${ticket.timeElapsed.replace(/\s*ago\b/i, '')}`
-    : '';
-
-  if (ticketTimeTextEl) {
-    ticketTimeTextEl.textContent = `${shortDate}${waitingStr}`;
-    ticketTimeTextEl.title = `Audit timestamp: ${ticket.firstWeightTime}`;
-  }
-
-  if (firstDetail) {
-    firstDetail.textContent = `Recorded at ${shortDate}${waitingStr}`;
-    firstDetail.title = `Audit timestamp: ${ticket.firstWeightTime}`;
-  }
+  updateTicketWaiting(ticket);
 
   // Previous weigh data for this truck (helps spot bad tares)
   renderTruckHistory(ticket, isFirstGross);

@@ -22,7 +22,7 @@ import {
 } from '../state.js';
 import { IS_PRODUCTION } from '../runtime.js';
 import { showScreen } from '../router.js';
-import { formatDateTime12H } from '../utils.js';
+import { formatDateTime12H, formatElapsed } from '../utils.js';
 import hapticAudio from '../audio.js';
 import { showToast } from '../toast.js';
 import { mountHud } from '../hud.js';
@@ -821,7 +821,7 @@ function getTruckSuggestions(query) {
         phone: t.phone || '',
         hasOpenTicket: true,
         openTicketId: t.id,
-        timeElapsed: t.timeElapsed || 'open',
+        timeElapsed: formatElapsed(t.createdAt || t.firstWeightTime) || t.timeElapsed || 'open',
       });
     }
   });
@@ -932,7 +932,7 @@ function applyTruckSelection(truckData) {
   state.firstWeigh._blockedTicketId = openTicket ? openTicket.id : null;
 
   if (openTicket && pendingNotice && pendingText) {
-    pendingText.textContent = `This truck already has open ticket #${openTicket.id} (${openTicket.timeElapsed || 'pending'})`;
+    pendingText.textContent = `This truck already has open ticket #${openTicket.id} (${formatElapsed(openTicket.createdAt || openTicket.firstWeightTime) || openTicket.timeElapsed || 'pending'})`;
     pendingNotice.hidden = false;
   } else if (pendingNotice) {
     pendingNotice.hidden = true;
@@ -1105,7 +1105,7 @@ export function initFirstWeighScreen() {
     state.firstWeigh._blockedTicketId = openTicket ? openTicket.id : null;
 
     if (openTicket && pendingNotice && pendingText) {
-      pendingText.textContent = `This truck already has open ticket #${openTicket.id} (${openTicket.timeElapsed || 'pending'})`;
+      pendingText.textContent = `This truck already has open ticket #${openTicket.id} (${formatElapsed(openTicket.createdAt || openTicket.firstWeightTime) || openTicket.timeElapsed || 'pending'})`;
       pendingNotice.hidden = false;
     } else if (pendingNotice) {
       pendingNotice.hidden = true;
@@ -1598,8 +1598,8 @@ export function initFirstWeighScreen() {
             firstWeight: state.firstWeigh.capturedWeight ?? 0,
             firstWeightType,
             firstWeightTime: currentTimestamp,
+            createdAt: new Date().toISOString(),
             firstOperator: operatorName,
-            timeElapsed: 'Just now',
           };
 
           // Reserve the displayed ID only now, at the moment of commit

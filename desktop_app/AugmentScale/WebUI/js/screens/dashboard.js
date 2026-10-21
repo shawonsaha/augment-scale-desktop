@@ -6,7 +6,7 @@
 import { state, pendingTickets, deleteTicket } from '../state.js';
 import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, formatElapsed } from '../utils.js';
 import { openFirstWeigh } from './first-weigh.js';
 import { openSecondWeighWithTicket } from './second-weigh.js';
 import { mountHud } from '../hud.js';
@@ -51,6 +51,11 @@ export function initDashboard() {
       renderPendingTicketsTable(e.target.value.trim());
     });
   }
+
+  setInterval(() => {
+    if (state.currentScreen !== 'dashboard-screen') return;
+    renderPendingTicketsTable(searchInput ? searchInput.value.trim() : '');
+  }, 30000);
 
   // Delegated click on tickets table: Complete Weigh button, Row click, or Delete [X]
   const pendingTbody = document.getElementById('pending-tickets-tbody');
@@ -333,7 +338,8 @@ export function renderPendingTicketsTable(query = '') {
     const tr = document.createElement('tr');
     tr.dataset.ticketId = ticket.id;
     if (idx === state.focusedTicketIndex) tr.classList.add('keyboard-focused');
-    const waitingStr = ticket.timeElapsed ? ticket.timeElapsed.replace(/\s*ago\b/i, '') : '';
+    const waitingStr =
+      formatElapsed(ticket.createdAt || ticket.firstWeightTime) || ticket.timeElapsed || '';
     const direction = directionOf(ticket);
     tr.innerHTML = `
       <td class="col-ticket-id"><span class="ticket-id-tag">#${ticket.id}</span><span class="hist-dir hist-dir--${direction.toLowerCase()}">${direction}</span></td>

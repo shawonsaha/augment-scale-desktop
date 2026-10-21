@@ -12,6 +12,55 @@ export function formatDateTime12H(d = new Date()) {
   return `${pad(dt.getDate())}-${pad(dt.getMonth() + 1)}-${String(dt.getFullYear()).slice(-2)} ${pad(h)}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())} ${ampm}`;
 }
 
+function parseAppTimestamp(input) {
+  if (input instanceof Date) {
+    return Number.isNaN(input.getTime()) ? null : input;
+  }
+  if (typeof input !== 'string') return null;
+
+  const value = input.trim();
+  if (!value) return null;
+
+  const match = value.match(
+    /^(\d{1,2})-(\d{1,2})-(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)$/i
+  );
+  if (match) {
+    let year = parseInt(match[3], 10);
+    if (year < 100) year += 2000;
+    const hour12 = parseInt(match[4], 10);
+    const hour = (hour12 % 12) + (/^p/i.test(match[7]) ? 12 : 0);
+    const parsed = new Date(
+      year,
+      parseInt(match[2], 10) - 1,
+      parseInt(match[1], 10),
+      hour,
+      parseInt(match[5], 10),
+      parseInt(match[6] || '0', 10)
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value.replace(/(\.\d{3})\d+/, '$1'));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function formatElapsed(input) {
+  const then = parseAppTimestamp(input);
+  if (!then) return '';
+
+  const minutes = Math.floor((Date.now() - then.getTime()) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} mins`;
+
+  const hours = minutes / 60;
+  if (hours < 24) {
+    const rounded = Math.round(hours * 10) / 10;
+    return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)} hrs`;
+  }
+
+  return `${Math.floor(hours / 24)} days`;
+}
+
 const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'

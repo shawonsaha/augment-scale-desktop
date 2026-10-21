@@ -85,6 +85,19 @@ public class DatabaseServiceTests
     }
 
     [Fact]
+    public void CreateTicket_ParsesWebUiFirstTime()
+    {
+        using var temp = new TempDatabase();
+        var request = NewTicket("TEST-TIME");
+        request.FirstTime = "13-10-26 09:14:00 AM";
+
+        var ticket = temp.Database.CreateTicket(request);
+
+        Assert.Equal("13-10-26 09:14:00 AM", ticket.FirstWeightTime);
+        Assert.StartsWith("2026-10-13T09:14:00", ticket.CreatedAt);
+    }
+
+    [Fact]
     public void TicketLifecycle_CreateCompleteReprintVoid()
     {
         using var temp = new TempDatabase();
