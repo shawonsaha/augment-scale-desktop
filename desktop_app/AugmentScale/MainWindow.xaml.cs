@@ -33,6 +33,9 @@ public partial class MainWindow : Window
         _scale = scale;
         _bridge = bridge;
         InitializeComponent();
+        Title = _config.IsDefaultDataDirectory
+            ? "Augment Scale"
+            : "Augment Scale — TEST DATA";
         Loaded += OnLoaded;
         Closing += OnClosing;
     }

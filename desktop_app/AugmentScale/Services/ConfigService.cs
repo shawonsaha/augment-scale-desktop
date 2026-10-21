@@ -35,15 +35,23 @@ public sealed class ConfigService
         var overrideDirectory = Environment.GetEnvironmentVariable("AUGMENTSCALE_DATA_DIR");
         _dataDirectory = dataDirectory ?? (!string.IsNullOrWhiteSpace(overrideDirectory)
             ? Path.GetFullPath(overrideDirectory)
-            : Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "AugmentScale"));
+            : DefaultDataDirectory);
         Directory.CreateDirectory(_dataDirectory);
         _setupPath = Path.Combine(_dataDirectory, "setup.json");
         _secretsPath = Path.Combine(_dataDirectory, "secrets.dat");
     }
 
     public string DataDirectory => _dataDirectory;
+
+    public bool IsDefaultDataDirectory => string.Equals(
+        Path.GetFullPath(_dataDirectory),
+        Path.GetFullPath(DefaultDataDirectory),
+        StringComparison.OrdinalIgnoreCase);
+
+    private static string DefaultDataDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "AugmentScale");
+
     public string SetupPath => _setupPath;
     public string SecretsPath => _secretsPath;
     public string DatabasePath => Path.Combine(_dataDirectory, "augment-scale.db");

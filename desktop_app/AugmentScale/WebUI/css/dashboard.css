@@ -515,7 +515,7 @@ body.dark-mode .tickets-count-badge,
 
 /* Explicit column width management */
 .col-ticket-id {
-  width: 85px;
+  width: 110px;
   white-space: nowrap;
 }
 

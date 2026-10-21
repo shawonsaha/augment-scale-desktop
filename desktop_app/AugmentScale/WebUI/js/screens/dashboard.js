@@ -271,6 +271,11 @@ export function updateTableRowFocus() {
   });
 }
 
+function directionOf(ticket) {
+  const raw = String(ticket.direction || ticket.weightType || '').toUpperCase();
+  return raw.includes('OUT') ? 'OUT' : 'IN';
+}
+
 export function renderPendingTicketsTable(query = '') {
   const tbody = document.getElementById('pending-tickets-tbody');
   const countBadge = document.getElementById('tickets-count-badge');
@@ -329,8 +334,9 @@ export function renderPendingTicketsTable(query = '') {
     tr.dataset.ticketId = ticket.id;
     if (idx === state.focusedTicketIndex) tr.classList.add('keyboard-focused');
     const waitingStr = ticket.timeElapsed ? ticket.timeElapsed.replace(/\s*ago\b/i, '') : '';
+    const direction = directionOf(ticket);
     tr.innerHTML = `
-      <td class="col-ticket-id"><span class="ticket-id-tag">#${ticket.id}</span></td>
+      <td class="col-ticket-id"><span class="ticket-id-tag">#${ticket.id}</span><span class="hist-dir hist-dir--${direction.toLowerCase()}">${direction}</span></td>
       <td class="col-truck-no"><span class="truck-plate-tag">${escapeHtml(ticket.truckNo)}</span></td>
       <td class="col-driver" title="${escapeHtml(ticket.driver)}">${escapeHtml(ticket.driver) || '—'}</td>
       <td class="col-operator" title="${escapeHtml(ticket.firstOperator || '')}">${escapeHtml(ticket.firstOperator) || '—'}</td>
