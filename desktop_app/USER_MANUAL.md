@@ -16,7 +16,7 @@ Augment Scale is a local weighbridge workstation application. It replaces the br
 - stores trucks, tickets, print history, and audit events in an encrypted SQLCipher database;
 - prints first-weigh slips and completed weight certificates through the Windows print system;
 - tracks reprints, voids, pending-ticket deletions, and operator identity in an audit trail;
-- provides a simulator mode for training and acceptance testing without a physical scale.
+- works with the standalone scale simulator for training and acceptance testing without a physical scale.
 
 All data is stored locally. Phase 1 does **not** upload tickets to a cloud service. An outbox table is populated for future synchronization, but no background cloud push exists yet.
 
@@ -274,18 +274,16 @@ Operator fields:
   "stopBits": 1,
   "protocolFormat": "yaohua_format_1",
   "stabilityWindowMs": 500,
-  "stabilityToleranceKg": 10,
-  "simulatorTargetKg": 735
+  "stabilityToleranceKg": 10
 }
 ```
 
-- `portName`: `COM1`, `COM3`, etc., `SIM` for the built-in simulator, or `TCP:127.0.0.1:9876` for the external GUI simulator.
+- `portName`: `COM1`, `COM3`, etc., or `TCP:127.0.0.1:9876` for the standalone GUI simulator.
 - Use Windows Device Manager to confirm the USB-serial adapter's port number.
 - The indicator must be configured to match the baud rate, data bits, parity, and stop bits.
 - Changes require an application restart.
 - `stabilityWindowMs`: how long readings must remain within tolerance before capture is allowed.
 - `stabilityToleranceKg`: maximum variation treated as stable.
-- `simulatorTargetKg`: target weight used in `SIM` mode.
 
 ### Organization and site block
 
@@ -469,7 +467,7 @@ The application does not silently spool certificates without operator confirmati
 
 Simulator mode is intended for training, UI acceptance, and integration testing. It must not be used to issue real weight certificates.
 
-### External GUI simulator (recommended)
+### Standalone GUI simulator
 
 `AugmentScale.ScaleSimulator` is a standalone desktop app that emulates an XK3190-D10 indicator: byte-accurate frames, real XOR checksums, 15 frames/s by default, and live controls. It drives the real application over loopback TCP, so weights can be changed without restarting anything.
 
@@ -521,12 +519,6 @@ Anomaly and fault drills:
 - choose `Bad checksum` and confirm the application rejects the corrupt frames and does not crash;
 - choose `Garbage` and confirm framing recovers and valid frames continue;
 - click `Disconnect app client` and confirm the HUD shows disconnected, then reconnect.
-
-### Built-in SIM mode
-
-For a quick check without the GUI simulator, close the application, set `"portName": "SIM"` in `setup.json`, optionally set `"simulatorTargetKg"`, and start the application. The HUD reports a connected simulator and produces a stable reading near the target after a short ramp-up.
-
-The built-in mode reads the target only at startup. To test a two-weigh transaction with it, change `simulatorTargetKg` and restart the application between weighings.
 
 ### Automated tests
 

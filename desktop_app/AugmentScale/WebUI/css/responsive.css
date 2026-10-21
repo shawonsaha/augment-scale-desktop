@@ -53,20 +53,7 @@
     }
   }
 
-  .sim-dock-body {
-    grid-template-columns: 1fr;
-  }
-
   .sync-time-detail {
-    display: none;
-  }
-
-  .telemetry-btn.sim-dock-trigger {
-    width: 32px;
-    padding: 0;
-  }
-
-  .telemetry-btn.sim-dock-trigger .telemetry-label-hide-sm {
     display: none;
   }
 }
@@ -74,15 +61,6 @@
 @media (max-width: 768px) {
   .form-grid-3 {
     grid-template-columns: 1fr;
-  }
-
-  .telemetry-label-hide-sm {
-    display: none;
-  }
-
-  .telemetry-btn.sim-dock-trigger {
-    width: 32px;
-    padding: 0;
   }
 
   .sync-text,

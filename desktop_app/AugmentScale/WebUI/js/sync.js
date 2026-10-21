@@ -10,7 +10,6 @@ export function initSyncEngine() {
   const syncPill = document.getElementById('sync-status-pill');
   const syncPopover = document.getElementById('sync-popover');
   const btnSyncNow = document.getElementById('btn-sync-now');
-  const btnToggleSim = document.getElementById('btn-toggle-sim-sync');
 
   if (syncPill && syncPopover) {
     syncPill.addEventListener('click', (e) => {
@@ -39,13 +38,6 @@ export function initSyncEngine() {
     });
   }
 
-  if (btnToggleSim) {
-    btnToggleSim.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleSimulatedSyncFailure();
-    });
-  }
-
   // Update relative time elapsed every second
   setInterval(updateSyncUI, 1000);
 
@@ -69,8 +61,6 @@ export function updateSyncUI() {
   const popoverBadge = document.getElementById('popover-status-badge');
   const popoverLastSync = document.getElementById('popover-last-sync');
   const popoverPending = document.getElementById('popover-pending-count');
-  const btnToggleSim = document.getElementById('btn-toggle-sim-sync');
-  const btnDrawerSync = document.getElementById('sim-toggle-sync-state');
 
   if (!syncPill) return;
 
@@ -112,11 +102,6 @@ export function updateSyncUI() {
     }
     if (popoverLastSync) popoverLastSync.textContent = `${timeStr} (${relativeStr})`;
     if (popoverPending) popoverPending.textContent = `${state.sync.pendingQueue} items`;
-    if (btnToggleSim) btnToggleSim.textContent = 'Simulate Failure';
-    if (btnDrawerSync) {
-      btnDrawerSync.textContent = 'Simulate Sync Fail';
-      btnDrawerSync.classList.remove('active');
-    }
   } else {
     syncPill.className = 'telemetry-item sync-pill failed';
     if (syncDot) syncDot.className = 'telemetry-dot red pulse';
@@ -134,11 +119,6 @@ export function updateSyncUI() {
     if (popoverLastSync) popoverLastSync.textContent = `Failed • Last: ${timeStr} (${relativeStr})`;
     if (popoverPending)
       popoverPending.textContent = `${state.sync.pendingQueue} items in local outbox`;
-    if (btnToggleSim) btnToggleSim.textContent = 'Restore Sync';
-    if (btnDrawerSync) {
-      btnDrawerSync.textContent = 'Restore Sync';
-      btnDrawerSync.classList.add('active');
-    }
   }
 }
 
@@ -202,20 +182,3 @@ export function triggerSync(isManual = false) {
   }, 750);
 }
 
-export function toggleSimulatedSyncFailure() {
-  if (IS_PRODUCTION) {
-    showToast('Sync failure simulation is unavailable in the desktop app.', 'info');
-    return;
-  }
-
-  state.sync.isHealthy = !state.sync.isHealthy;
-  if (!state.sync.isHealthy) {
-    if (state.sync.pendingQueue === 0) state.sync.pendingQueue = 1;
-    showToast('Simulated Cloud Network Interruption. Local outbox queued.', 'error');
-  } else {
-    state.sync.pendingQueue = 0;
-    state.sync.lastSyncTimestamp = new Date();
-    showToast('Cloud Connection Restored. Outbox synchronized with Supabase.', 'success');
-  }
-  updateSyncUI();
-}

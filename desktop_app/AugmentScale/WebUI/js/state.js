@@ -659,23 +659,9 @@ export const state = {
   currentScreen: 'login-screen',
   selectedOperator: null,
   activeOperator: null,
-  currentLiveWeight: IS_PRODUCTION ? null : 18420,
-  isScaleStable: !IS_PRODUCTION,
-  isScaleConnected: !IS_PRODUCTION,
-
-  // Hardware Interface & Operating Mode
-  devMode:
-    !IS_PRODUCTION &&
-    typeof localStorage !== 'undefined' &&
-    localStorage.getItem('weighbridge-dev-mode') === 'true',
-  simulationEnabled: IS_PRODUCTION
-    ? false
-    : typeof localStorage !== 'undefined'
-      ? localStorage.getItem('weighbridge-sim-active') !== 'false'
-      : true,
-  serialPort:
-    (typeof localStorage !== 'undefined' && localStorage.getItem('weighbridge-serial-port')) ||
-    'COM1',
+  currentLiveWeight: null,
+  isScaleStable: false,
+  isScaleConnected: false,
 
   // First Weigh State
   firstWeigh: {

@@ -31,10 +31,10 @@
       <span id="scale-status-text">Connected</span>
     </div>
 
-    <!-- Synthetic Weight Indicator (set by the C# bridge when a simulator feeds the reader) -->
-    <div class="dev-mode-pill" id="sim-mode-pill" style="display: none"
+    <!-- Simulated Weight Indicator (set by the C# bridge when the standalone simulator feeds the reader) -->
+    <div class="sim-mode-pill" id="sim-mode-pill" style="display: none"
          title="Simulated scale reading - development only">
-      <span class="dev-mode-dot"></span>
+      <span class="sim-mode-dot"></span>
       <span>SIM</span>
     </div>
 
@@ -98,7 +98,6 @@
         </div>
         <div class="sync-popover-actions">
           <button class="sync-action-btn primary" id="btn-sync-now">↻ Sync Now</button>
-          <button class="sync-action-btn" id="btn-toggle-sim-sync">Simulate Failure</button>
         </div>
       </div>
     </div>
@@ -186,37 +185,6 @@
   </nav>
 
   <div class="telemetry-right">
-    <!-- Developer Mode Active Indicator Pill -->
-    <div class="dev-mode-pill" id="dev-mode-pill" style="display: none">
-      <span class="dev-mode-dot"></span>
-      <span>DEV MODE</span>
-    </div>
-
-    <!-- Simulator Bench Quick Toggle Button (Shown when Dev Mode & Simulation are enabled) -->
-    <button
-      class="telemetry-btn sim-dock-trigger"
-      id="btn-toggle-sim-dock"
-      title="Toggle Hardware Simulator (~)"
-      aria-label="Simulator Bench"
-      style="display: none"
-    >
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path
-          d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-        />
-      </svg>
-      <span class="telemetry-label-hide-sm">Simulator</span>
-    </button>
-
     <!-- Active Operator Pill (Shown when logged in) -->
     <div class="operator-pill" id="active-operator-pill" style="display: none">
       <div class="operator-avatar-chip">
@@ -273,30 +241,6 @@
         id="theme-toggle-icon"
       >
         <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-      </svg>
-    </button>
-
-    <!-- System Settings & Diagnostics (Gear Icon) -->
-    <button
-      class="telemetry-btn"
-      id="btn-settings-toggle"
-      title="Settings &amp; Developer Mode"
-      aria-label="Settings"
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path
-          d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-        />
-        <circle cx="12" cy="12" r="3" />
       </svg>
     </button>
 

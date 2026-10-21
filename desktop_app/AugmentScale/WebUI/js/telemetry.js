@@ -1,9 +1,8 @@
 /**
  * Scale Telemetry Stream Listener
- * Listens to continuous stream from XK3190-D10 Scale Simulator / Serial reader.
+ * Renders the continuous weight stream pushed by the C# bridge.
  */
 import { state } from './state.js';
-import scaleSimulator from './scale-simulator.js';
 import { updateSecondWeighPreview } from './screens/second-weigh.js';
 import { updateFirstWeighPreview } from './screens/first-weigh.js';
 
@@ -47,7 +46,7 @@ const renderScaleData = (data) => {
     }
   }
 
-  // 3. Synthetic weight badge (TCP simulator or built-in SIM mode).
+  // 3. Standalone simulator badge.
   const simPill = document.getElementById('sim-mode-pill');
   if (simPill) {
     simPill.style.display = data.source === 'simulator' ? 'inline-flex' : 'none';
@@ -74,16 +73,10 @@ const renderScaleData = (data) => {
   }
 };
 
-export function initScaleStream() {
-  scaleSimulator.subscribe(renderScaleData);
-}
-
 /**
- * Real hardware feed via the C# WebView2 bridge. Stops the simulator so it
- * cannot overwrite real weight 15 times per second.
+ * Live feed from the C# WebView2 bridge (hardware or standalone simulator).
  */
 export function applyExternalWeight(data) {
-  scaleSimulator.stop();
   renderScaleData({
     weight: data.weight,
     formatted: Number.isFinite(data.weight) ? data.weight.toLocaleString('en-US') : '------',

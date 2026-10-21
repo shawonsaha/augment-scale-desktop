@@ -4,12 +4,11 @@
  * 1 (First Weigh), 2 (Second Weigh), I (Inbound), O (Outbound),
  * Spacebar (Capture/Recapture), Enter (Finalize/Print), Escape (Back/Close),
  * M (Material input), Ctrl+S (Register truck), Ctrl+Enter (Open pending ticket),
- * ~ (Simulator Drawer), ? (Cheat Sheet modal), Ctrl+L (Lock workstation).
+ * ? (Cheat Sheet modal), Ctrl+L (Lock workstation).
  */
 import { state, pendingTickets } from './state.js';
 import { showScreen, requestNavigation } from './router.js';
 import { showToast } from './toast.js';
-import { toggleSimDock } from './simulator-controls.js';
 import { closePrintModal } from './print.js';
 import {
   setFirstWeighDirection,
@@ -111,16 +110,6 @@ export function initKeyboardShortcuts() {
 
     // Escape: Innermost-first layering
     if (e.key === 'Escape') {
-      const settingsModal = document.getElementById('settings-modal');
-      if (settingsModal && settingsModal.classList.contains('open')) {
-        settingsModal.classList.remove('open');
-        return;
-      }
-      const simDock = document.getElementById('sim-dock');
-      if (simDock && simDock.classList.contains('open')) {
-        toggleSimDock(false);
-        return;
-      }
       const printModal = document.getElementById('print-modal');
       const shortcutsModal = document.getElementById('shortcuts-modal');
       if (printModal && printModal.classList.contains('open')) {
@@ -169,18 +158,6 @@ export function initKeyboardShortcuts() {
       if (state.currentScreen !== 'dashboard-screen' && state.currentScreen !== 'login-screen') {
         showScreen('dashboard-screen');
       }
-      return;
-    }
-
-    // Toggle Simulator Dock: `~` or Ctrl+Shift+D
-    if (
-      (e.key === '`' ||
-        e.key === '~' ||
-        (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd')) &&
-      !inInput
-    ) {
-      e.preventDefault();
-      toggleSimDock();
       return;
     }
 

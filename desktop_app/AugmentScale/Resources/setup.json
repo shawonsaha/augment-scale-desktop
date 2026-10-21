@@ -23,8 +23,7 @@
     "stopBits": 1,
     "protocolFormat": "yaohua_format_1",
     "stabilityWindowMs": 500,
-    "stabilityToleranceKg": 10,
-    "simulatorTargetKg": 735
+    "stabilityToleranceKg": 10
   },
   "operators": [
     {

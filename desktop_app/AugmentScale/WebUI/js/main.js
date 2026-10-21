@@ -3,7 +3,6 @@
  * Orchestrates all screen modules, hardware streams, and event handlers.
  */
 import { loadPartials } from './html-loader.js';
-import { initScaleStream } from './telemetry.js';
 import { initSyncEngine } from './sync.js';
 import { initLoginScreen } from './screens/login.js';
 import { initDashboard, renderPendingTicketsTable } from './screens/dashboard.js';
@@ -14,8 +13,6 @@ import { initTrucksScreen } from './screens/trucks.js';
 import { initPrintModal } from './print.js';
 import { initKeyboardShortcuts } from './keyboard.js';
 import { initThemeToggle } from './theme.js';
-import { initSettingsModal, applyOperatingMode } from './settings.js';
-import { initSimulatorControls } from './simulator-controls.js';
 import { updateClock, initAppNav } from './router.js';
 import { IS_PRODUCTION } from './runtime.js';
 import { loadProductionData } from './state.js';
@@ -32,9 +29,6 @@ async function bootstrap() {
     }
   }
 
-  if (!IS_PRODUCTION) {
-    initScaleStream();
-  }
   initSyncEngine();
   initLoginScreen();
   initDashboard();
@@ -46,9 +40,6 @@ async function bootstrap() {
   initKeyboardShortcuts();
   initAppNav();
   initThemeToggle();
-  initSettingsModal();
-  initSimulatorControls();
-  applyOperatingMode();
   renderPendingTicketsTable();
   updateClock();
   setInterval(updateClock, 1000);

@@ -22,7 +22,7 @@ export const ScaleApp = {
   // Toast notifications from C#
   showToast: (message, type) => showToast(message, type),
 
-  // Receive real weight data from C# serial reader (stops the simulator)
+  // Receive live weight data from the C# scale reader
   onWeightData: (data) => {
     if (data && typeof data.weight === 'number') {
       applyExternalWeight(data);

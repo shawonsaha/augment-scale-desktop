@@ -112,16 +112,13 @@
     transform: none !important;
   }
 
-  /* ── Hide modal chrome, toast, simulator dock, and other modals ─────── */
+  /* ── Hide modal chrome, toast, and other modals ─────────────────────── */
   #print-modal .modal-header,
   #print-modal .modal-actions,
   #print-modal .modal-close-btn,
   .ticket-preprinted-notice,
   .ticket-reprint-watermark,
   .toast-container,
-  .sim-dock,
-  .sim-dock-overlay,
-  #settings-modal,
   #shortcuts-modal {
     display: none !important;
     visibility: hidden !important;

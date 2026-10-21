@@ -50,7 +50,6 @@ public sealed class ScaleConnectionSetup
     public string ProtocolFormat { get; set; } = "yaohua_format_1";
     public int StabilityWindowMs { get; set; } = 500;
     public double StabilityToleranceKg { get; set; } = 10;
-    public double SimulatorTargetKg { get; set; } = 735;
 }
 
 public sealed class OperatorSetup

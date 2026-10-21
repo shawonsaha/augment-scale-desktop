@@ -8,9 +8,9 @@ using AugmentScale.Protocol;
 namespace AugmentScale.Services;
 
 /// <summary>
-/// Background RS-232 reader for the XK3190-D10. Runs on a dedicated thread,
-/// reconnects automatically and publishes stable/unstable readings. Set
-/// PortName to "SIM" in setup.json to run without hardware.
+/// Background RS-232/TCP reader for the XK3190-D10. Runs on a dedicated thread,
+/// reconnects automatically and publishes stable/unstable readings. A TCP target
+/// connects to the standalone scale simulator.
 /// </summary>
 public sealed class ScaleReaderService : IDisposable
 {
@@ -36,8 +36,7 @@ public sealed class ScaleReaderService : IDisposable
     public bool IsConnected { get; private set; }
     public string StatusMessage { get; private set; } = "Not started";
     public string PortName { get; private set; } = "";
-    public bool IsSimulator => IsInternalSimulator(PortName) ||
-                               PortName.StartsWith("TCP:", StringComparison.OrdinalIgnoreCase);
+    public bool IsSimulator => PortName.StartsWith("TCP:", StringComparison.OrdinalIgnoreCase);
     public WeightReading? LastReading { get; private set; }
 
     public void Start()
@@ -48,7 +47,7 @@ public sealed class ScaleReaderService : IDisposable
         _thread = new Thread(Run)
         {
             IsBackground = true,
-            Name = "XK3190 serial reader",
+            Name = "XK3190 scale reader",
         };
         _thread.Start();
     }
@@ -75,10 +74,6 @@ public sealed class ScaleReaderService : IDisposable
                 {
                     RunTcp(settings, host, port);
                 }
-                else if (IsInternalSimulator(settings.PortName))
-                {
-                    RunSimulator(settings);
-                }
                 else
                 {
                     RunSerial(settings);
@@ -99,40 +94,6 @@ public sealed class ScaleReaderService : IDisposable
             }
 
             if (_running) _stop.Wait(TimeSpan.FromSeconds(3));
-        }
-    }
-
-    private void RunSimulator(ScaleConnectionSetup settings)
-    {
-        SetStatus(true, "Simulator connected");
-        var detector = new StabilityDetector(settings.StabilityWindowMs, settings.StabilityToleranceKg);
-        var random = new Random(20261021);
-        var target = settings.SimulatorTargetKg <= 0 ? 735 : settings.SimulatorTargetKg;
-        var started = DateTimeOffset.Now;
-
-        while (_running && !_stop.IsSet)
-        {
-            var ramp = Math.Min(1, (DateTimeOffset.Now - started).TotalSeconds / 1.5);
-            var noise = (random.NextDouble() - 0.5) * 2.0;
-            var weight = Math.Round(target * ramp + noise, 0);
-            var stability = detector.Add(weight);
-            Publish(new WeightReading
-            {
-                WeightKg = weight,
-                RawDigits = Math.Abs(weight).ToString("000000"),
-                Sign = weight < 0 ? "-" : "+",
-                DecimalCount = 0,
-                ChecksumValid = true,
-                RawFrameHex = "SIM",
-                IsStable = stability.IsStable,
-                StabilityVariance = stability.Variance,
-                StabilitySampleCount = stability.SampleCount,
-                StabilityWindowMs = stability.WindowMs,
-                StabilityToleranceKg = stability.ToleranceKg,
-                Source = "simulator",
-                CapturedAt = DateTimeOffset.Now,
-            });
-            _stop.Wait(120);
         }
     }
 
@@ -248,9 +209,6 @@ public sealed class ScaleReaderService : IDisposable
         try { _database.RecordScaleHealth(eventType, details); }
         catch { /* health logging must never take the reader down */ }
     }
-
-    private static bool IsInternalSimulator(string portName) =>
-        string.Equals(portName, "SIM", StringComparison.OrdinalIgnoreCase);
 
     public static bool TryParseTcp(string? portName, out string host, out int port)
     {
