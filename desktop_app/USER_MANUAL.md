@@ -81,7 +81,7 @@ prototype-to-production/
     AugmentScale.Protocol/        Shared XK3190 framing, checksum, stability, encoder
     AugmentScale.ScaleSimulator/  Standalone GUI scale simulator (development only)
     AugmentScale.Tests/           xUnit protocol, transport and database tests
-    start-dev-sim.ps1             Isolated test data + simulator + app launcher
+    start-dev-sim.ps1             Simulator launcher (isolated or live database)
     USER_MANUAL.md                This document
 ```
 
@@ -211,7 +211,29 @@ Copy-Item ".\AugmentScale\Resources\setup.json" "$env:AUGMENTSCALE_DATA_DIR\setu
 & ".\AugmentScale\bin\Debug\net10.0-windows\win-x64\AugmentScale.exe"
 ```
 
-Delete that temporary directory to reset the test environment. Never point this variable at the live data directory during destructive testing.
+Delete that temporary directory to reset the test environment. Use the simulator
+launcher's `-UseProductionData` switch for intentional live-data tests; do not set
+this variable to the live directory for destructive testing.
+
+### Live database with the simulator
+
+To exercise the real database while the simulator supplies readings:
+
+```powershell
+.\start-dev-sim.ps1 -UseProductionData
+```
+
+This writes vehicle, ticket, audit, and outbox rows to
+`%LOCALAPPDATA%\AugmentScale\augment-scale.db`. The launcher temporarily sets
+`scaleConnection.portName` to `TCP:127.0.0.1:9876` and restores the previous value
+(`COM1` by default) when the application exits. The database itself is not restored.
+
+Add `-BackupDatabase` to copy the database, secrets, configuration, simulator
+settings, and any `-wal`/`-shm` files to
+`%LOCALAPPDATA%\AugmentScale\backups\<timestamp>\` before launch.
+
+The window title shows `Augment Scale — TEST DATA` when the active data directory is
+not `%LOCALAPPDATA%\AugmentScale`; a live run keeps the normal `Augment Scale` title.
 
 ---
 
@@ -477,7 +499,37 @@ Quick start from `desktop_app`:
 .\start-dev-sim.ps1
 ```
 
-The script builds the solution, creates an isolated test data directory at `%TEMP%\augment-scale-dev`, sets `portName` to `TCP:127.0.0.1:9876` and the simulator port to `9876`, starts the simulator, then starts the application with `AUGMENTSCALE_DATA_DIR` pointing at that directory. Closing the application stops the simulator. Delete the test directory to reset tickets and PINs. Use `-Port 9877` (or similar) if `9876` is already in use.
+The script builds the solution, creates an isolated test data directory at `%TEMP%\augment-scale-dev`, sets `portName` to `TCP:127.0.0.1:9876` and the simulator port to `9876`, starts the simulator, then starts the application with `AUGMENTSCALE_DATA_DIR` pointing at that directory. Closing the application stops the simulator and restores the previous scale port in `setup.json`. Delete the test directory to reset tickets and PINs. Use `-Port 9877` (or similar) if `9876` is already in use.
+
+### Testing against the live database
+
+Use `-UseProductionData` when you need to inspect how the application writes to the
+real database:
+
+```powershell
+.\start-dev-sim.ps1 -UseProductionData
+```
+
+Requirements and behavior:
+
+- Close Augment Scale first. The launcher refuses to start if another instance is running.
+- The launcher prints the selected mode and the full database path before launching. Live mode uses `%LOCALAPPDATA%\AugmentScale\augment-scale.db`.
+- Vehicle, ticket, audit, and outbox writes are real. Back up the database and `secrets.dat` before destructive testing.
+- Add `-BackupDatabase` to create an automatic backup under `%LOCALAPPDATA%\AugmentScale\backups\<timestamp>\`.
+- When the application exits, the launcher restores only `scaleConnection.portName` in `setup.json`. The database and other configuration changes remain.
+- If the launcher is forcibly terminated, automatic restore cannot run. Edit `setup.json` manually or restore it from the backup.
+- The `scale_connection_profiles` table keeps the simulator transport until the next normal application launch re-provisions it from the restored `setup.json`.
+
+To verify persistence, add a vehicle, close the application, then run the same command
+again with `-NoBuild`. The launcher re-applies the simulator transport, starts both
+processes, and the existing database rows are still present. If you launch
+`AugmentScale.exe` directly after the script exits, the data is still available, but
+the application uses `COM1` and the scale will be disconnected until the simulator
+launcher is used again.
+
+The window title indicates the active data source: `Augment Scale` for the live
+database and `Augment Scale — TEST DATA` for the isolated or any custom data
+directory.
 
 To run the pieces manually:
 
