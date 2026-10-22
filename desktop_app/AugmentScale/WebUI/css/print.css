@@ -130,13 +130,21 @@
     overflow: hidden !important;
   }
 
-  /* ── Remarks cell: truncate long text to single line with ellipsis ──── */
-  .doc-remarks-cell,
-  #doc-remarks {
+  /* ── Remarks: compact when paired, full width when it owns the row ──── */
+  .doc-remarks-cell--inline {
     max-width: 150px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+  }
+
+  .doc-remarks-cell--full {
+    max-width: none !important;
+    white-space: pre-line !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
   }
 
   /* ── Position the ticket document at top of page ─────────────────────── */

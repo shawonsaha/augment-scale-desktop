@@ -31,6 +31,109 @@ if (typeof window !== 'undefined') {
   window._printConfirmReady = false;
 }
 
+function cleanMetaValue(value) {
+  return value == null ? '' : String(value).trim();
+}
+
+function createMetaRow(entries) {
+  const row = document.createElement('tr');
+  row.className = 'doc-meta-optional';
+
+  const addCell = (tag, className, text, colSpan) => {
+    const cell = document.createElement(tag);
+    cell.className = className;
+    if (colSpan) cell.colSpan = colSpan;
+    cell.textContent = text;
+    row.appendChild(cell);
+  };
+
+  if (entries.length === 1) {
+    const entry = entries[0];
+    const valueClass =
+      entry.label === 'Remarks'
+        ? 'meta-td doc-remarks-cell doc-remarks-cell--full'
+        : 'meta-td';
+    addCell('th', 'meta-th', entry.label);
+    addCell('td', valueClass, entry.value, 3);
+    return row;
+  }
+
+  const [first, second] = entries;
+  const secondValueClass =
+    second.label === 'Remarks'
+      ? 'meta-td doc-remarks-cell doc-remarks-cell--inline'
+      : 'meta-td';
+
+  addCell('th', 'meta-th', first.label);
+  addCell('td', 'meta-td', first.value);
+  addCell('th', 'meta-th', second.label);
+  addCell('td', secondValueClass, second.value);
+
+  return row;
+}
+
+function buildMetaRows(fields, remarksText) {
+  const present = fields.filter((field) => field.value);
+  const byLabel = new Map(present.map((field) => [field.label, field]));
+  const used = new Set();
+  const rows = [];
+
+  const pairFields = (labelA, labelB) => {
+    rows.push([byLabel.get(labelA), byLabel.get(labelB)]);
+    used.add(labelA);
+    used.add(labelB);
+  };
+
+  if (byLabel.has('Material') && byLabel.has('Client')) {
+    pairFields('Material', 'Client');
+  } else if (byLabel.has('Client') && byLabel.has('Challan / Gate Pass')) {
+    pairFields('Client', 'Challan / Gate Pass');
+  }
+
+  if (byLabel.has('Driver') && byLabel.has('Driver Mobile')) {
+    pairFields('Driver', 'Driver Mobile');
+  }
+
+  const leftovers = present.filter((field) => !used.has(field.label));
+  const remarks = remarksText ? { label: 'Remarks', value: remarksText } : null;
+  const totalFields = present.length + (remarks ? 1 : 0);
+
+  let remarksWithChallan = null;
+  if (remarks && totalFields % 2 === 0) {
+    const challanIndex = leftovers.findIndex(
+      (field) => field.label === 'Challan / Gate Pass'
+    );
+    if (challanIndex >= 0) {
+      remarksWithChallan = leftovers.splice(challanIndex, 1)[0];
+    }
+  }
+
+  for (let i = 0; i < leftovers.length; i += 2) {
+    rows.push(leftovers.slice(i, i + 2));
+  }
+
+  return { rows, remarks, remarksWithChallan };
+}
+
+function renderMetaRows(fields, remarksText) {
+  const body = document.getElementById('doc-meta-body');
+  if (!body) return;
+
+  body.querySelectorAll('tr.doc-meta-optional').forEach((row) => row.remove());
+
+  const { rows, remarks, remarksWithChallan } = buildMetaRows(fields, remarksText);
+
+  for (const entries of rows) {
+    body.appendChild(createMetaRow(entries));
+  }
+
+  if (remarks) {
+    body.appendChild(
+      createMetaRow(remarksWithChallan ? [remarksWithChallan, remarks] : [remarks])
+    );
+  }
+}
+
 export function openPrintSlipModal(data) {
   const modal = document.getElementById('print-modal');
   if (!modal) return;
@@ -83,86 +186,26 @@ export function openPrintSlipModal(data) {
     }
   }
 
-  // ── Conditional Fields Helper ─────────────────────────────────────────
-  function setPairRow(rowEl, th1, td1, label1, val1, th2, td2, label2, val2) {
-    if (!rowEl) return;
-    const v1 = (val1 || '').trim();
-    const v2 = (val2 || '').trim();
-    if (v1 && v2) {
-      rowEl.style.display = '';
-      if (th1) th1.textContent = label1;
-      if (td1) {
-        td1.textContent = v1;
-        td1.colSpan = 1;
-      }
-      if (th2) th2.style.display = '';
-      if (td2) {
-        td2.style.display = '';
-        td2.textContent = v2;
-      }
-    } else if (v1 || v2) {
-      rowEl.style.display = '';
-      if (th1) th1.textContent = v1 ? label1 : label2;
-      if (td1) {
-        td1.textContent = v1 || v2;
-        td1.colSpan = 3;
-      }
-      if (th2) th2.style.display = 'none';
-      if (td2) {
-        td2.style.display = 'none';
-        td2.textContent = v2;
-      }
-    } else {
-      rowEl.style.display = 'none';
-    }
-  }
-
-  // Material & Client
-  const isOther =
-    !data.material ||
-    ['other', 'others', '-', '--', '------', 'n/a'].includes(data.material.toLowerCase().trim());
-  setPairRow(
-    document.getElementById('doc-row-material-client'),
-    document.getElementById('doc-th-material'),
-    document.getElementById('doc-material'),
-    'Material',
-    isOther ? '' : data.material,
-    document.getElementById('doc-th-client'),
-    document.getElementById('doc-client'),
-    'Client',
-    data.client
+  // ── Optional Metadata Rows (Pairs reflow based on populated fields) ───
+  const materialValue = cleanMetaValue(data.material);
+  const isOther = ['other', 'others', '-', '--', '------', 'n/a'].includes(
+    materialValue.toLowerCase()
   );
 
-  // Driver & Phone
-  const driverRow = document.getElementById('doc-row-driver-phone');
-  setPairRow(
-    driverRow,
-    driverRow?.querySelector('th'),
-    document.getElementById('doc-driver-name'),
-    'Driver',
-    data.driver,
-    document.getElementById('doc-th-phone'),
-    document.getElementById('doc-phone'),
-    'Phone',
-    data.phone
-  );
-
-  // Challan & Remarks (Appends override audit if present)
-  let remarksText = data.remarks || '';
+  let remarksText = cleanMetaValue(data.remarks);
   if (data.override) {
     const auditText = `OVERRIDE: ${data.override.reason} (Auth: ${data.override.operator})`;
     remarksText = remarksText ? `${remarksText} • ${auditText}` : auditText;
   }
-  const challanRow = document.getElementById('doc-row-challan-remarks');
-  setPairRow(
-    challanRow,
-    challanRow?.querySelector('th'),
-    document.getElementById('doc-challan'),
-    'Challan / Gate Pass',
-    data.challan,
-    document.getElementById('doc-th-remarks'),
-    document.getElementById('doc-remarks'),
-    'Remarks',
+
+  renderMetaRows(
+    [
+      { label: 'Material', value: isOther ? '' : materialValue },
+      { label: 'Client', value: cleanMetaValue(data.client) },
+      { label: 'Driver', value: cleanMetaValue(data.driver) },
+      { label: 'Driver Mobile', value: cleanMetaValue(data.phone) },
+      { label: 'Challan / Gate Pass', value: cleanMetaValue(data.challan) },
+    ],
     remarksText
   );
 
