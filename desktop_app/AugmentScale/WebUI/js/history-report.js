@@ -616,7 +616,23 @@ function printReport() {
 
   const style = document.createElement('style');
   style.id = PAGE_STYLE_ID;
-  style.textContent = '@media print { @page { size: A4 portrait; margin: 10mm; } }';
+  style.textContent = `@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+    @top-left { content: ""; }
+    @top-center { content: ""; }
+    @top-right { content: ""; }
+    @bottom-left { content: ""; }
+    @bottom-center { content: ""; }
+    @bottom-right {
+      content: counter(page) " / " counter(pages);
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      color: #4b5563;
+    }
+  }
+}`;
   document.head.appendChild(style);
   document.body.classList.add('printing-history-report');
 
@@ -627,12 +643,6 @@ function printReport() {
   window.addEventListener('afterprint', cleanup, { once: true });
 
   setTimeout(() => {
-    if (IS_PRODUCTION) {
-      sendCommand('showSystemPrintDialog').catch(() => {
-        showToast('The system print dialog could not be opened.', 'warning');
-      });
-      return;
-    }
     try {
       window.print();
     } catch {
