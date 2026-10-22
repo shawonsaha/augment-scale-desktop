@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using AugmentScale.Services;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -37,6 +38,7 @@ public partial class MainWindow : Window
             ? "Augment Scale"
             : "Augment Scale — TEST DATA";
         Loaded += OnLoaded;
+        Activated += OnActivated;
         Closing += OnClosing;
     }
 
@@ -105,10 +107,25 @@ public partial class MainWindow : Window
         }
 
         LoadingOverlay.Visibility = Visibility.Collapsed;
+        FocusWebViewDeferred();
         if (_started) return;
         _started = true;
         _scale.Start();
         AppLog.Info("Scale reader started");
+    }
+
+    private void OnActivated(object? sender, EventArgs e) => FocusWebViewDeferred();
+
+    private void FocusWebViewDeferred()
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(FocusWebView));
+    }
+
+    private void FocusWebView()
+    {
+        if (!IsActive || LoadingOverlay.Visibility != Visibility.Collapsed) return;
+        WebView.Focus();
+        Keyboard.Focus(WebView);
     }
 
     private void OnProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
