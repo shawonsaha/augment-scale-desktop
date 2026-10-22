@@ -130,7 +130,7 @@ Solution file containing a single WPF project.
     <AssemblyName>AugmentScale</AssemblyName>
     <ApplicationIcon>Resources\app-icon.ico</ApplicationIcon>
     <Version>1.0.0</Version>
-    <Company>Meghna Digital Scales</Company>
+    <Company>Augment Digital Scale</Company>
     <Product>Augment Scale</Product>
   </PropertyGroup>
 

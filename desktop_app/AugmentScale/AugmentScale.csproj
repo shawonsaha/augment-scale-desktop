@@ -6,7 +6,7 @@
     <RootNamespace>AugmentScale</RootNamespace>
     <AssemblyName>AugmentScale</AssemblyName>
     <Version>1.0.0</Version>
-    <Company>Meghna Digital Scales</Company>
+    <Company>Augment Digital Scale</Company>
     <Product>Augment Scale</Product>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
