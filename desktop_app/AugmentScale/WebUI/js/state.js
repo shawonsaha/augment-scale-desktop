@@ -734,6 +734,7 @@ export const state = {
   // Filtered tickets cache for keyboard navigation
   currentFilteredTickets: [],
   focusedTicketIndex: -1,
+  pendingTicketsSort: { key: 'waiting', dir: 'desc' },
   _deleteDialogOpen: false,
   _overrideDialogOpen: false,
 

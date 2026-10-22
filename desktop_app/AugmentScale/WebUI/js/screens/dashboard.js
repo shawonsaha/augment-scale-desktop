@@ -3,7 +3,7 @@
  * Central operation hub, active pending tickets table, search, keyboard table navigation,
  * ticket deletion with audit metadata and reason confirmation.
  */
-import { state, pendingTickets, deleteTicket } from '../state.js';
+import { state, pendingTickets, deleteTicket, getTicketTimestamp } from '../state.js';
 import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
 import { escapeHtml, formatElapsed, directionOf } from '../utils.js';
@@ -11,6 +11,115 @@ import { openFirstWeigh } from './first-weigh.js';
 import { openSecondWeighWithTicket } from './second-weigh.js';
 import { mountHud } from '../hud.js';
 import { openReasonDialog } from '../reason-dialog.js';
+
+const TICKET_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+const SORT_COLUMNS = {
+  id: {
+    label: 'Ticket ID',
+    compare: (a, b) => (Number(a.id) || 0) - (Number(b.id) || 0),
+  },
+  truckNo: {
+    label: 'Truck Reg No',
+    compare: (a, b) => TICKET_COLLATOR.compare(a.truckNo || '', b.truckNo || ''),
+  },
+  driver: {
+    label: 'Driver',
+    compare: (a, b) => TICKET_COLLATOR.compare(a.driver || '', b.driver || ''),
+  },
+  firstOperator: {
+    label: 'First Weigh By',
+    compare: (a, b) => TICKET_COLLATOR.compare(a.firstOperator || '', b.firstOperator || ''),
+  },
+  material: {
+    label: 'Material',
+    compare: (a, b) => TICKET_COLLATOR.compare(a.material || '', b.material || ''),
+  },
+  firstWeight: {
+    label: 'First Weight',
+    compare: (a, b) => (Number(a.firstWeight) || 0) - (Number(b.firstWeight) || 0),
+  },
+  waiting: {
+    label: 'Waiting',
+  },
+};
+
+const DEFAULT_SORT_DIR = { waiting: 'desc' };
+
+function compareTickets(a, b, key, dir) {
+  const idTieBreak = (Number(a.id) || 0) - (Number(b.id) || 0);
+
+  if (key === 'waiting') {
+    const aTime = getTicketTimestamp(a);
+    const bTime = getTicketTimestamp(b);
+    if (!aTime && !bTime) return idTieBreak;
+    if (!aTime) return 1;
+    if (!bTime) return -1;
+    const cmp = dir === 'asc' ? bTime - aTime : aTime - bTime;
+    return cmp || idTieBreak;
+  }
+
+  const factor = dir === 'desc' ? -1 : 1;
+  const compare = SORT_COLUMNS[key]?.compare;
+  const cmp = compare ? compare(a, b) : 0;
+  return (cmp || idTieBreak) * factor;
+}
+
+function getSortedPendingTickets() {
+  const { key, dir } = state.pendingTicketsSort;
+  return [...pendingTickets].sort((a, b) => compareTickets(a, b, key, dir));
+}
+
+function updateSortHeaders() {
+  const { key, dir } = state.pendingTicketsSort;
+  const headers = document.querySelectorAll('#pending-tickets-table th[data-sort-key]');
+
+  headers.forEach((th) => {
+    const active = th.dataset.sortKey === key;
+    th.setAttribute(
+      'aria-sort',
+      active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'
+    );
+
+    if (active) {
+      th.dataset.sortDir = dir;
+    } else {
+      delete th.dataset.sortDir;
+    }
+
+    const btn = th.querySelector('.th-sort-btn');
+    if (btn) {
+      const label = SORT_COLUMNS[th.dataset.sortKey]?.label || 'column';
+      const direction =
+        th.dataset.sortKey === 'waiting'
+          ? dir === 'asc'
+            ? 'shortest wait first'
+            : 'longest wait first'
+          : dir === 'asc'
+            ? 'ascending'
+            : 'descending';
+      btn.title = active
+        ? `${label} sorted ${direction} — click to reverse`
+        : `Sort by ${label}`;
+    }
+  });
+}
+
+function setSort(key) {
+  if (!SORT_COLUMNS[key]) return;
+
+  const sort = state.pendingTicketsSort;
+  if (sort.key === key) {
+    sort.dir = sort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sort.key = key;
+    sort.dir = DEFAULT_SORT_DIR[key] || 'asc';
+  }
+
+  updateSortHeaders();
+  const searchInput = document.getElementById('tickets-search-input');
+  renderPendingTicketsTable(searchInput ? searchInput.value.trim() : '');
+}
 
 export function initDashboard() {
   const hudSlot = document.getElementById('dashboard-hud-slot');
@@ -51,6 +160,17 @@ export function initDashboard() {
       renderPendingTicketsTable(e.target.value.trim());
     });
   }
+
+  // Sortable column headers
+  const ticketsTableHead = document.querySelector('#pending-tickets-table thead');
+  if (ticketsTableHead) {
+    ticketsTableHead.addEventListener('click', (e) => {
+      const sortBtn = e.target.closest('.th-sort-btn');
+      if (!sortBtn) return;
+      setSort(sortBtn.dataset.sortKey);
+    });
+  }
+  updateSortHeaders();
 
   setInterval(() => {
     if (state.currentScreen !== 'dashboard-screen') return;
@@ -102,6 +222,11 @@ export function initDashboard() {
         activeEl.blur();
         updateTableRowFocus();
       }
+      return;
+    }
+
+    // Let the sort button's native activation run before table row shortcuts.
+    if (e.key === 'Enter' && activeEl && activeEl.closest?.('.th-sort-btn')) {
       return;
     }
 
@@ -291,7 +416,10 @@ export function renderPendingTicketsTable(query = '') {
     searchInput.value = '';
   }
 
-  const filtered = pendingTickets.filter((t) => {
+  const previouslyFocusedId =
+    state.currentFilteredTickets?.[state.focusedTicketIndex]?.id;
+
+  const filtered = getSortedPendingTickets().filter((t) => {
     if (!query) return true;
     const q = query.toLowerCase();
     return (
@@ -306,12 +434,17 @@ export function renderPendingTicketsTable(query = '') {
 
   if (filtered.length === 0) {
     state.focusedTicketIndex = -1;
-  } else if (
-    typeof state.focusedTicketIndex !== 'number' ||
-    state.focusedTicketIndex < 0 ||
-    state.focusedTicketIndex >= filtered.length
-  ) {
-    state.focusedTicketIndex = 0;
+  } else {
+    const previousFocusIndex = filtered.findIndex((t) => t.id === previouslyFocusedId);
+    if (previousFocusIndex >= 0) {
+      state.focusedTicketIndex = previousFocusIndex;
+    } else if (
+      typeof state.focusedTicketIndex !== 'number' ||
+      state.focusedTicketIndex < 0 ||
+      state.focusedTicketIndex >= filtered.length
+    ) {
+      state.focusedTicketIndex = 0;
+    }
   }
 
   if (countBadge) {

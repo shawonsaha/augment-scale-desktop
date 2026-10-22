@@ -359,7 +359,7 @@ Only one copy can run per Windows session. A second launch displays "Augment Sca
 The dashboard shows:
 
 - live weight and scale connection status;
-- pending tickets with truck, driver, first weight, and elapsed time;
+- pending tickets with truck, driver, first weight, and elapsed time, sorted by longest wait first by default (click any column header to change the sort);
 - search for pending tickets;
 - counts for today's completed, pending, and total tickets;
 - actions for Inbound and Outbound first weigh.

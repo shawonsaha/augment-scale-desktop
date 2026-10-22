@@ -506,6 +506,68 @@ body.dark-mode .tickets-count-badge,
   white-space: nowrap;
 }
 
+.tickets-table th.sortable {
+  padding: 0;
+}
+
+.th-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--spring-duration-fast) ease;
+}
+
+.tickets-table th.sortable:hover .th-sort-btn,
+.tickets-table th[data-sort-dir] .th-sort-btn {
+  color: var(--color-brand);
+}
+
+.th-sort-btn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: -2px;
+  border-radius: var(--radius-xs);
+}
+
+.sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 10px;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.3;
+  transition:
+    opacity var(--spring-duration-fast) ease,
+    color var(--spring-duration-fast) ease;
+}
+
+.sort-indicator::before {
+  content: '⇅';
+}
+
+.tickets-table th[data-sort-dir='asc'] .sort-indicator::before {
+  content: '▲';
+}
+
+.tickets-table th[data-sort-dir='desc'] .sort-indicator::before {
+  content: '▼';
+}
+
+.tickets-table th[data-sort-dir] .sort-indicator {
+  opacity: 1;
+}
+
 .tickets-table th.th-delete,
 .tickets-table td.col-delete {
   width: 36px;

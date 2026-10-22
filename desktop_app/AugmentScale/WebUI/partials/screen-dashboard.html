@@ -91,15 +91,54 @@
         <table class="tickets-table" id="pending-tickets-table">
           <thead>
             <tr>
-              <th class="col-ticket-id">Ticket ID</th>
-              <th class="col-truck-no">Truck Reg No</th>
-              <th class="col-driver">Driver</th>
-              <th class="col-operator">First Weigh By</th>
-              <th class="col-material">Material</th>
-              <th class="col-weight">First Weight</th>
-              <th class="col-waiting">Waiting</th>
-              <th class="col-action">Action</th>
-              <th class="th-delete col-delete" aria-label="Delete"></th>
+              <th scope="col" class="col-ticket-id sortable" data-sort-key="id" aria-sort="none">
+                <button type="button" class="th-sort-btn" data-sort-key="id">
+                  Ticket ID <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="col-truck-no sortable" data-sort-key="truckNo" aria-sort="none">
+                <button type="button" class="th-sort-btn" data-sort-key="truckNo">
+                  Truck Reg No <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="col-driver sortable" data-sort-key="driver" aria-sort="none">
+                <button type="button" class="th-sort-btn" data-sort-key="driver">
+                  Driver <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th
+                scope="col"
+                class="col-operator sortable"
+                data-sort-key="firstOperator"
+                aria-sort="none"
+              >
+                <button type="button" class="th-sort-btn" data-sort-key="firstOperator">
+                  First Weigh By <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="col-material sortable" data-sort-key="material" aria-sort="none">
+                <button type="button" class="th-sort-btn" data-sort-key="material">
+                  Material <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="col-weight sortable" data-sort-key="firstWeight" aria-sort="none">
+                <button type="button" class="th-sort-btn" data-sort-key="firstWeight">
+                  First Weight <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th
+                scope="col"
+                class="col-waiting sortable"
+                data-sort-key="waiting"
+                data-sort-dir="desc"
+                aria-sort="descending"
+              >
+                <button type="button" class="th-sort-btn" data-sort-key="waiting">
+                  Waiting <span class="sort-indicator" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="col-action">Action</th>
+              <th scope="col" class="th-delete col-delete" aria-label="Delete"></th>
             </tr>
           </thead>
           <tbody id="pending-tickets-tbody">
