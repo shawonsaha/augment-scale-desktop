@@ -355,6 +355,31 @@
   border-color: var(--border-medium);
 }
 
+.telemetry-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.telemetry-btn.is-refreshing svg {
+  animation: telemetry-refresh-spin 0.9s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes telemetry-refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .telemetry-btn.is-refreshing svg {
+    animation: none;
+  }
+}
+
 .sim-mode-pill {
   display: inline-flex;
   align-items: center;

@@ -846,6 +846,8 @@ body.dark-mode .fw-pending-open-btn:hover,
 
 .fw-register-strip-info {
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   gap: 1px;
 }
@@ -859,11 +861,13 @@ body.dark-mode .fw-pending-open-btn:hover,
 .fw-register-strip-desc {
   font-size: 10px;
   font-weight: 500;
+  line-height: 1.35;
   color: var(--text-muted);
 }
 
 .fw-register-btn {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
   height: 28px;
@@ -892,6 +896,66 @@ body.dark-mode .fw-pending-open-btn:hover,
   background: var(--surface-panel-sub);
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
+}
+
+.fw-register-strip--new {
+  background: var(--color-brand-light);
+  border-color: var(--color-brand-border);
+  border-left: 3px solid var(--color-brand);
+}
+
+.fw-register-strip--new .fw-register-strip-title {
+  color: var(--color-brand);
+}
+
+.fw-register-strip--new .fw-register-btn {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-brand-on);
+}
+
+.fw-register-strip--new .fw-register-btn:hover {
+  background: var(--color-brand-hover);
+  border-color: var(--color-brand-hover);
+}
+
+.fw-register-strip--new .fw-register-btn kbd {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.38);
+  color: inherit;
+}
+
+.fw-register-strip--update {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: var(--status-motion-border);
+  border-left: 3px solid var(--color-warning);
+}
+
+.fw-register-strip--update .fw-register-strip-title {
+  color: #b45309;
+}
+
+.fw-register-strip--update .fw-register-btn {
+  background: var(--color-warning);
+  border-color: var(--color-warning);
+  color: #1f2937;
+}
+
+.fw-register-strip--update .fw-register-btn:hover {
+  background: #d97706;
+  border-color: #d97706;
+  color: #ffffff;
+}
+
+.fw-register-strip--update .fw-register-btn kbd {
+  background: rgba(15, 23, 42, 0.12);
+  border-color: rgba(15, 23, 42, 0.18);
+  color: inherit;
+}
+
+body.dark-mode .fw-register-strip--update .fw-register-strip-title,
+:root[data-theme='dark'] .fw-register-strip--update .fw-register-strip-title {
+  color: var(--color-warning);
 }
 
 /* Pre-filled Input Accent */

@@ -12,6 +12,7 @@ import { initHistoryScreen } from './screens/history.js';
 import { initTrucksScreen } from './screens/trucks.js';
 import { initPrintModal } from './print.js';
 import { initKeyboardShortcuts } from './keyboard.js';
+import { initRefreshControls } from './refresh.js';
 import { initThemeToggle } from './theme.js';
 import { updateClock, initAppNav } from './router.js';
 import { IS_PRODUCTION } from './runtime.js';
@@ -37,6 +38,7 @@ async function bootstrap() {
   initHistoryScreen();
   initTrucksScreen();
   initPrintModal();
+  initRefreshControls();
   initKeyboardShortcuts();
   initAppNav();
   initThemeToggle();

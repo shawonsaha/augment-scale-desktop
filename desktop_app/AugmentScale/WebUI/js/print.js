@@ -16,9 +16,8 @@ import {
   recordReprint,
   logAction,
   commitSecondWeigh,
-  setRegisteredTrucks,
 } from './state.js';
-import { IS_PRODUCTION, sendCommand } from './runtime.js';
+import { IS_PRODUCTION } from './runtime.js';
 import { openReasonDialog } from './reason-dialog.js';
 import { renderPendingTicketsTable } from './screens/dashboard.js';
 import { triggerSync, updateSyncUI } from './sync.js';
@@ -457,12 +456,6 @@ async function handleConfirmAndPrint() {
       completedTickets.unshift(completed);
       renderPendingTicketsTable();
 
-      try {
-        setRegisteredTrucks(await sendCommand('getVehicles'));
-      } catch {
-        // Vehicle stats refresh is best-effort; the ticket is already durable.
-      }
-
       document.dispatchEvent(
         new CustomEvent('history:refresh', { detail: { ticketId: completed.id } })
       );
@@ -536,6 +529,7 @@ async function handleConfirmAndPrint() {
       REGISTERED_TRUCKS[truckIdx].tripCount = (REGISTERED_TRUCKS[truckIdx].tripCount || 0) + 1;
       REGISTERED_TRUCKS[truckIdx].lastTare = completedTicket.tareWeight;
     }
+    document.dispatchEvent(new CustomEvent('vehicle:refresh'));
     logAction('complete_weigh', 'ticket', completedTicket.id, {
       netWeight: completedTicket.netWeight,
     });

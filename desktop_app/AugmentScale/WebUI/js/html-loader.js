@@ -6,7 +6,7 @@
 
 // Shared asset version tag. Bump alongside the ?v= tags in index.html on deploy
 // so partials/JS/CSS cache normally between deploys instead of re-fetching every load.
-export const ASSET_VERSION = 'prod2';
+export const ASSET_VERSION = 'prod5';
 
 const PARTIALS = [
   'partials/telemetry-bar.html',

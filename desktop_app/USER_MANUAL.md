@@ -371,7 +371,7 @@ If the scale is disconnected, the HUD shows `------` and `DISCONNECTED`. Capture
 1. From the dashboard, choose **Inbound** (loaded truck, gross) or **Outbound** (empty truck, tare).
 2. Enter the truck registration number. Suggestions from registered trucks appear as you type.
 3. Optionally enter driver, phone, client, material, challan/gate-pass number, and remarks.
-4. If the truck is not registered, use **Register Truck** (`Ctrl+S`) to save it. Registration also works later from the Trucks screen.
+4. Truck details save automatically with the ticket when you click **Confirm & Print**. The suggestion strip is only a shortcut for saving or updating the truck before the ticket is committed; you can also edit or archive it later from the Trucks screen.
 5. Confirm the live weight is stable and the platform is clear except for the truck.
 6. Click **Capture Weight** (or press `Space`).
 7. Check the captured weight and the pre-print preview. The preview shows the server-allocated ticket number.
@@ -385,6 +385,7 @@ Notes:
 - If the weight is zero or unstable, capture remains unavailable.
 - The first-weigh modal is a preview only; no ticket is written until **Confirm & Print** is clicked.
 - The printed slip uses the number returned by the database, not the temporary preview numbering.
+- When the ticket is committed, the truck is created or updated in the Trucks register automatically. A brief toast confirms new or changed truck details.
 
 ### 8.3 Second weigh and certificate
 
@@ -455,6 +456,8 @@ The Trucks screen supports:
 - show archived trucks and restore them.
 
 A truck with an open ticket cannot be archived. Complete or delete the pending ticket first.
+
+Vehicle details and running totals update automatically after ticket commits, completions, and voids. Use the refresh button in the top bar (or `Ctrl+R`) to reload the register, pending tickets, history, and sync status from the database without restarting the application.
 
 ### 8.9 Sync status
 
@@ -604,6 +607,8 @@ Tests create temporary directories and do not require a scale, printer, or exter
 - [ ] Existing open ticket blocks a second first weigh for the same truck.
 - [ ] First-weigh preview does not write a ticket until confirmed.
 - [ ] Confirmed first weigh appears in pending tickets with the correct number.
+- [ ] Confirmed first weigh creates or updates the truck in the Trucks register without a restart.
+- [ ] Navbar refresh and `Ctrl+R` reload database data and show a confirmation toast.
 - [ ] Second weigh calculates gross, tare, and net correctly.
 - [ ] Zero/negative net requires a reason before preview.
 - [ ] Certificate confirm writes the ticket and clears it from pending.
@@ -624,7 +629,8 @@ Tests create temporary directories and do not require a scale, printer, or exter
 | `O` | Outbound first weigh (dashboard) / select Outbound (first-weigh screen) |
 | `M` | Focus material field on the first-weigh screen |
 | `Space` | Capture or recapture weight on weigh screens |
-| `Ctrl+S` | Register or update truck from first weigh |
+| `Ctrl+S` | Register or update truck from first weigh (optional; ticket commit also saves it) |
+| `Ctrl+R` | Refresh all data from the local database without restarting |
 | `Enter` | Preview when available; confirm print when the preview is ready |
 | `Shift+Enter` | Open anomaly override on the second-weigh screen |
 | `Esc` | Go back, close dialog, or cancel preview |

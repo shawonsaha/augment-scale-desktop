@@ -10,6 +10,7 @@ import { state, pendingTickets } from './state.js';
 import { showScreen, requestNavigation } from './router.js';
 import { showToast } from './toast.js';
 import { closePrintModal } from './print.js';
+import { refreshAllData } from './refresh.js';
 import {
   setFirstWeighDirection,
   handleFirstWeighBack,
@@ -52,6 +53,16 @@ export function initKeyboardShortcuts() {
   applyNavChordLabels();
 
   document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'r') {
+      e.preventDefault();
+      if (document.querySelector('.modal-overlay.open')) {
+        showToast('Close the open dialog before refreshing', 'warning');
+        return;
+      }
+      refreshAllData();
+      return;
+    }
+
     // Block all global hotkeys while modal dialogs are open (except print modal Enter/Esc)
     if (state._deleteDialogOpen || state._discardDialogOpen || state._overrideDialogOpen) return;
 

@@ -3,7 +3,15 @@
  * Search/paginate the register, add or edit a vehicle, archive/restore with
  * an audit reason. Archiving is blocked while the plate has an open ticket.
  */
-import { state, REGISTERED_TRUCKS, registerTruck, archiveTruck, restoreTruck } from '../state.js';
+import {
+  state,
+  REGISTERED_TRUCKS,
+  registerTruck,
+  archiveTruck,
+  restoreTruck,
+  refreshVehiclesFromDatabase,
+} from '../state.js';
+import { IS_PRODUCTION } from '../runtime.js';
 import { showToast } from '../toast.js';
 import { openReasonDialog } from '../reason-dialog.js';
 import { openConfirmDialog } from '../confirm-dialog.js';
@@ -379,6 +387,9 @@ export function initTrucksScreen() {
 
   document.addEventListener('screenchange', (event) => {
     if (event.detail?.screenId !== 'trucks-screen') return;
+    if (IS_PRODUCTION) {
+      refreshVehiclesFromDatabase().catch(() => {});
+    }
     requestAnimationFrame(() => {
       pageSize = calculatePageSize();
       state.trucks.pageSize = pageSize;

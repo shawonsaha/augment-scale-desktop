@@ -194,6 +194,7 @@ export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
     );
     if (index >= 0) REGISTERED_TRUCKS[index] = record;
     else REGISTERED_TRUCKS.unshift(record);
+    notifyVehicleRefresh();
     return record;
   }
 
@@ -211,6 +212,7 @@ export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
     };
     REGISTERED_TRUCKS[existingIndex] = record;
     logAction('edit_vehicle', 'vehicle', plate, { before: { ...old }, after: { ...record } });
+    notifyVehicleRefresh();
     return record;
   }
 
@@ -230,6 +232,7 @@ export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
   };
   REGISTERED_TRUCKS.unshift(record);
   logAction('add_vehicle', 'vehicle', plate, { plate });
+  notifyVehicleRefresh();
   return record;
 }
 
@@ -259,6 +262,7 @@ export async function archiveTruck(plate, reason, operatorName) {
         (t) => (t.plate || '').toUpperCase() === target
       );
       if (index >= 0) REGISTERED_TRUCKS[index] = record;
+      notifyVehicleRefresh();
       return { ok: true, truck: record };
     } catch (error) {
       return { ok: false, reason: error.message };
@@ -278,6 +282,7 @@ export async function archiveTruck(plate, reason, operatorName) {
   truck.archivedBy = operatorName || 'Unknown';
   truck.archivedReason = reason || '';
   logAction('archive_vehicle', 'vehicle', target, { reason });
+  notifyVehicleRefresh();
   return { ok: true, truck };
 }
 
@@ -295,6 +300,7 @@ export async function restoreTruck(plate, operatorName) {
     });
     const index = REGISTERED_TRUCKS.findIndex((t) => (t.plate || '').toUpperCase() === target);
     if (index >= 0) REGISTERED_TRUCKS[index] = record;
+    notifyVehicleRefresh();
     return record;
   }
 
@@ -303,6 +309,7 @@ export async function restoreTruck(plate, operatorName) {
   truck.archivedBy = null;
   truck.archivedReason = null;
   logAction('restore_vehicle', 'vehicle', target, {});
+  notifyVehicleRefresh();
   return truck;
 }
 
@@ -408,6 +415,24 @@ export function setRegisteredTrucks(trucks) {
   }));
 }
 
+function notifyVehicleRefresh() {
+  if (typeof document !== 'undefined') {
+    document.dispatchEvent(new CustomEvent('vehicle:refresh'));
+  }
+}
+
+export async function refreshVehiclesFromDatabase() {
+  if (!IS_PRODUCTION) {
+    notifyVehicleRefresh();
+    return REGISTERED_TRUCKS;
+  }
+
+  const vehicles = await sendCommand('getVehicles');
+  setRegisteredTrucks(vehicles || []);
+  notifyVehicleRefresh();
+  return REGISTERED_TRUCKS;
+}
+
 export function setNextTicketId(id) {
   const value = Number(id);
   nextTicketId = Number.isFinite(value) ? Math.max(11353, value) : 11353;
@@ -457,17 +482,24 @@ export async function commitFirstWeigh(ticketData) {
     recordFirstPrint: true,
   });
   setNextTicketId(saved.id + 1);
+  try {
+    await refreshVehiclesFromDatabase();
+  } catch {}
   return saved;
 }
 
 /** Persists the second weigh and returns the completed certificate record. */
 export async function commitSecondWeigh(ticketData) {
-  return sendCommand('completeTicket', {
+  const completed = await sendCommand('completeTicket', {
     ...ticketData,
     operatorId: state.activeOperator?.id || '',
     operatorName: state.activeOperator?.name || 'Unknown Operator',
     recordCertificatePrint: true,
   });
+  try {
+    await refreshVehiclesFromDatabase();
+  } catch {}
+  return completed;
 }
 
 export async function deleteTicket(ticketId, reason, operatorName) {
@@ -582,6 +614,9 @@ export async function voidTicket(ticketId, reason, operatorName) {
     });
     completedTickets.splice(idx, 1);
     voidedTickets.unshift(updated);
+    try {
+      await refreshVehiclesFromDatabase();
+    } catch {}
     return updated;
   }
 
@@ -593,6 +628,7 @@ export async function voidTicket(ticketId, reason, operatorName) {
   voidedTickets.unshift(ticket);
   completedTickets.splice(idx, 1);
   logAction('void', 'ticket', ticketId, { reason });
+  notifyVehicleRefresh();
   return ticket;
 }
 

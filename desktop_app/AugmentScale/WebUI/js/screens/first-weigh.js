@@ -140,7 +140,10 @@ export function resetFirstWeighForm() {
   if (pendingNotice) pendingNotice.hidden = true;
   if (truckSuggestions) truckSuggestions.hidden = true;
   if (materialDropdown) materialDropdown.hidden = true;
-  if (regStrip) regStrip.hidden = true;
+  if (regStrip) {
+    regStrip.hidden = true;
+    regStrip.classList.remove('fw-register-strip--new', 'fw-register-strip--update');
+  }
 
   // Set quick-pick 'Other' pill to active
   const pills = document.querySelectorAll('.fw-quick-pick');
@@ -294,6 +297,8 @@ export function updateRegisterStrip() {
   const btnTextEl = document.getElementById('fw-register-btn-text');
   if (!strip) return;
 
+  strip.classList.remove('fw-register-strip--new', 'fw-register-strip--update');
+
   const truckInput = document.getElementById('fw-truck-input');
   const plate = truckInput ? truckInput.value.trim().toUpperCase() : '';
   if (!plate) {
@@ -308,21 +313,21 @@ export function updateRegisterStrip() {
   const saved = REGISTERED_TRUCKS.find((t) => (t.plate || '').trim().toUpperCase() === plate);
 
   if (!saved) {
-    // New truck
     if (titleEl) titleEl.textContent = 'Register truck';
-    if (descEl) descEl.textContent = 'New truck, not saved yet';
+    if (descEl) descEl.textContent = 'Auto-saves with this ticket · Edit or archive later in Trucks';
     if (btnTextEl) btnTextEl.textContent = 'Register Truck';
+    strip.classList.add('fw-register-strip--new');
     strip.hidden = false;
   } else {
-    // Existing truck: check if form has differing non-empty values
     const driverDiff = Boolean(driver && driver !== (saved.driver || ''));
     const phoneDiff = Boolean(phone && phone !== (saved.phone || ''));
     const clientDiff = Boolean(client && client !== (saved.client || ''));
 
     if (driverDiff || phoneDiff || clientDiff) {
       if (titleEl) titleEl.textContent = 'Update truck';
-      if (descEl) descEl.textContent = 'Details changed';
+      if (descEl) descEl.textContent = 'Changes auto-save with this ticket · Edit or archive later in Trucks';
       if (btnTextEl) btnTextEl.textContent = 'Update Truck';
+      strip.classList.add('fw-register-strip--update');
       strip.hidden = false;
     } else {
       strip.hidden = true;
@@ -1544,6 +1549,16 @@ export function initFirstWeighScreen() {
             return false;
           }
 
+          const registeredTruck = REGISTERED_TRUCKS.find(
+            (t) => (t.plate || '').trim().toUpperCase() === checkPlate
+          );
+          const isNewTruck = !registeredTruck;
+          const truckDetailsChanged =
+            Boolean(registeredTruck) &&
+            ((driver && driver !== (registeredTruck.driver || '')) ||
+              (phone && phone !== (registeredTruck.phone || '')) ||
+              (client && client !== (registeredTruck.client || '')));
+
           if (IS_PRODUCTION) {
             try {
               const saved = await commitFirstWeigh({
@@ -1574,6 +1589,11 @@ export function initFirstWeighScreen() {
 
               resetFirstWeighForm();
               showScreen('dashboard-screen');
+              if (isNewTruck) {
+                showToast(`Truck ${truck} added to the Trucks register`, 'success');
+              } else if (truckDetailsChanged) {
+                showToast(`Truck ${truck} details saved to the Trucks register`, 'info');
+              }
               return true;
             } catch (err) {
               closePrintModal();
@@ -1607,6 +1627,10 @@ export function initFirstWeighScreen() {
           pendingTickets.unshift(newTicket);
           renderPendingTicketsTable();
 
+          try {
+            await registerTruck({ plate: truck, driver, phone, client, material }, operatorName);
+          } catch {}
+
           // Trigger sync or update offline outbox
           if (state.sync.isHealthy) {
             triggerSync(false);
@@ -1620,6 +1644,11 @@ export function initFirstWeighScreen() {
 
           // Return to dashboard
           showScreen('dashboard-screen');
+          if (isNewTruck) {
+            showToast(`Truck ${truck} added to the Trucks register`, 'success');
+          } else if (truckDetailsChanged) {
+            showToast(`Truck ${truck} details saved to the Trucks register`, 'info');
+          }
           return true;
         },
         onDeferredCancel: () => {
@@ -1640,5 +1669,10 @@ export function initFirstWeighScreen() {
     if (state.currentScreen === 'first-weigh-screen') {
       setTimeout(() => updateBackButtonState(), 10);
     }
+  });
+
+  document.addEventListener('data:refresh', () => {
+    if (state.currentScreen !== 'first-weigh-screen') return;
+    evaluateTruckState();
   });
 }

@@ -98,6 +98,46 @@ public class DatabaseServiceTests
     }
 
     [Fact]
+    public void CreateTicket_NewPlate_AutoRegistersVehicle()
+    {
+        using var temp = new TempDatabase();
+        var request = NewTicket("TEST-AUTO-NEW");
+        request.Driver = "Auto Driver";
+        request.Phone = "+880 1700 111222";
+        request.Client = "Auto Client";
+        request.Material = "Auto Material";
+
+        temp.Database.CreateTicket(request);
+
+        var vehicle = temp.Database.GetVehicles().Single(v => v.Plate == "TEST-AUTO-NEW");
+        Assert.Equal("Auto Driver", vehicle.Driver);
+        Assert.Equal("+880 1700 111222", vehicle.Phone);
+        Assert.Equal("Auto Client", vehicle.Client);
+        Assert.Equal("Auto Material", vehicle.Material);
+        Assert.Equal("active", vehicle.Status);
+    }
+
+    [Fact]
+    public void CreateTicket_ExistingVehicle_UpdatesDefaults()
+    {
+        using var temp = new TempDatabase();
+        var request = NewTicket("DM-T-11-2045");
+        request.Driver = "Updated Driver";
+        request.Phone = "+880 1700 333444";
+        request.Client = "Updated Client";
+        request.Material = "Updated Material";
+
+        temp.Database.CreateTicket(request);
+
+        var vehicle = temp.Database.GetVehicles().Single(v => v.Plate == "DM-T-11-2045");
+        Assert.Equal("Updated Driver", vehicle.Driver);
+        Assert.Equal("+880 1700 333444", vehicle.Phone);
+        Assert.Equal("Updated Client", vehicle.Client);
+        Assert.Equal("Updated Material", vehicle.Material);
+        Assert.Equal(5, temp.Database.GetVehicles().Count);
+    }
+
+    [Fact]
     public void TicketLifecycle_CreateCompleteReprintVoid()
     {
         using var temp = new TempDatabase();
