@@ -163,6 +163,14 @@ public sealed class BridgeService
                        ?? throw new InvalidOperationException("Vehicle not found.");
             }
 
+            case "deleteVehicle":
+            {
+                var request = Deserialize<DeleteVehicleRequest>(payload);
+                var result = _database.DeleteVehicle(request);
+                if (!result.Ok) throw new InvalidOperationException(result.Error ?? "Delete failed.");
+                return true;
+            }
+
             case "recordReprint":
             {
                 var request = Deserialize<ReprintRequest>(payload);

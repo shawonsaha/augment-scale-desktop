@@ -155,14 +155,23 @@
   color: var(--color-brand-kbd-text);
 }
 
-.trucks-table-container {
+.trucks-main {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
   background: var(--surface-panel);
   border: 1.5px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.trucks-table-container {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .trucks-table {
@@ -186,6 +195,31 @@
   letter-spacing: 0.05em;
   border-bottom: 1.5px solid var(--border-subtle);
   white-space: nowrap;
+}
+
+.trucks-table th.sortable {
+  padding: 0;
+}
+
+.trucks-table th.sortable .th-sort-btn {
+  padding: 8px var(--space-2);
+}
+
+.trucks-table th.sortable:hover .th-sort-btn,
+.trucks-table th[data-sort-dir] .th-sort-btn {
+  color: var(--color-brand);
+}
+
+.trucks-table th[data-sort-dir='asc'] .sort-indicator::before {
+  content: '▲';
+}
+
+.trucks-table th[data-sort-dir='desc'] .sort-indicator::before {
+  content: '▼';
+}
+
+.trucks-table th[data-sort-dir] .sort-indicator {
+  opacity: 1;
 }
 
 .trucks-table td {
@@ -221,13 +255,13 @@
 }
 
 .trucks-col-last {
-  width: 100px;
+  width: 110px;
   font-family: var(--font-mono);
   font-size: 10.5px;
 }
 
 .trucks-col-trips {
-  width: 60px;
+  width: 72px;
   font-family: var(--font-mono);
   text-align: center;
 }
@@ -243,7 +277,7 @@
 }
 
 .trucks-col-action {
-  width: 130px;
+  width: 168px;
 }
 
 .trucks-table tbody tr {
@@ -331,8 +365,14 @@
   color: var(--status-stable-text);
 }
 
-.trucks-footer {
-  flex-shrink: 0;
+.truck-row-btn--delete {
+  color: var(--color-danger);
+}
+
+.truck-row-btn--delete:hover {
+  border-color: var(--color-danger);
+  background: var(--status-error-bg);
+  color: var(--color-danger);
 }
 
 /* ─── Add / edit dialog ───────────────────────────────────────────────────── */

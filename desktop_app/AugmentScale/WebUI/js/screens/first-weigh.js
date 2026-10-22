@@ -314,7 +314,7 @@ export function updateRegisterStrip() {
 
   if (!saved) {
     if (titleEl) titleEl.textContent = 'Register truck';
-    if (descEl) descEl.textContent = 'Auto-saves with this ticket · Edit or archive later in Trucks';
+    if (descEl) descEl.textContent = 'Auto-saves with this ticket · Edit or archive later in Vehicles';
     if (btnTextEl) btnTextEl.textContent = 'Register Truck';
     strip.classList.add('fw-register-strip--new');
     strip.hidden = false;
@@ -325,7 +325,7 @@ export function updateRegisterStrip() {
 
     if (driverDiff || phoneDiff || clientDiff) {
       if (titleEl) titleEl.textContent = 'Update truck';
-      if (descEl) descEl.textContent = 'Changes auto-save with this ticket · Edit or archive later in Trucks';
+      if (descEl) descEl.textContent = 'Changes auto-save with this ticket · Edit or archive later in Vehicles';
       if (btnTextEl) btnTextEl.textContent = 'Update Truck';
       strip.classList.add('fw-register-strip--update');
       strip.hidden = false;
@@ -1590,9 +1590,9 @@ export function initFirstWeighScreen() {
               resetFirstWeighForm();
               showScreen('dashboard-screen');
               if (isNewTruck) {
-                showToast(`Truck ${truck} added to the Trucks register`, 'success');
+                showToast(`Truck ${truck} added to the Vehicles register`, 'success');
               } else if (truckDetailsChanged) {
-                showToast(`Truck ${truck} details saved to the Trucks register`, 'info');
+                showToast(`Truck ${truck} details saved to the Vehicles register`, 'info');
               }
               return true;
             } catch (err) {
@@ -1645,9 +1645,9 @@ export function initFirstWeighScreen() {
           // Return to dashboard
           showScreen('dashboard-screen');
           if (isNewTruck) {
-            showToast(`Truck ${truck} added to the Trucks register`, 'success');
+            showToast(`Truck ${truck} added to the Vehicles register`, 'success');
           } else if (truckDetailsChanged) {
-            showToast(`Truck ${truck} details saved to the Trucks register`, 'info');
+            showToast(`Truck ${truck} details saved to the Vehicles register`, 'info');
           }
           return true;
         },

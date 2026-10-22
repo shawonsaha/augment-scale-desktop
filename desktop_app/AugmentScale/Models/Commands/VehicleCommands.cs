@@ -18,3 +18,11 @@ public sealed class ArchiveVehicleRequest
     public string OperatorId { get; set; } = string.Empty;
     public string OperatorName { get; set; } = string.Empty;
 }
+
+public sealed class DeleteVehicleRequest
+{
+    public string Plate { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public string OperatorId { get; set; } = string.Empty;
+    public string OperatorName { get; set; } = string.Empty;
+}

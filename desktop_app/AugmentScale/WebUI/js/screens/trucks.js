@@ -1,7 +1,8 @@
 /**
- * Screen: Trucks (registered vehicles master data)
- * Search/paginate the register, add or edit a vehicle, archive/restore with
- * an audit reason. Archiving is blocked while the plate has an open ticket.
+ * Screen: Vehicles (registered vehicle master data)
+ * Search/paginate the register, add or edit a vehicle, sort, archive/restore,
+ * or permanently delete with an audit reason. Archiving is blocked while the
+ * plate has an open ticket.
  */
 import {
   state,
@@ -9,9 +10,11 @@ import {
   registerTruck,
   archiveTruck,
   restoreTruck,
+  deleteVehicle,
   refreshVehiclesFromDatabase,
 } from '../state.js';
 import { IS_PRODUCTION } from '../runtime.js';
+import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
 import { openReasonDialog } from '../reason-dialog.js';
 import { openConfirmDialog } from '../confirm-dialog.js';
@@ -19,6 +22,7 @@ import { escapeHtml, formatShortDate } from '../utils.js';
 
 const FALLBACK_ROW_HEIGHT = 48;
 const MIN_PAGE_SIZE = 5;
+const SORT_DEFAULTS = { lastWeighed: 'desc', trips: 'desc' };
 
 let filtered = [];
 let pageSize = 15;
@@ -48,10 +52,48 @@ function getFilteredTrucks() {
     const aArchived = a.status === 'archived';
     const bArchived = b.status === 'archived';
     if (aArchived !== bArchived) return aArchived ? 1 : -1;
-    const aTime = a.lastWeighed ? new Date(a.lastWeighed).getTime() : 0;
-    const bTime = b.lastWeighed ? new Date(b.lastWeighed).getTime() : 0;
-    if (aTime !== bTime) return bTime - aTime;
+
+    const sortKey = state.trucks.sortKey === 'trips' ? 'trips' : 'lastWeighed';
+    const direction = state.trucks.sortDir === 'asc' ? 1 : -1;
+
+    if (sortKey === 'trips') {
+      const delta = (a.tripCount || 0) - (b.tripCount || 0);
+      if (delta !== 0) return delta * direction;
+    } else {
+      const aTime = a.lastWeighed ? new Date(a.lastWeighed).getTime() : null;
+      const bTime = b.lastWeighed ? new Date(b.lastWeighed).getTime() : null;
+      if (aTime === null && bTime !== null) return 1;
+      if (bTime === null && aTime !== null) return -1;
+      if (aTime !== null && bTime !== null && aTime !== bTime) {
+        return (aTime - bTime) * direction;
+      }
+    }
+
     return normalize(a.plate).localeCompare(normalize(b.plate));
+  });
+}
+
+function setSort(key) {
+  if (!SORT_DEFAULTS[key]) return;
+  if (state.trucks.sortKey === key) {
+    state.trucks.sortDir = state.trucks.sortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    state.trucks.sortKey = key;
+    state.trucks.sortDir = SORT_DEFAULTS[key];
+  }
+  state.trucks.currentPage = 0;
+  focusedIndex = 0;
+  render();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('.trucks-table th[data-sort-key]').forEach((th) => {
+    const active = th.dataset.sortKey === state.trucks.sortKey;
+    th.setAttribute('aria-sort', active
+      ? state.trucks.sortDir === 'asc' ? 'ascending' : 'descending'
+      : 'none');
+    if (active) th.setAttribute('data-sort-dir', state.trucks.sortDir);
+    else th.removeAttribute('data-sort-dir');
   });
 }
 
@@ -96,6 +138,7 @@ function rowHtml(truck) {
         <button type="button" class="truck-row-btn truck-row-btn--${direction}" data-action="${direction}">
           ${archived ? 'Restore' : 'Archive'}
         </button>
+        ${archived ? '<button type="button" class="truck-row-btn truck-row-btn--delete" data-action="delete">Delete</button>' : ''}
       </td>
     </tr>
   `;
@@ -151,6 +194,8 @@ function render() {
   const next = document.getElementById('trucks-next');
   if (prev) prev.disabled = state.trucks.currentPage <= 0;
   if (next) next.disabled = state.trucks.currentPage >= pageCount - 1;
+
+  updateSortHeaders();
 }
 
 // ─── Add / edit form ────────────────────────────────────────────────────────
@@ -305,6 +350,33 @@ function restoreVehicle(truck) {
   });
 }
 
+function deleteArchivedVehicle(truck) {
+  if (!truck || truck.status !== 'archived') return;
+
+  openReasonDialog({
+    id: 'delete-truck-modal',
+    title: `Permanently delete ${truck.plate}?`,
+    metaHtml:
+      'This cannot be undone. The vehicle record is removed for good.<br>' +
+      'Past tickets keep their plate number but lose the vehicle link.',
+    prompt: 'Why is this vehicle being permanently deleted?',
+    reasons: ['Duplicate record', 'Entered by mistake', 'Test record', 'Other'],
+    confirmLabel: 'Delete permanently',
+    confirmTone: 'danger',
+    stateFlag: '_deleteVehicleDialogOpen',
+    onConfirm: async (reason) => {
+      const operator = state.activeOperator?.name || 'Unknown';
+      const result = await deleteVehicle(truck.plate, reason, operator);
+      if (!result.ok) {
+        showToast(result.reason || 'Vehicle could not be deleted', 'error');
+        return;
+      }
+      showToast(`${truck.plate} permanently deleted`, 'success');
+      render();
+    },
+  });
+}
+
 function truckByPlate(plate) {
   return REGISTERED_TRUCKS.find((truck) => normalize(truck.plate) === normalize(plate)) || null;
 }
@@ -348,6 +420,9 @@ export function initTrucksScreen() {
   });
 
   document.getElementById('trucks-new-btn')?.addEventListener('click', () => openTruckForm());
+  document.getElementById('trucks-back')?.addEventListener('click', () => {
+    showScreen('dashboard-screen');
+  });
   document.getElementById('truck-form-close')?.addEventListener('click', closeTruckForm);
   document.getElementById('truck-form-cancel')?.addEventListener('click', closeTruckForm);
   document.getElementById('truck-form-modal')?.addEventListener('click', (event) => {
@@ -371,6 +446,11 @@ export function initTrucksScreen() {
     }
   });
 
+  document.querySelector('.trucks-table thead')?.addEventListener('click', (event) => {
+    const sortBtn = event.target.closest('.th-sort-btn');
+    if (sortBtn) setSort(sortBtn.dataset.sortKey);
+  });
+
   tbody.addEventListener('click', (event) => {
     const row = event.target.closest('tr[data-plate]');
     if (!row) return;
@@ -382,6 +462,7 @@ export function initTrucksScreen() {
     if (action === 'edit') openTruckForm(truck);
     else if (action === 'archive') archiveVehicle(truck);
     else if (action === 'restore') restoreVehicle(truck);
+    else if (action === 'delete') deleteArchivedVehicle(truck);
     else render();
   });
 
@@ -422,8 +503,8 @@ export function initTrucksScreen() {
       if (document.querySelector('.modal-overlay.open')) return;
 
       const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName);
-      const popupOpen = ['archive-truck-modal', 'restore-truck-modal'].some((id) =>
-        document.getElementById(id)
+      const popupOpen = ['archive-truck-modal', 'restore-truck-modal', 'delete-truck-modal'].some(
+        (id) => document.getElementById(id)
       );
       if (popupOpen) return;
 
@@ -454,6 +535,9 @@ export function initTrucksScreen() {
         }
         return;
       }
+
+      const onControl = event.target?.closest?.('button, a');
+      if (onControl && (event.key === 'Enter' || event.key === 'Backspace')) return;
 
       if (event.altKey && event.key.toLowerCase() === 'n') {
         event.preventDefault();

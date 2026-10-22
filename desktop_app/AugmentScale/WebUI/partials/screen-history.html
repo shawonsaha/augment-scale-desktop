@@ -111,14 +111,19 @@
         </div>
 
         <footer class="hist-footer">
-          <div class="hist-pager">
-            <button type="button" class="hist-page-btn" id="hist-prev" aria-label="Previous page">
-              ◀
+          <div class="list-footer-left">
+            <button type="button" class="list-back-btn" id="hist-back">
+              <span aria-hidden="true">←</span> Back <span class="list-back-kbd">Esc</span>
             </button>
-            <span class="hist-range" id="hist-range">0–0 of 0</span>
-            <button type="button" class="hist-page-btn" id="hist-next" aria-label="Next page">
-              ▶
-            </button>
+            <div class="hist-pager">
+              <button type="button" class="hist-page-btn" id="hist-prev" aria-label="Previous page">
+                ◀
+              </button>
+              <span class="hist-range" id="hist-range">0–0 of 0</span>
+              <button type="button" class="hist-page-btn" id="hist-next" aria-label="Next page">
+                ▶
+              </button>
+            </div>
           </div>
           <div class="hist-summary" id="hist-summary">0 tickets</div>
         </footer>

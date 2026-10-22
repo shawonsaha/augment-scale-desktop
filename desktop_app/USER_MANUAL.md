@@ -13,7 +13,7 @@ Complete operator, administrator, build, test, and recovery guide for the Augmen
 Augment Scale is a local weighbridge workstation application. It replaces the browser prototype with a native Windows host that:
 
 - reads live weight from a Yaohua XK3190-D10 indicator over a serial (RS-232/USB-serial) connection;
-- stores trucks, tickets, print history, and audit events in an encrypted SQLCipher database;
+- stores vehicles, tickets, print history, and audit events in an encrypted SQLCipher database;
 - prints first-weigh slips and completed weight certificates through the Windows print system;
 - tracks reprints, voids, pending-ticket deletions, and operator identity in an audit trail;
 - works with the standalone scale simulator for training and acceptance testing without a physical scale.
@@ -369,9 +369,9 @@ If the scale is disconnected, the HUD shows `------` and `DISCONNECTED`. Capture
 ### 8.2 First weigh
 
 1. From the dashboard, choose **Inbound** (loaded truck, gross) or **Outbound** (empty truck, tare).
-2. Enter the truck registration number. Suggestions from registered trucks appear as you type.
+2. Enter the truck registration number. Suggestions from registered vehicles appear as you type.
 3. Optionally enter driver, phone, client, material, challan/gate-pass number, and remarks.
-4. Truck details save automatically with the ticket when you click **Confirm & Print**. The suggestion strip is only a shortcut for saving or updating the truck before the ticket is committed; you can also edit or archive it later from the Trucks screen.
+4. Truck details save automatically with the ticket when you click **Confirm & Print**. The suggestion strip is only a shortcut for saving or updating the truck before the ticket is committed; you can also edit or archive it later from the Vehicles screen.
 5. Confirm the live weight is stable and the platform is clear except for the truck.
 6. Click **Capture Weight** (or press `Space`).
 7. Check the captured weight and the pre-print preview. The preview shows the server-allocated ticket number.
@@ -385,7 +385,7 @@ Notes:
 - If the weight is zero or unstable, capture remains unavailable.
 - The first-weigh modal is a preview only; no ticket is written until **Confirm & Print** is clicked.
 - The printed slip uses the number returned by the database, not the temporary preview numbering.
-- When the ticket is committed, the truck is created or updated in the Trucks register automatically. A brief toast confirms new or changed truck details.
+- When the ticket is committed, the truck is created or updated in the Vehicles register automatically. A brief toast confirms new or changed truck details.
 
 ### 8.3 Second weigh and certificate
 
@@ -445,17 +445,18 @@ History supports date ranges, status filters, stage filters, operator/material/c
 - print and reprint log;
 - void or delete reason.
 
-### 8.8 Trucks
+### 8.8 Vehicles
 
-The Trucks screen supports:
+The Vehicles screen supports:
 
 - search and paging;
-- add a truck (`Alt+N`);
-- edit truck details;
-- archive a truck;
-- show archived trucks and restore them.
+- add a vehicle (`Alt+N`);
+- edit vehicle details;
+- sort by trip count or last-weighed date and time;
+- archive a vehicle;
+- show archived vehicles and restore or permanently delete them.
 
-A truck with an open ticket cannot be archived. Complete or delete the pending ticket first.
+A vehicle with an open ticket cannot be archived or permanently deleted. Complete or delete the pending ticket first. Permanent deletion requires a reason and is recorded in the database audit log with the operator who performed it. Historical tickets keep their plate number.
 
 Vehicle details and running totals update automatically after ticket commits, completions, and voids. Use the refresh button in the top bar (or `Ctrl+R`) to reload the register, pending tickets, history, and sync status from the database without restarting the application.
 
@@ -607,7 +608,7 @@ Tests create temporary directories and do not require a scale, printer, or exter
 - [ ] Existing open ticket blocks a second first weigh for the same truck.
 - [ ] First-weigh preview does not write a ticket until confirmed.
 - [ ] Confirmed first weigh appears in pending tickets with the correct number.
-- [ ] Confirmed first weigh creates or updates the truck in the Trucks register without a restart.
+- [ ] Confirmed first weigh creates or updates the truck in the Vehicles register without a restart.
 - [ ] Navbar refresh and `Ctrl+R` reload database data and show a confirmation toast.
 - [ ] Second weigh calculates gross, tare, and net correctly.
 - [ ] Zero/negative net requires a reason before preview.
@@ -615,8 +616,9 @@ Tests create temporary directories and do not require a scale, printer, or exter
 - [ ] Reprint records a copy number and prints a reprint stamp.
 - [ ] Void requires a reason, preserves history, and records an audit event.
 - [ ] Delete requires a reason and only works on pending tickets.
-- [ ] Archived truck cannot have an open ticket.
-- [ ] Restart preserves operators, trucks, pending tickets, history, and settings.
+- [ ] Archived vehicle cannot have an open ticket.
+- [ ] Permanently deleting an archived vehicle requires a reason, removes it from the register, and keeps historical tickets.
+- [ ] Restart preserves operators, vehicles, pending tickets, history, and settings.
 - [ ] Logs contain startup and scale-health entries.
 
 ---
@@ -637,7 +639,7 @@ Tests create temporary directories and do not require a scale, printer, or exter
 | `Ctrl+L` | Lock workstation |
 | `Alt+R` | Reprint selected history ticket |
 | `Alt+V` | Void selected completed ticket |
-| `Alt+N` | New truck on Trucks screen |
+| `Alt+N` | New vehicle on Vehicles screen |
 | `F11` | Toggle full screen |
 | `Ctrl+Shift+D` | Open developer tools (support use only) |
 | `?` | Show shortcut help where available |

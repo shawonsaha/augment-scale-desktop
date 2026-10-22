@@ -103,7 +103,7 @@ export let REGISTERED_TRUCKS = IS_PRODUCTION ? [] : [
   },
 ];
 
-// Operational fields used by the Trucks screen. Kept on every record so the
+// Operational fields used by the Vehicles screen. Kept on every record so the
 // first-weigh register and the master-data form share one shape.
 REGISTERED_TRUCKS.forEach((truck) => {
   truck.status = truck.status || 'active';
@@ -311,6 +311,54 @@ export async function restoreTruck(plate, operatorName) {
   logAction('restore_vehicle', 'vehicle', target, {});
   notifyVehicleRefresh();
   return truck;
+}
+
+/**
+ * Permanently removes an archived vehicle. Historical tickets keep their
+ * denormalized plate and lose the vehicle link.
+ * @returns {{ok: boolean, reason?: string}}
+ */
+export async function deleteVehicle(plate, reason, operatorName) {
+  const target = (plate || '').trim().toUpperCase();
+  const truck = REGISTERED_TRUCKS.find((t) => (t.plate || '').toUpperCase() === target);
+  if (!truck) return { ok: false, reason: 'Vehicle not found' };
+  if (truck.status !== 'archived') {
+    return { ok: false, reason: 'Only archived vehicles can be permanently deleted.' };
+  }
+  if (!reason?.trim()) return { ok: false, reason: 'A deletion reason is required.' };
+
+  if (IS_PRODUCTION) {
+    try {
+      await sendCommand('deleteVehicle', {
+        plate: target,
+        reason,
+        operatorId: state.activeOperator?.id || '',
+        operatorName: operatorName || state.activeOperator?.name || 'Unknown',
+      });
+      const index = REGISTERED_TRUCKS.findIndex(
+        (t) => (t.plate || '').toUpperCase() === target
+      );
+      if (index >= 0) REGISTERED_TRUCKS.splice(index, 1);
+      notifyVehicleRefresh();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, reason: error.message };
+    }
+  }
+
+  const openTicket = pendingTickets.find((t) => (t.truckNo || '').toUpperCase() === target);
+  if (openTicket) {
+    return {
+      ok: false,
+      reason: `Vehicle has open ticket #${openTicket.id}. Complete or delete it first.`,
+    };
+  }
+
+  const index = REGISTERED_TRUCKS.findIndex((t) => (t.plate || '').toUpperCase() === target);
+  if (index >= 0) REGISTERED_TRUCKS.splice(index, 1);
+  logAction('delete_vehicle', 'vehicle', target, { reason });
+  notifyVehicleRefresh();
+  return { ok: true };
 }
 
 export let pendingTickets = IS_PRODUCTION ? [] : [
@@ -753,7 +801,7 @@ export const state = {
     focusedRowIndex: 0,
   },
 
-  // Trucks screen state
+  // Vehicles screen state
   trucks: {
     currentPage: 0,
     pageSize: 20,
@@ -761,6 +809,8 @@ export const state = {
     showArchived: false,
     focusedRowIndex: 0,
     editingTruck: null,
+    sortKey: 'lastWeighed',
+    sortDir: 'desc',
   },
 
   // Dialog flags (block global hotkeys while open)
@@ -768,4 +818,5 @@ export const state = {
   _voidDialogOpen: false,
   _archiveDialogOpen: false,
   _truckFormOpen: false,
+  _deleteVehicleDialogOpen: false,
 };

@@ -267,6 +267,74 @@ public class DatabaseServiceTests
     }
 
     [Fact]
+    public void VehicleDelete_RequiresArchiveAndPreservesTicketHistory()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        var active = db.GetVehicles().First(v => v.Plate == "DM-T-11-2045");
+
+        var unarchived = db.DeleteVehicle(new DeleteVehicleRequest
+        {
+            Plate = active.Plate,
+            Reason = "Duplicate record",
+            OperatorId = "mr",
+        });
+        Assert.False(unarchived.Ok);
+        Assert.Contains("archived", unarchived.Error);
+
+        var ticket = db.CreateTicket(NewTicket(active.Plate));
+        var completed = db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = ticket.Id,
+            WeightKg = 9000,
+            OperatorId = "mr",
+        });
+        Assert.Equal(3000, completed.NetWeight);
+
+        var archived = db.ArchiveVehicle(new ArchiveVehicleRequest
+        {
+            Plate = active.Plate,
+            Reason = "Retired",
+            OperatorId = "mr",
+        });
+        Assert.True(archived.Ok);
+
+        var deleted = db.DeleteVehicle(new DeleteVehicleRequest
+        {
+            Plate = active.Plate,
+            Reason = "Permanently removed",
+            OperatorId = "mr",
+        });
+
+        Assert.True(deleted.Ok);
+        Assert.DoesNotContain(db.GetVehicles(), v => v.Plate == active.Plate);
+        Assert.Contains(db.GetHistory(), t => t.Id == ticket.Id);
+
+        using var connection = db.OpenConnection();
+        using (var ticketCmd = connection.CreateCommand())
+        {
+            ticketCmd.CommandText = "SELECT vehicle_id FROM weigh_tickets WHERE id = $id;";
+            ticketCmd.Parameters.AddWithValue("$id", ticket.TicketUuid);
+            using var reader = ticketCmd.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.True(reader.IsDBNull(0));
+        }
+
+        using var auditCmd = connection.CreateCommand();
+        auditCmd.CommandText = """
+            SELECT actor_user_id, actor_display_name, change_reason
+            FROM audit_events
+            WHERE entity_type = 'vehicles' AND entity_id = $id AND action = 'hard_delete';
+            """;
+        auditCmd.Parameters.AddWithValue("$id", active.Id);
+        using var audit = auditCmd.ExecuteReader();
+        Assert.True(audit.Read());
+        Assert.Equal("mr", audit.GetString(0));
+        Assert.Equal("MD. RAJU", audit.GetString(1));
+        Assert.Equal("Permanently removed", audit.GetString(2));
+    }
+
+    [Fact]
     public void CompleteTicket_AnomalousNet_RequiresOverride()
     {
         using var temp = new TempDatabase();

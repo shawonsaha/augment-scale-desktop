@@ -15,6 +15,7 @@ import {
 } from '../state.js';
 import { openReprintModal } from '../print.js';
 import { openReasonDialog } from '../reason-dialog.js';
+import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
 import { escapeHtml, formatDateTime12H } from '../utils.js';
 
@@ -758,6 +759,9 @@ export function initHistoryScreen() {
     if (!event.target.closest('.hist-more-wrap')) setMoreOpen(false);
   });
 
+  document.getElementById('hist-back')?.addEventListener('click', () => {
+    showScreen('dashboard-screen');
+  });
   document.getElementById('hist-prev')?.addEventListener('click', () => {
     if (state.history.currentPage > 0) {
       state.history.currentPage--;
@@ -867,6 +871,9 @@ export function initHistoryScreen() {
         }
         return;
       }
+
+      const onControl = event.target?.closest?.('button, a');
+      if (onControl && (event.key === 'Enter' || event.key === 'Backspace')) return;
 
       if (event.altKey && event.key.toLowerCase() === 'r') {
         event.preventDefault();

@@ -524,6 +524,58 @@ public sealed class DatabaseService
         return updated;
     }
 
+    public (bool Ok, string? Error) DeleteVehicle(DeleteVehicleRequest req)
+    {
+        EnsureInitialized();
+        var normalized = NormalizePlate(req.Plate);
+        using var connection = OpenConnection();
+        using var txn = connection.BeginTransaction();
+
+        var vehicle = FindVehicleByPlate(connection, txn, normalized);
+        if (vehicle is null) return (false, "Vehicle not found");
+        if (vehicle.Status != "archived")
+            return (false, "Only archived vehicles can be permanently deleted.");
+        if (string.IsNullOrWhiteSpace(req.Reason))
+            return (false, "A deletion reason is required.");
+
+        using (var open = connection.CreateCommand())
+        {
+            open.Transaction = txn;
+            open.CommandText = """
+                SELECT 1 FROM weigh_tickets t
+                WHERE t.organization_id = $org AND t.status = 'pending' AND t.deleted_at IS NULL
+                  AND (t.vehicle_id = $id OR UPPER(TRIM(t.plate_number)) = $plate)
+                LIMIT 1;
+                """;
+            open.Parameters.AddWithValue("$org", _organizationId);
+            open.Parameters.AddWithValue("$id", vehicle.Id);
+            open.Parameters.AddWithValue("$plate", normalized);
+            if (open.ExecuteScalar() is not null)
+                return (false, "Vehicle has an open ticket. Complete or delete it first.");
+        }
+
+        var operatorName = ResolveOperatorName(connection, txn, req.OperatorId, req.OperatorName);
+
+        Exec(connection, txn, """
+            UPDATE weigh_tickets SET vehicle_id = NULL
+            WHERE organization_id = $org AND vehicle_id = $id;
+            """,
+            ("$org", _organizationId), ("$id", vehicle.Id));
+        Exec(connection, txn, """
+            DELETE FROM vehicles WHERE id = $id AND organization_id = $org;
+            """,
+            ("$id", vehicle.Id), ("$org", _organizationId));
+
+        _audit.InsertMutation(connection, txn, _organizationId, _workstationId,
+            "vehicles", vehicle.Id, "hard_delete", req.OperatorId, operatorName,
+            after: null, before: vehicle, reason: req.Reason);
+        InsertOutbox(connection, txn, "vehicles", vehicle.Id, "delete", vehicle,
+            req.OperatorId, req.Reason);
+
+        txn.Commit();
+        return (true, null);
+    }
+
     // ---------------------------------------------------------------------
     // Tickets
     // ---------------------------------------------------------------------
