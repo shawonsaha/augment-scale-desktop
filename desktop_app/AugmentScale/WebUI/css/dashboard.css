@@ -922,6 +922,11 @@ body.dark-mode .tickets-count-badge,
   gap: var(--space-5);
 }
 
+.shift-stats-list[hidden],
+.shift-stat-item[hidden] {
+  display: none;
+}
+
 .shift-stat-item {
   display: flex;
   align-items: center;

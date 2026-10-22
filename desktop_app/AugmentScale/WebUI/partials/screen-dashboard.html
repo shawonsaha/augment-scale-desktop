@@ -150,22 +150,25 @@
 
     <!-- Footer Stats Bar -->
     <footer class="dashboard-footer">
-      <div class="shift-stats-list">
-        <div class="shift-stat-item">
+      <div class="shift-stats-list" id="dashboard-stats-list" hidden>
+        <div class="shift-stat-item" id="dashboard-stat-trucks-item" hidden>
           <span>Weighed Today:</span>
-          <span class="shift-stat-val">42 Trucks</span>
+          <span class="shift-stat-val" id="dashboard-stat-trucks"></span>
         </div>
-        <div class="shift-stat-item">
+        <div class="shift-stat-item" id="dashboard-stat-tonnage-item" hidden>
           <span>Total Tonnage:</span>
-          <span class="shift-stat-val">842.60 MT</span>
+          <span class="shift-stat-val" id="dashboard-stat-tonnage"></span>
         </div>
-        <div class="shift-stat-item">
+        <div class="shift-stat-item" id="dashboard-stat-turnaround-item" hidden>
           <span>Avg Turnaround:</span>
-          <span class="shift-stat-val">3.2 mins</span>
+          <span class="shift-stat-val" id="dashboard-stat-turnaround"></span>
         </div>
       </div>
 
-      <div style="font-family: var(--font-mono); font-size: var(--text-sm)" id="system-clock">
+      <div
+        style="font-family: var(--font-mono); font-size: var(--text-sm); margin-left: auto"
+        id="system-clock"
+      >
         10:45:12 AM
       </div>
     </footer>

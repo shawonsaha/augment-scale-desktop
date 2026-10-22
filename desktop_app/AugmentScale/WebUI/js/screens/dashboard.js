@@ -3,7 +3,14 @@
  * Central operation hub, active pending tickets table, search, keyboard table navigation,
  * ticket deletion with audit metadata and reason confirmation.
  */
-import { state, pendingTickets, deleteTicket, getTicketTimestamp } from '../state.js';
+import {
+  state,
+  pendingTickets,
+  completedTickets,
+  deleteTicket,
+  getTicketStatus,
+  getTicketTimestamp,
+} from '../state.js';
 import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
 import { escapeHtml, formatElapsed, directionOf } from '../utils.js';
@@ -121,6 +128,87 @@ function setSort(key) {
   renderPendingTicketsTable(searchInput ? searchInput.value.trim() : '');
 }
 
+export function renderDashboardStats() {
+  const list = document.getElementById('dashboard-stats-list');
+  const trucksItem = document.getElementById('dashboard-stat-trucks-item');
+  const tonnageItem = document.getElementById('dashboard-stat-tonnage-item');
+  const turnaroundItem = document.getElementById('dashboard-stat-turnaround-item');
+  const trucksValue = document.getElementById('dashboard-stat-trucks');
+  const tonnageValue = document.getElementById('dashboard-stat-tonnage');
+  const turnaroundValue = document.getElementById('dashboard-stat-turnaround');
+
+  if (
+    !list ||
+    !trucksItem ||
+    !tonnageItem ||
+    !turnaroundItem ||
+    !trucksValue ||
+    !tonnageValue ||
+    !turnaroundValue
+  ) {
+    return;
+  }
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  const todayCompleted = completedTickets.filter(
+    (ticket) =>
+      ticket &&
+      getTicketStatus(ticket) === 'completed' &&
+      getTicketTimestamp(ticket) >= todayStart
+  );
+
+  const count = todayCompleted.length;
+  if (count === 0) {
+    list.hidden = true;
+    return;
+  }
+
+  list.hidden = false;
+
+  trucksItem.hidden = false;
+  trucksValue.textContent = `${count} ${count === 1 ? 'Truck' : 'Trucks'}`;
+
+  const totalKg = todayCompleted.reduce(
+    (sum, ticket) => sum + (Number(ticket.netWeight) || 0),
+    0
+  );
+  const tonnage = totalKg / 1000;
+  if (tonnage !== 0) {
+    tonnageItem.hidden = false;
+    tonnageValue.textContent = `${tonnage.toFixed(2)} MT`;
+  } else {
+    tonnageItem.hidden = true;
+  }
+
+  const durations = todayCompleted
+    .map((ticket) => {
+      const createdAt = new Date(ticket.createdAt || 0).getTime();
+      const completedAt = getTicketTimestamp(ticket);
+      if (!Number.isFinite(createdAt) || createdAt <= 0 || !Number.isFinite(completedAt)) {
+        return null;
+      }
+      const minutes = (completedAt - createdAt) / 60000;
+      return minutes > 0 ? minutes : null;
+    })
+    .filter((minutes) => minutes !== null);
+
+  const avgMinutes =
+    durations.length > 0
+      ? Math.round(
+          (durations.reduce((sum, minutes) => sum + minutes, 0) / durations.length) * 10
+        ) / 10
+      : 0;
+
+  if (avgMinutes > 0) {
+    turnaroundItem.hidden = false;
+    turnaroundValue.textContent = `${avgMinutes.toFixed(1)} mins`;
+  } else {
+    turnaroundItem.hidden = true;
+  }
+}
+
 export function initDashboard() {
   const hudSlot = document.getElementById('dashboard-hud-slot');
   if (hudSlot) mountHud(hudSlot);
@@ -171,10 +259,18 @@ export function initDashboard() {
     });
   }
   updateSortHeaders();
+  renderDashboardStats();
+
+  document.addEventListener('screenchange', (event) => {
+    if (event.detail?.screenId === 'dashboard-screen') renderDashboardStats();
+  });
+  document.addEventListener('data:refresh', renderDashboardStats);
+  document.addEventListener('history:refresh', renderDashboardStats);
 
   setInterval(() => {
     if (state.currentScreen !== 'dashboard-screen') return;
     renderPendingTicketsTable(searchInput ? searchInput.value.trim() : '');
+    renderDashboardStats();
   }, 30000);
 
   // Delegated click on tickets table: Complete Weigh button, Row click, or Delete [X]
