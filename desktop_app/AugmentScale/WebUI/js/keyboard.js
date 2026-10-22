@@ -64,7 +64,14 @@ export function initKeyboardShortcuts() {
     }
 
     // Block all global hotkeys while modal dialogs are open (except print modal Enter/Esc)
-    if (state._deleteDialogOpen || state._discardDialogOpen || state._overrideDialogOpen) return;
+    if (
+      state._deleteDialogOpen ||
+      state._discardDialogOpen ||
+      state._overrideDialogOpen ||
+      state._historyReportOpen
+    ) {
+      return;
+    }
 
     // Check if currently focused inside a text input or textarea
     const activeEl = document.activeElement;

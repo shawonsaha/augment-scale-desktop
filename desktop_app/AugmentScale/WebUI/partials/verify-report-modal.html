@@ -1,0 +1,90 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+         MODAL: VERIFY REPORT
+         Checks a printed report ID and SHA-256 hash against the local
+         append-only audit snapshot.
+         ═══════════════════════════════════════════════════════════════════════ -->
+<div
+  class="modal-overlay verify-report-overlay"
+  id="verify-report-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="verify-report-title"
+  aria-hidden="true"
+>
+  <div class="modal-content verify-report-modal">
+    <header class="verify-report-header">
+      <div>
+        <span class="verify-report-eyebrow">Integrity check</span>
+        <h2 class="verify-report-title" id="verify-report-title">Verify report</h2>
+        <p class="verify-report-subtitle">
+          Match a printed report against the archived snapshot on this workstation.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="modal-close-btn"
+        id="verify-report-close"
+        aria-label="Close report verification"
+      >
+        ✕
+      </button>
+    </header>
+
+    <form class="verify-report-body" id="verify-report-form" novalidate>
+      <p class="verify-report-intro">
+        Enter the report ID and SHA-256 hash printed in the report header. Verification is
+        read-only and does not require a PIN.
+      </p>
+
+      <label class="verify-report-field">
+        <span>Report ID</span>
+        <input
+          type="text"
+          id="verify-report-id"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="48"
+          placeholder="HR-20261022-072900-A1B2C3"
+        />
+      </label>
+
+      <label class="verify-report-field">
+        <span>SHA-256 hash</span>
+        <input
+          type="text"
+          id="verify-report-hash"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="64"
+          placeholder="64-character hexadecimal hash"
+        />
+      </label>
+
+      <p class="verify-report-error" id="verify-report-error" aria-live="polite"></p>
+
+      <div class="verify-report-result" id="verify-report-result" hidden aria-live="polite">
+        <strong id="verify-report-result-title"></strong>
+        <p id="verify-report-result-message"></p>
+        <dl class="verify-report-hashes">
+          <div>
+            <dt>Computed</dt>
+            <dd id="verify-report-computed"></dd>
+          </div>
+          <div>
+            <dt>Recorded</dt>
+            <dd id="verify-report-stored"></dd>
+          </div>
+        </dl>
+      </div>
+
+      <footer class="verify-report-actions">
+        <button type="button" class="history-report-btn history-report-btn--ghost" id="verify-report-cancel">
+          Cancel
+        </button>
+        <button type="submit" class="history-report-btn history-report-btn--primary" id="verify-report-submit">
+          Verify integrity
+        </button>
+      </footer>
+    </form>
+  </div>
+</div>

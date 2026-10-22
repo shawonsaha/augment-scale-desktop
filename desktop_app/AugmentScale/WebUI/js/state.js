@@ -793,10 +793,18 @@ export const state = {
     dateFilter: 'today', // 'today' | 'yesterday' | '7days' | '30days' | 'custom'
     customDateFrom: null,
     customDateTo: null,
-    statusFilter: 'all', // 'all' | 'pending' | 'completed' | 'voided' | 'deleted'
-    stageFilter: 'all', // 'all' | 'first' | 'complete'
     searchQuery: '',
-    moreFilters: { operators: [], materials: [], clients: [] },
+    filters: {
+      statuses: [],
+      drivers: [],
+      operators: [],
+      materials: [],
+      clients: [],
+      directions: [],
+      flags: [],
+    },
+    sortKey: 'when',
+    sortDir: 'desc',
     selectedTicketId: null,
     focusedRowIndex: 0,
   },
@@ -819,4 +827,5 @@ export const state = {
   _archiveDialogOpen: false,
   _truckFormOpen: false,
   _deleteVehicleDialogOpen: false,
+  _historyReportOpen: false,
 };

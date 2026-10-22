@@ -1,3 +1,4 @@
+using System.Globalization;
 using AugmentScale.Models.Commands;
 using AugmentScale.Services;
 using Xunit;
@@ -362,5 +363,231 @@ public class DatabaseServiceTests
 
         Assert.Equal(-2000, completed.NetWeight);
         Assert.True(completed.Override is not null);
+    }
+
+    private static string DateValue(DateTime value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static int CountReportAudits(DatabaseService db)
+    {
+        using var connection = db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(*) FROM audit_events
+            WHERE entity_type = 'history_report' AND action = 'generate';
+            """;
+        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    private static HistoryReportRequest TodayReportRequest(string pin = "1234") => new()
+    {
+        FromDate = DateValue(DateTime.Now),
+        ToDate = DateValue(DateTime.Now),
+        OperatorId = "mr",
+        Pin = pin,
+    };
+
+    [Fact]
+    public void HistoryReport_RejectsWrongPinWithoutAuditAndHashesSuccessfulSnapshot()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        var ticket = db.CreateTicket(NewTicket("TEST-REPORT", 18000));
+        var completed = db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = ticket.Id,
+            WeightKg = 6000,
+            OperatorId = "mr",
+        });
+        db.RecordReprint(new ReprintRequest
+        {
+            TicketId = ticket.Id,
+            Reason = "Customer copy",
+            OperatorId = "mr",
+        });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            db.GenerateHistoryReport(TodayReportRequest("9999")));
+        Assert.Equal(0, CountReportAudits(db));
+
+        var report = db.GenerateHistoryReport(TodayReportRequest());
+
+        Assert.Contains(report.Tickets, t => t.Id == completed.Id && t.Status == "completed");
+        Assert.Equal(1, report.Summary.Completed);
+        Assert.Equal(1, report.Summary.Reprints);
+        Assert.Equal(12000, report.Summary.NetKg);
+        Assert.Equal(64, report.IntegrityHash.Length);
+        Assert.Equal(DateTime.Now.ToString("dd MMM yyyy", CultureInfo.InvariantCulture), report.RangeLabel);
+        Assert.Equal("MD. RAJU", report.OperatorName);
+        Assert.Equal(1, CountReportAudits(db));
+
+        using var connection = db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT after_values FROM audit_events
+            WHERE entity_type = 'history_report' AND entity_id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", report.ReportId);
+        var auditPayload = Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture) ?? "";
+        Assert.Contains(report.ReportId, auditPayload);
+        Assert.Contains(report.IntegrityHash, auditPayload);
+        Assert.Contains("canonicalJson", auditPayload);
+        Assert.DoesNotContain("1234", auditPayload);
+    }
+
+    [Fact]
+    public void HistoryReport_IncludesEveryStatusInChronologicalOrder()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        var pending = db.CreateTicket(NewTicket("TEST-RPT-PENDING", 1000));
+
+        var completedTicket = db.CreateTicket(NewTicket("TEST-RPT-COMPLETE", 18000));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = completedTicket.Id,
+            WeightKg = 7000,
+            OperatorId = "mr",
+        });
+
+        var voidTicket = db.CreateTicket(NewTicket("TEST-RPT-VOID", 15000));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = voidTicket.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+        db.VoidTicket(new TicketReasonRequest
+        {
+            TicketId = voidTicket.Id,
+            Reason = "Wrong vehicle",
+            OperatorId = "mr",
+        });
+
+        var deleted = db.CreateTicket(NewTicket("TEST-RPT-DELETE", 12000));
+        db.SoftDeleteTicket(new TicketReasonRequest
+        {
+            TicketId = deleted.Id,
+            Reason = "Duplicate",
+            OperatorId = "mr",
+        });
+
+        var report = db.GenerateHistoryReport(TodayReportRequest());
+
+        Assert.Equal(4, report.Tickets.Count);
+        Assert.Equal(4, report.Summary.Total);
+        Assert.Equal(1, report.Summary.Completed);
+        Assert.Equal(1, report.Summary.Pending);
+        Assert.Equal(1, report.Summary.Voided);
+        Assert.Equal(1, report.Summary.Deleted);
+        Assert.Contains(report.Tickets, t => t.Id == pending.Id && t.Status == "pending");
+        Assert.Contains(report.Tickets, t => t.Id == voidTicket.Id && t.Status == "voided");
+        Assert.Contains(report.Tickets, t => t.Id == deleted.Id && t.Status == "deleted");
+
+        var timestamps = report.Tickets
+            .Select(t => DateTimeOffset.Parse(t.BusinessAt!, CultureInfo.InvariantCulture))
+            .ToList();
+        Assert.Equal(timestamps.OrderBy(value => value), timestamps);
+    }
+
+    [Fact]
+    public void HistoryReport_UsesInclusiveLocalDateRange()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        var yesterday = DateTime.Now.AddDays(-1);
+
+        var request = NewTicket("TEST-RPT-YESTERDAY", 11000);
+        request.FirstTime = yesterday.ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture);
+        var oldTicket = db.CreateTicket(request);
+
+        var todayReport = db.GenerateHistoryReport(TodayReportRequest());
+        Assert.DoesNotContain(todayReport.Tickets, t => t.Id == oldTicket.Id);
+
+        var yesterdayRequest = TodayReportRequest();
+        yesterdayRequest.FromDate = DateValue(yesterday);
+        yesterdayRequest.ToDate = DateValue(yesterday);
+        var yesterdayReport = db.GenerateHistoryReport(yesterdayRequest);
+
+        Assert.Contains(yesterdayReport.Tickets, t => t.Id == oldTicket.Id);
+        Assert.DoesNotContain(todayReport.Tickets, t => t.Id == oldTicket.Id);
+    }
+
+    [Fact]
+    public void HistoryReport_VerificationMatchesArchivedSnapshot()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        var ticket = db.CreateTicket(NewTicket("TEST-RPT-VERIFY", 15000));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = ticket.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+
+        var report = db.GenerateHistoryReport(TodayReportRequest());
+        var result = db.VerifyHistoryReport(new VerifyHistoryReportRequest
+        {
+            ReportId = report.ReportId,
+            IntegrityHash = report.IntegrityHash,
+        });
+
+        Assert.True(result.Matched);
+        Assert.Equal(report.IntegrityHash, result.ComputedHash);
+        Assert.Equal(report.IntegrityHash, result.StoredHash);
+        Assert.Equal("MD. RAJU", result.OperatorName);
+        Assert.Contains("matches", result.Message);
+    }
+
+    [Fact]
+    public void HistoryReport_VerificationRejectsWrongHashAndTamperedSnapshot()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        db.CreateTicket(NewTicket("TEST-RPT-TAMPER", 12000));
+        var report = db.GenerateHistoryReport(TodayReportRequest());
+
+        var wrongHash = db.VerifyHistoryReport(new VerifyHistoryReportRequest
+        {
+            ReportId = report.ReportId,
+            IntegrityHash = new string('0', 64),
+        });
+        Assert.False(wrongHash.Matched);
+        Assert.Contains("does not match", wrongHash.Message);
+
+        using (var connection = db.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                UPDATE audit_events
+                SET after_values = replace(after_values, '"canonicalJson":"', '"canonicalJson":"x')
+                WHERE entity_type = 'history_report' AND entity_id = $id;
+                """;
+            command.Parameters.AddWithValue("$id", report.ReportId);
+            Assert.Equal(1, command.ExecuteNonQuery());
+        }
+
+        var tampered = db.VerifyHistoryReport(new VerifyHistoryReportRequest
+        {
+            ReportId = report.ReportId,
+            IntegrityHash = report.IntegrityHash,
+        });
+        Assert.False(tampered.Matched);
+        Assert.Contains("does not match its recorded hash", tampered.Message);
+    }
+
+    [Fact]
+    public void HistoryReport_VerificationReportsUnknownReport()
+    {
+        using var temp = new TempDatabase();
+        var result = temp.Database.VerifyHistoryReport(new VerifyHistoryReportRequest
+        {
+            ReportId = "HR-UNKNOWN",
+            IntegrityHash = new string('0', 64),
+        });
+
+        Assert.False(result.Matched);
+        Assert.Contains("No archived snapshot", result.Message);
     }
 }

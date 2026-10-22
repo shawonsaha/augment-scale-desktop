@@ -1,0 +1,155 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+         MODAL: HISTORY REPORT
+         Range selection → PIN re-authentication → printable A4 portrait preview
+         ═══════════════════════════════════════════════════════════════════════ -->
+<div
+  class="modal-overlay history-report-overlay"
+  id="history-report-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="history-report-title"
+  aria-hidden="true"
+>
+  <div class="modal-content history-report-modal">
+    <header class="history-report-header">
+      <div>
+        <span class="history-report-eyebrow">History ledger</span>
+        <h2 class="history-report-title" id="history-report-title">Printable history report</h2>
+        <p class="history-report-subtitle">
+          A4 portrait snapshot including every ticket status. History filters are not applied.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="modal-close-btn"
+        id="history-report-close"
+        aria-label="Close history report"
+      >
+        ✕
+      </button>
+    </header>
+
+    <section class="history-report-stage" id="history-report-setup">
+      <div class="history-report-section">
+        <h3>Report period</h3>
+        <div class="history-report-range-grid" role="radiogroup" aria-label="Report period">
+          <label class="history-report-range">
+            <input type="radio" name="history-report-range" value="today" checked />
+            <span><strong>Today</strong><small>Current shift day</small></span>
+          </label>
+          <label class="history-report-range">
+            <input type="radio" name="history-report-range" value="yesterday" />
+            <span><strong>Yesterday</strong><small>Previous day</small></span>
+          </label>
+          <label class="history-report-range">
+            <input type="radio" name="history-report-range" value="7days" />
+            <span><strong>Last 7 days</strong><small>Rolling week</small></span>
+          </label>
+          <label class="history-report-range">
+            <input type="radio" name="history-report-range" value="30days" />
+            <span><strong>Last 30 days</strong><small>Rolling month</small></span>
+          </label>
+          <label class="history-report-range">
+            <input type="radio" name="history-report-range" value="custom" />
+            <span><strong>Custom</strong><small>Choose two dates</small></span>
+          </label>
+        </div>
+
+        <div class="history-report-custom" id="history-report-custom" hidden>
+          <label>
+            <span>From</span>
+            <input type="date" id="history-report-from" />
+          </label>
+          <span aria-hidden="true">→</span>
+          <label>
+            <span>To</span>
+            <input type="date" id="history-report-to" />
+          </label>
+        </div>
+      </div>
+
+      <div class="history-report-notice">
+        <strong>Snapshot, not a filter.</strong>
+        The report is built from the local database at generation time and includes pending,
+        completed, voided and deleted tickets for the selected days.
+      </div>
+
+      <footer class="history-report-actions">
+        <button type="button" class="history-report-btn history-report-btn--ghost" data-report-close>
+          Cancel
+        </button>
+        <button type="button" class="history-report-btn history-report-btn--primary" id="history-report-continue">
+          Continue to PIN
+        </button>
+      </footer>
+    </section>
+
+    <section class="history-report-stage" id="history-report-pin" hidden>
+      <div class="history-report-section">
+        <div class="history-report-operator">
+          <img
+            id="history-report-operator-avatar"
+            src="avatars/frame-9.svg"
+            alt=""
+            width="44"
+            height="44"
+          />
+          <div>
+            <span>Authorising operator</span>
+            <strong id="history-report-operator-name">—</strong>
+            <small id="history-report-pin-range">—</small>
+          </div>
+        </div>
+
+        <label class="history-report-pin-label" for="history-report-pin-input">
+          Re-enter your PIN to generate this report
+        </label>
+        <input
+          type="password"
+          class="history-report-pin-input"
+          id="history-report-pin-input"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="8"
+          aria-describedby="history-report-pin-error"
+        />
+        <p class="history-report-pin-error" id="history-report-pin-error" aria-live="polite"></p>
+        <p class="history-report-pin-help">
+          PIN verification happens on this workstation. The PIN is not saved with the report.
+        </p>
+      </div>
+
+      <footer class="history-report-actions">
+        <button type="button" class="history-report-btn history-report-btn--ghost" id="history-report-pin-back">
+          Back
+        </button>
+        <button type="button" class="history-report-btn history-report-btn--primary" id="history-report-generate">
+          Generate report
+        </button>
+      </footer>
+    </section>
+
+    <section class="history-report-stage history-report-stage--preview" id="history-report-preview" hidden>
+      <div class="history-report-preview-bar">
+        <div>
+          <strong id="history-report-preview-title">Report preview</strong>
+          <span id="history-report-preview-meta"></span>
+        </div>
+        <div class="history-report-preview-actions">
+          <button type="button" class="history-report-btn history-report-btn--ghost" id="history-report-change">
+            Change range
+          </button>
+          <button type="button" class="history-report-btn history-report-btn--ghost" id="history-report-verify">
+            Verify
+          </button>
+          <button type="button" class="history-report-btn history-report-btn--primary" id="history-report-print">
+            Print A4 portrait
+          </button>
+        </div>
+      </div>
+      <div class="history-report-preview-scroll">
+        <article class="history-report-document" id="history-report-document"></article>
+      </div>
+    </section>
+  </div>
+</div>

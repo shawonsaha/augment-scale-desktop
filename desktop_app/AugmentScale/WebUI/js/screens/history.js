@@ -1,26 +1,71 @@
 /**
  * Screen: History ledger
  * Paginated, no-scroll view of pending + completed + voided + deleted tickets.
- * Date/status/stage filters, optional multi-select filters, detail panel,
- * reprint and void actions. All data is read from the in-memory ledger.
+ * Date/search filters, grouped advanced filters, sortable columns, detail panel,
+ * reprint/void actions and the printable history report.
  */
 import {
   state,
   OPERATORS,
   getAllTickets,
-  getTicketStage,
   getTicketStatus,
   getTicketTimestamp,
   voidTicket,
 } from '../state.js';
 import { openReprintModal } from '../print.js';
 import { openReasonDialog } from '../reason-dialog.js';
+import { openHistoryReportModal } from '../history-report.js';
+import { openVerifyReportModal } from '../verify-report.js';
 import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
-import { escapeHtml, formatDateTime12H } from '../utils.js';
+import { escapeHtml, formatFullDateTime } from '../utils.js';
 
-const FALLBACK_ROW_HEIGHT = 56;
+const FALLBACK_ROW_HEIGHT = 68;
 const MIN_PAGE_SIZE = 5;
+
+const FILTER_KEYS = [
+  'statuses',
+  'drivers',
+  'operators',
+  'materials',
+  'clients',
+  'directions',
+  'flags',
+];
+
+const FILTER_GROUPS = {
+  statuses: 'Status',
+  drivers: 'Drivers',
+  operators: 'Operators',
+  materials: 'Materials',
+  clients: 'Clients',
+  directions: 'Direction',
+  flags: 'Flags',
+};
+
+const STATUS_OPTIONS = [
+  ['pending', 'Pending'],
+  ['completed', 'Completed'],
+  ['voided', 'Voided'],
+  ['deleted', 'Deleted'],
+];
+
+const FLAG_OPTIONS = [
+  ['overridden', 'Overridden only'],
+  ['reprinted', 'Reprinted only'],
+];
+
+const SORT_KEYS = new Set([
+  'id',
+  'when',
+  'truck',
+  'gross',
+  'tare',
+  'net',
+  'status',
+  'override',
+  'prints',
+]);
 
 let filtered = [];
 let pageSize = 20;
@@ -32,23 +77,14 @@ function startOfDay(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function toDateInputValue(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function formatKg(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
   return `${Math.round(value).toLocaleString('en-US')}`;
-}
-
-function shortTime(input) {
-  if (!input) return '';
-  if (typeof input === 'string') {
-    const match = /(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)/i.exec(input);
-    if (match) return `${match[1]}:${match[2]} ${match[3].toUpperCase()}`;
-    const parsed = new Date(input);
-    if (!Number.isNaN(parsed.getTime())) input = parsed;
-  }
-  if (input instanceof Date && !Number.isNaN(input.getTime())) {
-    return input.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return '';
 }
 
 function operatorFor(ticket, which) {
@@ -62,17 +98,38 @@ function operatorFor(ticket, which) {
   };
 }
 
+function hasOverride(ticket) {
+  return Boolean(ticket?.override || ticket?.overridden || ticket?.isOverridden);
+}
+
+function reprintEntries(ticket) {
+  const log = Array.isArray(ticket?.printLog) ? ticket.printLog : [];
+  return log.filter((entry) => entry.type === 'reprint' || Number(entry.copyNumber) > 1);
+}
+
+function isReprinted(ticket) {
+  return reprintEntries(ticket).length > 0 || Number(ticket?.printCount) > 1;
+}
+
+function printCount(ticket) {
+  const logCount = Array.isArray(ticket?.printLog) ? ticket.printLog.length : 0;
+  return Math.max(1, Number(ticket?.printCount) || 0, logCount);
+}
+
 function directionOf(ticket) {
   const raw = String(ticket.direction || ticket.weightType || '').toUpperCase();
   return raw.includes('OUT') ? 'OUT' : 'IN';
+}
+
+function businessTimestamp(ticket) {
+  const ms = getTicketTimestamp(ticket);
+  return ms ? formatFullDateTime(new Date(ms)) : '—';
 }
 
 /** Gross/tare values, timestamps and operators for either ticket shape. */
 function weightParts(ticket) {
   const direction = directionOf(ticket);
   const firstType = ticket.firstWeightType || (direction === 'IN' ? 'Gross' : 'Tare');
-  const completed = getTicketStage(ticket) === 'complete';
-
   const firstOp = operatorFor(ticket, 'first');
   const secondOp = operatorFor(ticket, 'second');
 
@@ -91,13 +148,7 @@ function weightParts(ticket) {
       ? { time: ticket.secondWeightTime, op: secondOp }
       : { time: ticket.firstWeightTime, op: firstOp };
 
-  return {
-    gross,
-    tare,
-    grossMeta,
-    tareMeta,
-    completed,
-  };
+  return { gross, tare, grossMeta, tareMeta };
 }
 
 function statusLabel(ticket) {
@@ -124,6 +175,10 @@ function statusIcon(ticket) {
     default:
       return '◌';
   }
+}
+
+function statusRank(ticket) {
+  return { pending: 0, completed: 1, voided: 2, deleted: 3 }[getTicketStatus(ticket)] ?? 4;
 }
 
 // ─── Filtering ──────────────────────────────────────────────────────────────
@@ -180,33 +235,126 @@ function matchesSearch(ticket, query) {
   return haystack.includes(query);
 }
 
+function matchesFlags(ticket, flags) {
+  if (flags.length === 0) return true;
+  return flags.every((flag) => {
+    if (flag === 'overridden') return hasOverride(ticket);
+    if (flag === 'reprinted') return isReprinted(ticket);
+    return true;
+  });
+}
+
 function getFilteredTickets() {
   const history = state.history;
   const query = history.searchQuery.trim().toLowerCase();
-  const selected = history.moreFilters;
+  const selected = history.filters;
 
-  return getAllTickets().filter((ticket) => {
-    if (!withinDateRange(ticket)) return false;
+  return getAllTickets()
+    .filter((ticket) => {
+      if (!withinDateRange(ticket)) return false;
+      if (!matchesSearch(ticket, query)) return false;
 
-    if (history.statusFilter !== 'all' && getTicketStatus(ticket) !== history.statusFilter) {
-      return false;
-    }
-    if (history.stageFilter !== 'all' && getTicketStage(ticket) !== history.stageFilter) {
-      return false;
-    }
-    if (!matchesSearch(ticket, query)) return false;
+      const status = getTicketStatus(ticket);
+      if (selected.statuses.length > 0 && !selected.statuses.includes(status)) return false;
+      if (selected.drivers.length > 0 && !selected.drivers.includes(ticket.driver || '')) {
+        return false;
+      }
+      if (selected.operators.length > 0) {
+        const names = [ticket.firstOperator, ticket.secondOperator];
+        if (!names.some((name) => selected.operators.includes(name))) return false;
+      }
+      if (selected.materials.length > 0 && !selected.materials.includes(ticket.material)) {
+        return false;
+      }
+      if (selected.clients.length > 0 && !selected.clients.includes(ticket.client)) return false;
+      if (
+        selected.directions.length > 0 &&
+        !selected.directions.includes(directionOf(ticket))
+      ) {
+        return false;
+      }
+      return matchesFlags(ticket, selected.flags);
+    })
+    .sort(compareTickets);
+}
 
-    if (selected.operators.length > 0) {
-      const names = [ticket.firstOperator, ticket.secondOperator];
-      if (!names.some((name) => selected.operators.includes(name))) return false;
+// ─── Sorting ────────────────────────────────────────────────────────────────
+
+function sortValue(ticket, key) {
+  switch (key) {
+    case 'id':
+      return ticket.id;
+    case 'when':
+      return getTicketTimestamp(ticket);
+    case 'truck':
+      return `${ticket.truckNo || ''} ${ticket.driver || ''}`.toLowerCase();
+    case 'gross':
+      return weightParts(ticket).gross;
+    case 'tare':
+      return weightParts(ticket).tare;
+    case 'net':
+      return ticket.netWeight;
+    case 'status':
+      return statusRank(ticket);
+    case 'override':
+      return hasOverride(ticket) ? 1 : 0;
+    case 'prints':
+      return printCount(ticket);
+    default:
+      return getTicketTimestamp(ticket);
+  }
+}
+
+function compareTickets(a, b) {
+  const key = SORT_KEYS.has(state.history.sortKey) ? state.history.sortKey : 'when';
+  const direction = state.history.sortDir === 'asc' ? 1 : -1;
+  const av = sortValue(a, key);
+  const bv = sortValue(b, key);
+
+  const aMissing = av === null || av === undefined || av === '';
+  const bMissing = bv === null || bv === undefined || bv === '';
+  if (aMissing && bMissing) return (b.id || 0) - (a.id || 0);
+  if (aMissing) return 1;
+  if (bMissing) return -1;
+
+  let result;
+  if (typeof av === 'string' && typeof bv === 'string') {
+    result = av.localeCompare(bv);
+  } else {
+    result = Number(av) - Number(bv);
+  }
+  if (result === 0) return (b.id || 0) - (a.id || 0);
+  return result * direction;
+}
+
+function setSort(key) {
+  if (!SORT_KEYS.has(key)) return;
+  if (state.history.sortKey === key) {
+    state.history.sortDir = state.history.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.history.sortKey = key;
+    state.history.sortDir = key === 'when' || key === 'id' ? 'desc' : 'asc';
+  }
+  state.history.currentPage = 0;
+  focusedIndex = 0;
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('.hist-sort-btn[data-sort-key]').forEach((button) => {
+    const th = button.closest('th');
+    const active = button.dataset.sortKey === state.history.sortKey;
+    const dir = active ? state.history.sortDir : 'none';
+    if (th) th.setAttribute('aria-sort', active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    button.classList.toggle('is-active', active);
+    button.dataset.sortDir = active ? dir : '';
+    let indicator = button.querySelector('.hist-sort-indicator');
+    if (!indicator) {
+      indicator = document.createElement('span');
+      indicator.className = 'hist-sort-indicator';
+      indicator.setAttribute('aria-hidden', 'true');
+      button.appendChild(indicator);
     }
-    if (selected.materials.length > 0 && !selected.materials.includes(ticket.material)) {
-      return false;
-    }
-    if (selected.clients.length > 0 && !selected.clients.includes(ticket.client)) {
-      return false;
-    }
-    return true;
+    indicator.textContent = active ? (dir === 'asc' ? '↑' : '↓') : '';
   });
 }
 
@@ -233,17 +381,34 @@ function weightCellHtml(value, meta) {
     return `
       <td class="hist-weight-cell hist-weight-cell--empty">
         <span class="hist-weight-val">—</span>
-        <div class="hist-weight-meta"><span>Pending 2nd</span></div>
+        <span class="hist-weight-op">Pending 2nd</span>
       </td>
     `;
   }
   return `
     <td class="hist-weight-cell">
       <span class="hist-weight-val">${formatKg(value)}</span>
-      <div class="hist-weight-meta">
-        <img class="hist-op-avatar" src="${escapeHtml(meta.op.avatar)}" alt="" title="${escapeHtml(meta.op.name)}" />
-        <span>${escapeHtml(shortTime(meta.time))}</span>
-      </div>
+      <span class="hist-weight-op">${escapeHtml(meta.op.name || '—')}</span>
+      <span class="hist-weight-time">${escapeHtml(formatFullDateTime(meta.time))}</span>
+    </td>
+  `;
+}
+
+function overrideCellHtml(ticket) {
+  if (!hasOverride(ticket)) {
+    return '<td class="hist-col-override"><span class="hist-muted">—</span></td>';
+  }
+  const override = ticket.override || {};
+  const tooltip = [
+    override.reason || 'Override recorded',
+    override.operator ? `by ${override.operator}` : '',
+    override.timestamp ? formatFullDateTime(override.timestamp) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return `
+    <td class="hist-col-override">
+      <span class="hist-override-badge" title="${escapeHtml(tooltip)}">OVR</span>
     </td>
   `;
 }
@@ -252,6 +417,7 @@ function rowHtml(ticket) {
   const status = getTicketStatus(ticket);
   const direction = directionOf(ticket);
   const { gross, tare, grossMeta, tareMeta } = weightParts(ticket);
+  const when = businessTimestamp(ticket);
   const rowClass = [
     'hist-row',
     `hist-row--${status}`,
@@ -259,13 +425,16 @@ function rowHtml(ticket) {
   ]
     .filter(Boolean)
     .join(' ');
-  const printCount = ticket.printCount || 1;
+  const count = printCount(ticket);
 
   return `
     <tr class="${rowClass}" data-ticket-id="${ticket.id}" tabindex="-1">
       <td class="hist-col-id">
         <span class="hist-id">#${ticket.id}</span>
         <span class="hist-dir hist-dir--${direction.toLowerCase()}">${direction}</span>
+      </td>
+      <td class="hist-col-when">
+        <span class="hist-when">${escapeHtml(when)}</span>
       </td>
       <td class="hist-col-truck">
         <span class="truck-plate-tag">${escapeHtml(ticket.truckNo)}</span>
@@ -280,8 +449,9 @@ function rowHtml(ticket) {
       <td class="hist-col-status">
         <span class="hist-status hist-status--${status}">${statusIcon(ticket)} ${statusLabel(ticket)}</span>
       </td>
+      ${overrideCellHtml(ticket)}
       <td class="hist-col-prints">
-        <span class="hist-print-badge ${printCount > 1 ? 'is-high' : ''}">🖨 ${printCount}</span>
+        <span class="hist-print-badge ${count > 1 ? 'is-high' : ''}">🖨 ${count}</span>
       </td>
     </tr>
   `;
@@ -305,14 +475,15 @@ function renderDetail() {
   const firstOp = operatorFor(ticket, 'first');
   const secondOp = operatorFor(ticket, 'second');
   const printLog = Array.isArray(ticket.printLog) ? ticket.printLog : [];
+  const when = businessTimestamp(ticket);
 
-  const overrideHtml = ticket.override
+  const overrideHtml = hasOverride(ticket)
     ? `
       <section class="hist-detail-section hist-detail-section--warn">
         <h4>Override</h4>
-        <p>${escapeHtml(ticket.override.reason || '')}</p>
-        <p class="hist-detail-muted">Authorised by ${escapeHtml(ticket.override.operator || '—')} · ${escapeHtml(ticket.override.timestamp || '')}</p>
-        ${ticket.override.anomalyDetails ? `<p class="hist-detail-muted">${escapeHtml(ticket.override.anomalyDetails)}</p>` : ''}
+        <p>${escapeHtml(ticket.override?.reason || 'Override recorded')}</p>
+        <p class="hist-detail-muted">Authorised by ${escapeHtml(ticket.override?.operator || '—')} · ${escapeHtml(formatFullDateTime(ticket.override?.timestamp))}</p>
+        ${ticket.override?.anomalyDetails ? `<p class="hist-detail-muted">${escapeHtml(ticket.override.anomalyDetails)}</p>` : ''}
       </section>
     `
     : '';
@@ -323,7 +494,7 @@ function renderDetail() {
         <section class="hist-detail-section hist-detail-section--danger">
           <h4>Voided</h4>
           <p>${escapeHtml(ticket.voidedReason || 'No reason recorded')}</p>
-          <p class="hist-detail-muted">By ${escapeHtml(ticket.voidedBy || '—')} · ${escapeHtml(formatDateTime12H(new Date(ticket.voidedAt)))}</p>
+          <p class="hist-detail-muted">By ${escapeHtml(ticket.voidedBy || '—')} · ${escapeHtml(formatFullDateTime(ticket.voidedAt))}</p>
         </section>
       `
       : '';
@@ -334,7 +505,7 @@ function renderDetail() {
         <section class="hist-detail-section hist-detail-section--danger">
           <h4>Deleted while pending</h4>
           <p>${escapeHtml(ticket.deletedReason || 'No reason recorded')}</p>
-          <p class="hist-detail-muted">By ${escapeHtml(ticket.deletedBy || '—')} · ${escapeHtml(formatDateTime12H(new Date(ticket.deletedAt)))}</p>
+          <p class="hist-detail-muted">By ${escapeHtml(ticket.deletedBy || '—')} · ${escapeHtml(formatFullDateTime(ticket.deletedAt))}</p>
         </section>
       `
       : '';
@@ -348,7 +519,7 @@ function renderDetail() {
                 <td>#${entry.copyNumber || 1}</td>
                 <td>${escapeHtml(entry.type === 'reprint' ? 'Reprint' : entry.type === 'first_weigh_slip' ? 'First slip' : 'Certificate')}</td>
                 <td>${escapeHtml(entry.by || '—')}</td>
-                <td>${escapeHtml(formatDateTime12H(new Date(entry.at)))}</td>
+                <td>${escapeHtml(formatFullDateTime(entry.at))}</td>
                 <td>${escapeHtml(entry.reason || '—')}</td>
               </tr>
             `
@@ -390,7 +561,7 @@ function renderDetail() {
           <img src="${escapeHtml(firstOp.avatar)}" alt="" />
           <div>
             <strong>${escapeHtml(firstOp.name || '—')}</strong>
-            <span>1st weigh · ${escapeHtml(shortTime(ticket.firstWeightTime))}</span>
+            <span>1st weigh · ${escapeHtml(formatFullDateTime(ticket.firstWeightTime))}</span>
             <span>${escapeHtml(ticket.firstWeightType || '')} ${formatKg(ticket.firstWeight)} kg</span>
           </div>
         </div>
@@ -402,16 +573,18 @@ function renderDetail() {
           }
           <div>
             <strong>${escapeHtml(secondOp.name || 'Awaiting second weigh')}</strong>
-            <span>2nd weigh · ${ticket.secondWeightTime ? escapeHtml(shortTime(ticket.secondWeightTime)) : 'Pending'}</span>
+            <span>2nd weigh · ${ticket.secondWeightTime ? escapeHtml(formatFullDateTime(ticket.secondWeightTime)) : 'Pending'}</span>
             <span>${ticket.secondWeight ? `${formatKg(ticket.secondWeight)} kg` : '—'}</span>
           </div>
         </div>
       </div>
       <div class="hist-detail-weights">
+        <div><span>Business time</span><strong>${escapeHtml(when || '—')}</strong></div>
         <div><span>Direction</span><strong>${direction}</strong></div>
         <div><span>Gross</span><strong>${formatKg(gross)} kg</strong></div>
         <div><span>Tare</span><strong>${formatKg(tare)} kg</strong></div>
         <div><span>Net</span><strong>${formatKg(ticket.netWeight)} kg</strong></div>
+        <div><span>Prints</span><strong>${printCount(ticket)}</strong></div>
       </div>
     </section>
 
@@ -468,10 +641,13 @@ function render() {
   const start = state.history.currentPage * pageSize;
   const pageRows = filtered.slice(start, start + pageSize);
 
+  updateSortHeaders();
+  renderActiveFilters();
+
   if (pageRows.length === 0) {
     tbody.innerHTML = `
       <tr class="hist-empty-row">
-        <td colspan="7">No tickets match these filters</td>
+        <td colspan="9">No tickets match these filters</td>
       </tr>
     `;
   } else {
@@ -508,32 +684,39 @@ function render() {
   renderDetail();
 }
 
-// ─── Multi-select filters ("More") ──────────────────────────────────────────
+// ─── Advanced filters ───────────────────────────────────────────────────────
 
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
-function buildMoreFilters() {
-  const body = document.getElementById('hist-more-body');
-  if (!body) return;
+function selectedValues(key) {
+  return Array.isArray(state.history.filters[key]) ? state.history.filters[key] : [];
+}
 
-  const all = getAllTickets();
-  const operators = uniqueValues(all.flatMap((t) => [t.firstOperator, t.secondOperator]));
-  const materials = uniqueValues(all.map((t) => t.material));
-  const clients = uniqueValues(all.map((t) => t.client));
-  const selected = state.history.moreFilters;
+function normalizeOption(option) {
+  return Array.isArray(option) ? { value: option[0], label: option[1] } : {
+    value: option,
+    label: option,
+  };
+}
 
-  const section = (title, key, values) => `
+function filterSection(title, key, options) {
+  const selected = selectedValues(key);
+  const normalized = options.map(normalizeOption);
+  const values = uniqueValues([...normalized.map((item) => item.value), ...selected]);
+  const labels = new Map(normalized.map((item) => [item.value, item.label]));
+
+  return `
     <section class="hist-more-section">
-      <h4>${title}</h4>
+      <h4>${escapeHtml(title)}</h4>
       <div class="hist-more-options">
         ${values
           .map(
             (value) => `
               <label class="hist-more-option">
-                <input type="checkbox" data-filter-key="${key}" value="${escapeHtml(value)}" ${selected[key].includes(value) ? 'checked' : ''} />
-                <span>${escapeHtml(value || '—')}</span>
+                <input type="checkbox" data-filter-key="${key}" value="${escapeHtml(value)}" ${selected.includes(value) ? 'checked' : ''} />
+                <span>${escapeHtml(labels.get(value) || value || '—')}</span>
               </label>
             `
           )
@@ -541,53 +724,116 @@ function buildMoreFilters() {
       </div>
     </section>
   `;
-
-  body.innerHTML = [
-    section('Operators', 'operators', operators),
-    section('Materials', 'materials', materials),
-    section('Clients', 'clients', clients),
-  ].join('');
-
-  updateMoreCount();
 }
 
-function updateMoreCount() {
+function buildFilterPanel() {
+  const body = document.getElementById('hist-more-body');
+  if (!body) return;
+
+  const all = getAllTickets();
+  const operators = uniqueValues(all.flatMap((t) => [t.firstOperator, t.secondOperator]));
+  const drivers = uniqueValues(all.map((t) => t.driver));
+  const materials = uniqueValues(all.map((t) => t.material));
+  const clients = uniqueValues(all.map((t) => t.client));
+
+  body.innerHTML = `
+    <p class="hist-filter-note">Leave a section empty to include every value. Filters combine with the search and date range.</p>
+    <div class="hist-filter-grid">
+      ${filterSection('Status', 'statuses', STATUS_OPTIONS)}
+      ${filterSection('Direction', 'directions', ['IN', 'OUT'])}
+      ${filterSection('Flags', 'flags', FLAG_OPTIONS)}
+      ${filterSection('Drivers', 'drivers', drivers)}
+      ${filterSection('Operators', 'operators', operators)}
+      ${filterSection('Materials', 'materials', materials)}
+      ${filterSection('Clients', 'clients', clients)}
+    </div>
+  `;
+
+  updateFilterCount();
+}
+
+function updateFilterCount() {
   const count = document.getElementById('hist-more-count');
   if (!count) return;
-  const selected = state.history.moreFilters;
-  const total = selected.operators.length + selected.materials.length + selected.clients.length;
+  const total = FILTER_KEYS.reduce((sum, key) => sum + selectedValues(key).length, 0);
   count.textContent = String(total);
   count.hidden = total === 0;
 }
 
-function setMoreOpen(open) {
+function setFiltersOpen(open) {
   const popover = document.getElementById('hist-more-popover');
-  const button = document.getElementById('hist-more-btn');
+  const button = document.getElementById('hist-filters-btn');
   if (!popover || !button) return;
   popover.hidden = !open;
   button.setAttribute('aria-expanded', String(open));
 }
 
-function applyMoreFilters() {
+function applyFilters() {
   const body = document.getElementById('hist-more-body');
   if (!body) return;
 
-  const next = { operators: [], materials: [], clients: [] };
+  const next = Object.fromEntries(FILTER_KEYS.map((key) => [key, []]));
   body.querySelectorAll('input[type="checkbox"]:checked').forEach((input) => {
-    next[input.dataset.filterKey]?.push(input.value);
+    const key = input.dataset.filterKey;
+    if (next[key]) next[key].push(input.value);
   });
 
-  state.history.moreFilters = next;
+  state.history.filters = next;
   state.history.currentPage = 0;
-  updateMoreCount();
-  setMoreOpen(false);
+  focusedIndex = 0;
+  updateFilterCount();
+  setFiltersOpen(false);
   render();
 }
 
-function clearMoreFilters() {
-  state.history.moreFilters = { operators: [], materials: [], clients: [] };
+function clearFilters() {
+  state.history.filters = Object.fromEntries(FILTER_KEYS.map((key) => [key, []]));
   state.history.currentPage = 0;
-  buildMoreFilters();
+  focusedIndex = 0;
+  buildFilterPanel();
+  render();
+}
+
+function filterLabel(key, value) {
+  if (key === 'statuses') {
+    return STATUS_OPTIONS.find(([option]) => option === value)?.[1] || value;
+  }
+  if (key === 'flags') {
+    return FLAG_OPTIONS.find(([option]) => option === value)?.[1] || value;
+  }
+  return value;
+}
+
+function renderActiveFilters() {
+  const container = document.getElementById('hist-active-filters');
+  if (!container) return;
+
+  const chips = [];
+  for (const key of FILTER_KEYS) {
+    for (const value of selectedValues(key)) {
+      chips.push(`
+        <button type="button" class="hist-active-chip" data-filter-key="${key}" data-filter-value="${escapeHtml(value)}" aria-label="Remove ${escapeHtml(FILTER_GROUPS[key])} filter ${escapeHtml(filterLabel(key, value))}">
+          <span class="hist-active-chip-label">${escapeHtml(FILTER_GROUPS[key])}:</span>
+          ${escapeHtml(filterLabel(key, value))}
+          <span aria-hidden="true">×</span>
+        </button>
+      `);
+    }
+  }
+
+  container.hidden = chips.length === 0;
+  container.innerHTML =
+    chips.length === 0
+      ? ''
+      : `${chips.join('')}<button type="button" class="hist-active-clear" id="hist-active-clear">Clear all</button>`;
+}
+
+function removeFilter(key, value) {
+  if (!FILTER_KEYS.includes(key)) return;
+  state.history.filters[key] = selectedValues(key).filter((item) => item !== value);
+  state.history.currentPage = 0;
+  focusedIndex = 0;
+  if (document.getElementById('hist-more-popover')?.hidden === false) buildFilterPanel();
   render();
 }
 
@@ -595,6 +841,10 @@ function clearMoreFilters() {
 
 function ticketById(id) {
   return getAllTickets().find((ticket) => ticket.id === id) || null;
+}
+
+function openReport() {
+  openHistoryReportModal();
 }
 
 function reprintTicket(ticket) {
@@ -674,12 +924,14 @@ export function initHistoryScreen() {
   const dateSelect = document.getElementById('hist-date-filter');
   const dateFrom = document.getElementById('hist-date-from');
   const dateTo = document.getElementById('hist-date-to');
-  const statusSelect = document.getElementById('hist-status-filter');
+  const filtersButton = document.getElementById('hist-filters-btn');
   const moreBody = document.getElementById('hist-more-body');
+  const activeFilters = document.getElementById('hist-active-filters');
+  const tableHead = document.querySelector('.hist-table thead');
 
   if (!tbody) return;
 
-  buildMoreFilters();
+  buildFilterPanel();
 
   searchInput?.addEventListener('input', (event) => {
     state.history.searchQuery = event.target.value;
@@ -698,11 +950,11 @@ export function initHistoryScreen() {
       const today = new Date();
       const monthAgo = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
       if (dateFrom && !dateFrom.value) {
-        dateFrom.value = monthAgo.toISOString().slice(0, 10);
+        dateFrom.value = toDateInputValue(monthAgo);
         state.history.customDateFrom = dateFrom.value;
       }
       if (dateTo && !dateTo.value) {
-        dateTo.value = today.toISOString().slice(0, 10);
+        dateTo.value = toDateInputValue(today);
         state.history.customDateTo = dateTo.value;
       }
     }
@@ -715,49 +967,52 @@ export function initHistoryScreen() {
   dateFrom?.addEventListener('change', (event) => {
     state.history.customDateFrom = event.target.value || null;
     state.history.currentPage = 0;
+    focusedIndex = 0;
     render();
   });
   dateTo?.addEventListener('change', (event) => {
     state.history.customDateTo = event.target.value || null;
     state.history.currentPage = 0;
-    render();
-  });
-
-  statusSelect?.addEventListener('change', (event) => {
-    state.history.statusFilter = event.target.value;
-    state.history.currentPage = 0;
     focusedIndex = 0;
     render();
   });
 
-  document.querySelectorAll('.hist-chip[data-stage]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      document.querySelectorAll('.hist-chip[data-stage]').forEach((other) => {
-        other.classList.toggle('is-active', other === chip);
-      });
-      state.history.stageFilter = chip.dataset.stage;
-      state.history.currentPage = 0;
-      focusedIndex = 0;
-      render();
-    });
-  });
-
-  document.getElementById('hist-more-btn')?.addEventListener('click', (event) => {
+  filtersButton?.addEventListener('click', (event) => {
     event.stopPropagation();
     const popover = document.getElementById('hist-more-popover');
     const opening = Boolean(popover?.hidden);
-    if (opening) buildMoreFilters();
-    setMoreOpen(opening);
+    if (opening) buildFilterPanel();
+    setFiltersOpen(opening);
   });
-  document.getElementById('hist-more-apply')?.addEventListener('click', applyMoreFilters);
-  document.getElementById('hist-more-clear')?.addEventListener('click', clearMoreFilters);
+  document.getElementById('hist-more-apply')?.addEventListener('click', applyFilters);
+  document.getElementById('hist-more-clear')?.addEventListener('click', clearFilters);
   moreBody?.addEventListener('change', (event) => {
-    if (event.target.matches('input[type="checkbox"]')) updateMoreCount();
+    if (event.target.matches('input[type="checkbox"]')) updateFilterCount();
   });
 
   document.addEventListener('click', (event) => {
-    if (!event.target.closest('.hist-more-wrap')) setMoreOpen(false);
+    if (!event.target.closest('.hist-more-wrap')) setFiltersOpen(false);
   });
+
+  activeFilters?.addEventListener('click', (event) => {
+    if (event.target.closest('#hist-active-clear')) {
+      clearFilters();
+      return;
+    }
+    const chip = event.target.closest('[data-filter-key][data-filter-value]');
+    if (!chip) return;
+    removeFilter(chip.dataset.filterKey, chip.dataset.filterValue);
+  });
+
+  tableHead?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-sort-key]');
+    if (!button) return;
+    setSort(button.dataset.sortKey);
+    render();
+  });
+
+  document.getElementById('hist-report-btn')?.addEventListener('click', openReport);
+  document.getElementById('hist-verify-btn')?.addEventListener('click', () => openVerifyReportModal());
 
   document.getElementById('hist-back')?.addEventListener('click', () => {
     showScreen('dashboard-screen');
@@ -812,7 +1067,7 @@ export function initHistoryScreen() {
 
   document.addEventListener('history:refresh', () => {
     if (state.currentScreen === 'history-screen') render();
-    buildMoreFilters();
+    buildFilterPanel();
   });
 
   window.addEventListener('resize', () => {
@@ -834,7 +1089,7 @@ export function initHistoryScreen() {
 
       if (event.key === 'Escape') {
         if (popoverOpen) {
-          setMoreOpen(false);
+          setFiltersOpen(false);
           event.preventDefault();
           event.stopPropagation();
           return;
@@ -885,6 +1140,12 @@ export function initHistoryScreen() {
         event.preventDefault();
         event.stopPropagation();
         voidTicketWithReason(currentFocusedTicket() || ticketById(state.history.selectedTicketId));
+        return;
+      }
+      if (event.altKey && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        event.stopPropagation();
+        openReport();
         return;
       }
 

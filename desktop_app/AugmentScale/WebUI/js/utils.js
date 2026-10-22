@@ -158,6 +158,21 @@ export function formatShortDateWithSeconds(input = new Date()) {
   return String(input);
 }
 
+/**
+ * Full timestamp for ledgers and reports: "22 Oct 2026 · 03:04:05 PM".
+ * Accepts Date objects, ISO strings and "DD-MM-YY hh:mm:ss AM/PM" strings.
+ */
+export function formatFullDateTime(input) {
+  if (!input) return '';
+  const dt = input instanceof Date ? input : parseAppTimestamp(input);
+  if (!dt || Number.isNaN(dt.getTime())) return String(input);
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const h = dt.getHours() % 12 || 12;
+  const ampm = dt.getHours() >= 12 ? 'PM' : 'AM';
+  return `${pad(dt.getDate())} ${MONTH_NAMES[dt.getMonth()]} ${dt.getFullYear()} · ${pad(h)}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())} ${ampm}`;
+}
+
 /** Ensure timestamp is formatted or returns null if pending */
 export function ensureFullTimestamp(t) {
   if (!t || String(t).startsWith('Pending')) return null;

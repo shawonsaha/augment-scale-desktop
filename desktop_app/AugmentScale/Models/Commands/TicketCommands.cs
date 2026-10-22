@@ -65,3 +65,17 @@ public sealed class HistoryQueryRequest
     public int? Offset { get; set; }
     public string? Status { get; set; }
 }
+
+public sealed class HistoryReportRequest
+{
+    public string FromDate { get; set; } = string.Empty;
+    public string ToDate { get; set; } = string.Empty;
+    public string OperatorId { get; set; } = string.Empty;
+    public string Pin { get; set; } = string.Empty;
+}
+
+public sealed class VerifyHistoryReportRequest
+{
+    public string ReportId { get; set; } = string.Empty;
+    public string IntegrityHash { get; set; } = string.Empty;
+}

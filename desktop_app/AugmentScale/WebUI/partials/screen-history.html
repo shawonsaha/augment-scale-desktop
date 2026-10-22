@@ -48,32 +48,18 @@
         <input type="date" id="hist-date-to" class="hist-date-input" hidden aria-label="To date" />
       </div>
 
-      <div class="hist-stage-group" role="group" aria-label="Weigh stage">
-        <button type="button" class="hist-chip is-active" data-stage="all">All stages</button>
-        <button type="button" class="hist-chip" data-stage="first">First only</button>
-        <button type="button" class="hist-chip" data-stage="complete">Complete</button>
-      </div>
-
-      <select id="hist-status-filter" class="hist-select" aria-label="Ticket status">
-        <option value="all">All statuses</option>
-        <option value="pending">Pending</option>
-        <option value="completed">Completed</option>
-        <option value="voided">Voided</option>
-        <option value="deleted">Deleted</option>
-      </select>
-
       <div class="hist-more-wrap">
         <button
           type="button"
           class="hist-more-btn"
-          id="hist-more-btn"
+          id="hist-filters-btn"
           aria-expanded="false"
           aria-controls="hist-more-popover"
         >
-          More
+          Filters
           <span class="hist-more-count" id="hist-more-count" hidden>0</span>
         </button>
-        <div class="hist-more-popover" id="hist-more-popover" hidden>
+        <div class="hist-more-popover hist-filter-panel" id="hist-more-popover" hidden>
           <div class="hist-more-body" id="hist-more-body"></div>
           <div class="hist-more-footer">
             <button type="button" class="hist-more-clear" id="hist-more-clear">Clear all</button>
@@ -84,11 +70,50 @@
         </div>
       </div>
 
+      <button type="button" class="hist-report-btn" id="hist-report-btn">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 9V2h12v7" />
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+          <rect x="6" y="14" width="12" height="8" rx="1" />
+        </svg>
+        Print report
+      </button>
+
+      <button type="button" class="hist-more-btn" id="hist-verify-btn">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="m9 12 2 2 4-4" />
+        </svg>
+        Verify report
+      </button>
+
       <span class="hist-keyboard-hint">
         <kbd>↑</kbd><kbd>↓</kbd> rows · <kbd>PgUp</kbd><kbd>PgDn</kbd> pages ·
-        <kbd>Enter</kbd> detail · <kbd>Alt+R</kbd> reprint
+        <kbd>Enter</kbd> detail · <kbd>Alt+R</kbd> reprint · <kbd>Alt+P</kbd> report
       </span>
     </section>
+
+    <div class="hist-active-filters" id="hist-active-filters" hidden></div>
 
     <!-- Table + detail panel -->
     <section class="hist-body">
@@ -97,13 +122,33 @@
           <table class="hist-table">
             <thead>
               <tr>
-                <th class="hist-col-id">Ticket</th>
-                <th class="hist-col-truck">Truck</th>
-                <th class="hist-col-weight">Gross</th>
-                <th class="hist-col-weight">Tare</th>
-                <th class="hist-col-net">Net</th>
-                <th class="hist-col-status">Status</th>
-                <th class="hist-col-prints">Prints</th>
+                <th class="hist-col-id" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="id">Ticket</button>
+                </th>
+                <th class="hist-col-when" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="when">When</button>
+                </th>
+                <th class="hist-col-truck" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="truck">Truck / Driver</button>
+                </th>
+                <th class="hist-col-weight" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="gross">Gross</button>
+                </th>
+                <th class="hist-col-weight" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="tare">Tare</button>
+                </th>
+                <th class="hist-col-net" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="net">Net</button>
+                </th>
+                <th class="hist-col-status" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="status">Status</button>
+                </th>
+                <th class="hist-col-override" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="override">Override</button>
+                </th>
+                <th class="hist-col-prints" scope="col">
+                  <button type="button" class="hist-sort-btn" data-sort-key="prints">Prints</button>
+                </th>
               </tr>
             </thead>
             <tbody id="history-tbody"></tbody>

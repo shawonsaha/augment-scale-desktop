@@ -109,6 +109,18 @@ public sealed class BridgeService
                 return _database.GetTicket(request.TicketId);
             }
 
+            case "generateHistoryReport":
+                return _database.GenerateHistoryReport(Deserialize<HistoryReportRequest>(payload));
+
+            case "verifyHistoryReport":
+                return _database.VerifyHistoryReport(Deserialize<VerifyHistoryReportRequest>(payload));
+
+            case "showSystemPrintDialog":
+                if (_webView is null)
+                    throw new InvalidOperationException("The print dialog is unavailable.");
+                _webView.ShowPrintUI(CoreWebView2PrintDialogKind.System);
+                return true;
+
             case "getNextTicketNumber":
                 return _database.PeekNextTicketNumber();
 

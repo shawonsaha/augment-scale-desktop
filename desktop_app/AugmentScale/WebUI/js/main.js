@@ -11,6 +11,8 @@ import { initSecondWeighScreen } from './screens/second-weigh.js';
 import { initHistoryScreen } from './screens/history.js';
 import { initTrucksScreen } from './screens/trucks.js';
 import { initPrintModal } from './print.js';
+import { initHistoryReport } from './history-report.js';
+import { initVerifyReport } from './verify-report.js';
 import { initKeyboardShortcuts } from './keyboard.js';
 import { initRefreshControls } from './refresh.js';
 import { initThemeToggle } from './theme.js';
@@ -38,6 +40,8 @@ async function bootstrap() {
   initHistoryScreen();
   initTrucksScreen();
   initPrintModal();
+  initHistoryReport();
+  initVerifyReport();
   initRefreshControls();
   initKeyboardShortcuts();
   initAppNav();

@@ -24,6 +24,7 @@ public sealed class TicketDto
     public string WeightType { get; set; } = "IN WEIGHT";
     public string Status { get; set; } = "pending";
     public bool Deleted { get; set; }
+    public string? BusinessAt { get; set; }
 
     public double? FirstWeight { get; set; }
     public string? FirstWeightType { get; set; }
