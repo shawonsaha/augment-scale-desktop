@@ -104,6 +104,38 @@
   font-size: var(--text-xs);
 }
 
+.hist-date-sort {
+  height: 34px;
+  padding: 0 var(--space-2-5);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-subtle);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hist-date-sort:hover {
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
+.hist-date-sort.is-active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-light);
+  color: var(--color-brand);
+}
+
+.hist-date-sort-indicator {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+}
+
 .hist-report-btn {
   height: 34px;
   padding: 0 var(--space-3);
@@ -185,7 +217,7 @@
 }
 
 .hist-filter-panel {
-  width: 460px;
+  width: min(460px, calc(100vw - 24px));
 }
 
 .hist-filter-note {
@@ -259,6 +291,7 @@
   padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-panel-sub);
+  flex-shrink: 0;
 }
 
 .hist-more-clear {
@@ -408,32 +441,23 @@
 }
 
 .hist-col-id {
-  width: 74px;
-}
-
-.hist-col-when {
-  width: 128px;
+  width: 78px;
 }
 
 .hist-col-truck {
-  width: 136px;
+  width: 146px;
 }
 
 .hist-col-weight {
-  width: 104px;
+  width: 112px;
 }
 
 .hist-col-net {
-  width: 76px;
+  width: 82px;
 }
 
 .hist-col-status {
-  width: 98px;
-}
-
-.hist-col-override {
-  width: 70px;
-  text-align: center;
+  width: 176px;
 }
 
 .hist-col-prints {
@@ -456,8 +480,7 @@
   white-space: nowrap;
 }
 
-.hist-col-prints .hist-sort-btn,
-.hist-col-override .hist-sort-btn {
+.hist-col-prints .hist-sort-btn {
   justify-content: center;
 }
 
@@ -601,15 +624,6 @@ body.dark-mode .hist-dir--in,
   text-overflow: ellipsis;
 }
 
-.hist-when {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  line-height: 1.35;
-  color: var(--text-secondary);
-  white-space: normal;
-}
-
 .hist-col-net strong {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -617,10 +631,30 @@ body.dark-mode .hist-dir--in,
   white-space: nowrap;
 }
 
+.hist-col-net--anomaly strong {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--status-error-border);
+  background: var(--status-error-bg);
+  color: var(--status-error-text);
+}
+
+.hist-col-net--anomaly .hist-net-unit {
+  color: var(--status-error-text);
+}
+
 .hist-net-unit {
   margin-left: 2px;
   font-size: 9px;
   color: var(--text-muted);
+}
+
+.hist-status-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
 }
 
 .hist-status {
@@ -664,7 +698,7 @@ body.dark-mode .hist-status--pending,
   border: 1px solid var(--status-error-border);
 }
 
-.hist-override-badge {
+.hist-override-chip {
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
@@ -674,17 +708,13 @@ body.dark-mode .hist-status--pending,
   color: #b45309;
   font-size: 9.5px;
   font-weight: 700;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
-body.dark-mode .hist-override-badge,
-:root[data-theme='dark'] .hist-override-badge {
+body.dark-mode .hist-override-chip,
+:root[data-theme='dark'] .hist-override-chip {
   color: var(--primitive-amber-400);
-}
-
-.hist-muted {
-  color: var(--text-muted);
-  font-size: 10px;
 }
 
 .hist-print-badge {
@@ -1116,16 +1146,16 @@ body.dark-mode .hist-print-badge.is-high,
     width: 300px;
   }
 
-  .hist-col-when {
-    width: 112px;
-  }
-
   .hist-col-truck {
-    width: 118px;
+    width: 126px;
   }
 
   .hist-col-weight {
-    width: 96px;
+    width: 104px;
+  }
+
+  .hist-col-status {
+    width: 168px;
   }
 }
 
@@ -1142,32 +1172,29 @@ body.dark-mode .hist-print-badge.is-high,
     width: 68px;
   }
 
-  .hist-col-when {
-    width: 100px;
-  }
-
   .hist-col-truck {
-    width: 106px;
+    width: 110px;
   }
 
   .hist-col-weight {
-    width: 90px;
+    width: 96px;
   }
 
   .hist-col-net {
-    width: 68px;
+    width: 72px;
   }
 
   .hist-col-status {
-    width: 88px;
+    width: 160px;
   }
 
-  .hist-col-override {
-    width: 62px;
-  }
-
-  .hist-when,
   .hist-weight-time {
     font-size: 9px;
+  }
+}
+
+@media (max-width: 560px) {
+  .hist-filter-grid {
+    grid-template-columns: 1fr;
   }
 }

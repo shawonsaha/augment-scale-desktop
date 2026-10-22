@@ -46,6 +46,16 @@
           aria-label="From date"
         />
         <input type="date" id="hist-date-to" class="hist-date-input" hidden aria-label="To date" />
+        <button
+          type="button"
+          class="hist-date-sort"
+          id="hist-date-sort"
+          aria-label="Sort by date, newest first"
+          title="Sort by date, newest first"
+        >
+          <span class="hist-date-sort-label" id="hist-date-sort-label">Newest first</span>
+          <span class="hist-date-sort-indicator" id="hist-date-sort-indicator" aria-hidden="true">↓</span>
+        </button>
       </div>
 
       <div class="hist-more-wrap">
@@ -125,26 +135,20 @@
                 <th class="hist-col-id" scope="col">
                   <button type="button" class="hist-sort-btn" data-sort-key="id">Ticket</button>
                 </th>
-                <th class="hist-col-when" scope="col">
-                  <button type="button" class="hist-sort-btn" data-sort-key="when">When</button>
-                </th>
                 <th class="hist-col-truck" scope="col">
                   <button type="button" class="hist-sort-btn" data-sort-key="truck">Truck / Driver</button>
                 </th>
                 <th class="hist-col-weight" scope="col">
-                  <button type="button" class="hist-sort-btn" data-sort-key="gross">Gross</button>
+                  <button type="button" class="hist-sort-btn" data-sort-key="first">First Weight</button>
                 </th>
                 <th class="hist-col-weight" scope="col">
-                  <button type="button" class="hist-sort-btn" data-sort-key="tare">Tare</button>
+                  <button type="button" class="hist-sort-btn" data-sort-key="second">Second Weight</button>
                 </th>
                 <th class="hist-col-net" scope="col">
                   <button type="button" class="hist-sort-btn" data-sort-key="net">Net</button>
                 </th>
                 <th class="hist-col-status" scope="col">
                   <button type="button" class="hist-sort-btn" data-sort-key="status">Status</button>
-                </th>
-                <th class="hist-col-override" scope="col">
-                  <button type="button" class="hist-sort-btn" data-sort-key="override">Override</button>
                 </th>
                 <th class="hist-col-prints" scope="col">
                   <button type="button" class="hist-sort-btn" data-sort-key="prints">Prints</button>

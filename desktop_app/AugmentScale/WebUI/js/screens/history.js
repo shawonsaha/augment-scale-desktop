@@ -22,6 +22,7 @@ import { escapeHtml, formatFullDateTime } from '../utils.js';
 
 const FALLBACK_ROW_HEIGHT = 68;
 const MIN_PAGE_SIZE = 5;
+const POPOVER_MARGIN = 12;
 
 const FILTER_KEYS = [
   'statuses',
@@ -59,11 +60,10 @@ const SORT_KEYS = new Set([
   'id',
   'when',
   'truck',
-  'gross',
-  'tare',
+  'first',
+  'second',
   'net',
   'status',
-  'override',
   'prints',
 ]);
 
@@ -126,7 +126,7 @@ function businessTimestamp(ticket) {
   return ms ? formatFullDateTime(new Date(ms)) : '—';
 }
 
-/** Gross/tare values, timestamps and operators for either ticket shape. */
+/** First/second weigh values, timestamps and operators for either ticket shape. */
 function weightParts(ticket) {
   const direction = directionOf(ticket);
   const firstType = ticket.firstWeightType || (direction === 'IN' ? 'Gross' : 'Tare');
@@ -139,16 +139,12 @@ function weightParts(ticket) {
   if (gross === null && firstType === 'Gross') gross = ticket.firstWeight;
   if (tare === null && firstType === 'Tare') tare = ticket.firstWeight;
 
-  const grossMeta =
-    direction === 'IN'
-      ? { time: ticket.firstWeightTime, op: firstOp }
-      : { time: ticket.secondWeightTime, op: secondOp };
-  const tareMeta =
-    direction === 'IN'
-      ? { time: ticket.secondWeightTime, op: secondOp }
-      : { time: ticket.firstWeightTime, op: firstOp };
+  const first = ticket.firstWeight ?? (firstType === 'Gross' ? gross : tare);
+  const second = ticket.secondWeight ?? (firstType === 'Gross' ? tare : gross);
+  const firstMeta = { time: ticket.firstWeightTime, op: firstOp };
+  const secondMeta = { time: ticket.secondWeightTime, op: secondOp };
 
-  return { gross, tare, grossMeta, tareMeta };
+  return { first, second, firstMeta, secondMeta, gross, tare };
 }
 
 function statusLabel(ticket) {
@@ -288,16 +284,14 @@ function sortValue(ticket, key) {
       return getTicketTimestamp(ticket);
     case 'truck':
       return `${ticket.truckNo || ''} ${ticket.driver || ''}`.toLowerCase();
-    case 'gross':
-      return weightParts(ticket).gross;
-    case 'tare':
-      return weightParts(ticket).tare;
+    case 'first':
+      return weightParts(ticket).first;
+    case 'second':
+      return weightParts(ticket).second;
     case 'net':
       return ticket.netWeight;
     case 'status':
       return statusRank(ticket);
-    case 'override':
-      return hasOverride(ticket) ? 1 : 0;
     case 'prints':
       return printCount(ticket);
     default:
@@ -356,6 +350,31 @@ function updateSortHeaders() {
     }
     indicator.textContent = active ? (dir === 'asc' ? '↑' : '↓') : '';
   });
+
+  updateDateSortButton();
+}
+
+function updateDateSortButton() {
+  const button = document.getElementById('hist-date-sort');
+  const label = document.getElementById('hist-date-sort-label');
+  const indicator = document.getElementById('hist-date-sort-indicator');
+  if (!button) return;
+
+  const active = state.history.sortKey === 'when';
+  const newestFirst = state.history.sortDir === 'desc';
+  button.classList.toggle('is-active', active);
+  button.dataset.sortDir = active ? state.history.sortDir : '';
+  button.setAttribute(
+    'aria-label',
+    active
+      ? `Sort by date, ${newestFirst ? 'newest' : 'oldest'} first. Activate to reverse.`
+      : 'Sort by date, newest first'
+  );
+  button.title = active
+    ? `Date sort: ${newestFirst ? 'newest first' : 'oldest first'}`
+    : 'Sort by date, newest first';
+  if (label) label.textContent = active ? (newestFirst ? 'Newest first' : 'Oldest first') : 'Sort by date';
+  if (indicator) indicator.textContent = active ? (newestFirst ? '↓' : '↑') : '';
 }
 
 // ─── Page sizing ────────────────────────────────────────────────────────────
@@ -376,12 +395,12 @@ function calculatePageSize() {
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
-function weightCellHtml(value, meta) {
+function weightCellHtml(value, meta, emptyLabel = 'Pending 2nd') {
   if (value === null || value === undefined) {
     return `
       <td class="hist-weight-cell hist-weight-cell--empty">
         <span class="hist-weight-val">—</span>
-        <span class="hist-weight-op">Pending 2nd</span>
+        <span class="hist-weight-op">${escapeHtml(emptyLabel)}</span>
       </td>
     `;
   }
@@ -394,10 +413,8 @@ function weightCellHtml(value, meta) {
   `;
 }
 
-function overrideCellHtml(ticket) {
-  if (!hasOverride(ticket)) {
-    return '<td class="hist-col-override"><span class="hist-muted">—</span></td>';
-  }
+function overrideChipHtml(ticket) {
+  if (!hasOverride(ticket)) return '';
   const override = ticket.override || {};
   const tooltip = [
     override.reason || 'Override recorded',
@@ -406,18 +423,16 @@ function overrideCellHtml(ticket) {
   ]
     .filter(Boolean)
     .join(' · ');
-  return `
-    <td class="hist-col-override">
-      <span class="hist-override-badge" title="${escapeHtml(tooltip)}">OVR</span>
-    </td>
-  `;
+  return `<span class="hist-override-chip" title="${escapeHtml(tooltip)}">Overridden</span>`;
 }
 
 function rowHtml(ticket) {
   const status = getTicketStatus(ticket);
   const direction = directionOf(ticket);
-  const { gross, tare, grossMeta, tareMeta } = weightParts(ticket);
-  const when = businessTimestamp(ticket);
+  const { first, second, firstMeta, secondMeta } = weightParts(ticket);
+  const net = ticket.netWeight;
+  const hasNet = net !== null && net !== undefined;
+  const netAnomaly = hasNet && Number(net) <= 0;
   const rowClass = [
     'hist-row',
     `hist-row--${status}`,
@@ -433,23 +448,22 @@ function rowHtml(ticket) {
         <span class="hist-id">#${ticket.id}</span>
         <span class="hist-dir hist-dir--${direction.toLowerCase()}">${direction}</span>
       </td>
-      <td class="hist-col-when">
-        <span class="hist-when">${escapeHtml(when)}</span>
-      </td>
       <td class="hist-col-truck">
         <span class="truck-plate-tag">${escapeHtml(ticket.truckNo)}</span>
         <span class="hist-driver" title="${escapeHtml(ticket.driver || '')}">${escapeHtml(ticket.driver || '—')}</span>
       </td>
-      ${weightCellHtml(gross, grossMeta)}
-      ${weightCellHtml(tare, tareMeta)}
-      <td class="hist-col-net">
-        <strong>${ticket.netWeight === null || ticket.netWeight === undefined ? '—' : formatKg(ticket.netWeight)}</strong>
+      ${weightCellHtml(first, firstMeta, 'Not recorded')}
+      ${weightCellHtml(second, secondMeta)}
+      <td class="hist-col-net${netAnomaly ? ' hist-col-net--anomaly' : ''}"${netAnomaly ? ' title="Anomaly: net weight is zero or negative"' : ''}>
+        <strong>${hasNet ? formatKg(net) : '—'}</strong>
         <span class="hist-net-unit">kg</span>
       </td>
       <td class="hist-col-status">
-        <span class="hist-status hist-status--${status}">${statusIcon(ticket)} ${statusLabel(ticket)}</span>
+        <span class="hist-status-cell">
+          <span class="hist-status hist-status--${status}">${statusIcon(ticket)} ${statusLabel(ticket)}</span>
+          ${overrideChipHtml(ticket)}
+        </span>
       </td>
-      ${overrideCellHtml(ticket)}
       <td class="hist-col-prints">
         <span class="hist-print-badge ${count > 1 ? 'is-high' : ''}">🖨 ${count}</span>
       </td>
@@ -647,7 +661,7 @@ function render() {
   if (pageRows.length === 0) {
     tbody.innerHTML = `
       <tr class="hist-empty-row">
-        <td colspan="9">No tickets match these filters</td>
+        <td colspan="7">No tickets match these filters</td>
       </tr>
     `;
   } else {
@@ -760,12 +774,31 @@ function updateFilterCount() {
   count.hidden = total === 0;
 }
 
+function positionFilterPopover() {
+  const wrap = document.querySelector('.hist-more-wrap');
+  const popover = document.getElementById('hist-more-popover');
+  if (!wrap || !popover || popover.hidden) return;
+
+  const wrapRect = wrap.getBoundingClientRect();
+  const width = popover.offsetWidth || 460;
+  const viewportWidth = document.documentElement.clientWidth;
+  const maxLeft = viewportWidth - width - POPOVER_MARGIN;
+  const left = Math.max(POPOVER_MARGIN, Math.min(wrapRect.right - width, maxLeft));
+
+  popover.style.left = `${left - wrapRect.left}px`;
+  popover.style.right = 'auto';
+
+  const spaceBelow = window.innerHeight - wrapRect.bottom - 6 - POPOVER_MARGIN;
+  popover.style.maxHeight = `${Math.min(480, Math.max(0, spaceBelow))}px`;
+}
+
 function setFiltersOpen(open) {
   const popover = document.getElementById('hist-more-popover');
   const button = document.getElementById('hist-filters-btn');
   if (!popover || !button) return;
   popover.hidden = !open;
   button.setAttribute('aria-expanded', String(open));
+  if (open) requestAnimationFrame(positionFilterPopover);
 }
 
 function applyFilters() {
@@ -977,6 +1010,11 @@ export function initHistoryScreen() {
     render();
   });
 
+  document.getElementById('hist-date-sort')?.addEventListener('click', () => {
+    setSort('when');
+    render();
+  });
+
   filtersButton?.addEventListener('click', (event) => {
     event.stopPropagation();
     const popover = document.getElementById('hist-more-popover');
@@ -1062,6 +1100,7 @@ export function initHistoryScreen() {
       pageSize = calculatePageSize();
       state.history.pageSize = pageSize;
       render();
+      positionFilterPopover();
     });
   });
 
@@ -1075,6 +1114,7 @@ export function initHistoryScreen() {
     pageSize = calculatePageSize();
     state.history.pageSize = pageSize;
     render();
+    positionFilterPopover();
   });
 
   // Capture phase so History owns Escape/arrows before the global handler.
