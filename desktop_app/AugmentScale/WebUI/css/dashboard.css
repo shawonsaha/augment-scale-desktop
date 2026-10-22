@@ -655,12 +655,13 @@ body.dark-mode .tickets-count-badge,
 
 /* ─── Table Keyboard Selection ────────────────────────────────────────────── */
 .tickets-table tbody tr.keyboard-focused td {
-  background-color: var(--surface-card-hover) !important;
+  background-color: var(--color-brand-light) !important;
   color: var(--text-primary);
+  box-shadow: inset 2px 0 0 var(--color-brand);
 }
 
-.tickets-table tbody tr.keyboard-focused td:first-child {
-  box-shadow: inset 3px 0 0 var(--color-brand);
+.tickets-table tbody tr.keyboard-focused .table-action-btn:not(:hover) {
+  background: var(--surface-panel);
 }
 
 /* ─── Delete Ticket Dialog ────────────────────────────────────────────────── */
