@@ -1243,7 +1243,8 @@ export function initHistoryScreen() {
       }
 
       const onControl = event.target?.closest?.('button, a');
-      if (onControl && (event.key === 'Enter' || event.key === 'Backspace')) return;
+      const onNavTab = event.target?.closest?.('.app-nav-tab');
+      if (onControl && !onNavTab && (event.key === 'Enter' || event.key === 'Backspace')) return;
 
       if (event.altKey && event.key.toLowerCase() === 'r') {
         event.preventDefault();

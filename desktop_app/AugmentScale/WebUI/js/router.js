@@ -102,7 +102,7 @@ export function initAppNav() {
   nav.addEventListener('click', (event) => {
     const tab = event.target.closest('.app-nav-tab');
     if (!tab) return;
-    requestNavigation(tab.dataset.screen);
+    if (requestNavigation(tab.dataset.screen)) tab.blur();
   });
 
   updateAppNav();
