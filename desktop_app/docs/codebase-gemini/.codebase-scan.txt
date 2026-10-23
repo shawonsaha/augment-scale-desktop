@@ -1,0 +1,232 @@
+
+=== DIRECTORY TREE (max depth 3, source files only) ===
+AugmentScale
+AugmentScale\App.xaml
+AugmentScale\App.xaml.cs
+AugmentScale\AugmentScale.csproj
+AugmentScale\Data
+AugmentScale\Data\Schema
+AugmentScale\Data\Schema\V001_InitialSchema.sql
+AugmentScale\MainWindow.xaml
+AugmentScale\MainWindow.xaml.cs
+AugmentScale\Models
+AugmentScale\Models\AuditEvent.cs
+AugmentScale\Models\Commands
+AugmentScale\Models\Commands\CommandEnvelope.cs
+AugmentScale\Models\Commands\ProfileCommands.cs
+AugmentScale\Models\Commands\TicketCommands.cs
+AugmentScale\Models\Commands\VehicleCommands.cs
+AugmentScale\Models\HistoryReportDto.cs
+AugmentScale\Models\ProfileDto.cs
+AugmentScale\Models\SetupConfig.cs
+AugmentScale\Models\SyncStatusDto.cs
+AugmentScale\Models\TicketDto.cs
+AugmentScale\Models\VehicleDto.cs
+AugmentScale\Models\WeightReading.cs
+AugmentScale\Resources
+AugmentScale\Resources\setup.json
+AugmentScale\Services
+AugmentScale\Services\AppLog.cs
+AugmentScale\Services\AuditService.cs
+AugmentScale\Services\BridgeService.cs
+AugmentScale\Services\ConfigService.cs
+AugmentScale\Services\DatabaseService.cs
+AugmentScale\Services\ScaleReaderService.cs
+AugmentScale\WebUI
+AugmentScale\WebUI\avatars
+AugmentScale\WebUI\avatars\frame-1.svg
+AugmentScale\WebUI\avatars\frame-3.svg
+AugmentScale\WebUI\avatars\frame-4.svg
+AugmentScale\WebUI\avatars\frame-5.svg
+AugmentScale\WebUI\avatars\frame-9.svg
+AugmentScale\WebUI\css
+AugmentScale\WebUI\css\base.css
+AugmentScale\WebUI\css\dashboard.css
+AugmentScale\WebUI\css\fonts
+AugmentScale\WebUI\css\fonts.css
+AugmentScale\WebUI\css\history-report.css
+AugmentScale\WebUI\css\history.css
+AugmentScale\WebUI\css\layout.css
+AugmentScale\WebUI\css\login.css
+AugmentScale\WebUI\css\modals.css
+AugmentScale\WebUI\css\print.css
+AugmentScale\WebUI\css\profiles.css
+AugmentScale\WebUI\css\responsive.css
+AugmentScale\WebUI\css\tokens.css
+AugmentScale\WebUI\css\trucks.css
+AugmentScale\WebUI\css\weigh.css
+AugmentScale\WebUI\index.html
+AugmentScale\WebUI\js
+AugmentScale\WebUI\js\audio.js
+AugmentScale\WebUI\js\bridge.js
+AugmentScale\WebUI\js\confirm-dialog.js
+AugmentScale\WebUI\js\history-report.js
+AugmentScale\WebUI\js\html-loader.js
+AugmentScale\WebUI\js\hud.js
+AugmentScale\WebUI\js\keyboard.js
+AugmentScale\WebUI\js\main.js
+AugmentScale\WebUI\js\pin-auth.js
+AugmentScale\WebUI\js\print.js
+AugmentScale\WebUI\js\reason-dialog.js
+AugmentScale\WebUI\js\refresh.js
+AugmentScale\WebUI\js\router.js
+AugmentScale\WebUI\js\runtime.js
+AugmentScale\WebUI\js\screens
+AugmentScale\WebUI\js\seed-data.js
+AugmentScale\WebUI\js\state.js
+AugmentScale\WebUI\js\sync.js
+AugmentScale\WebUI\js\telemetry.js
+AugmentScale\WebUI\js\theme.js
+AugmentScale\WebUI\js\toast.js
+AugmentScale\WebUI\js\utils.js
+AugmentScale\WebUI\js\verify-report.js
+AugmentScale\WebUI\partials
+AugmentScale\WebUI\partials\history-report-modal.html
+AugmentScale\WebUI\partials\hud.html
+AugmentScale\WebUI\partials\modals.html
+AugmentScale\WebUI\partials\screen-dashboard.html
+AugmentScale\WebUI\partials\screen-first-weigh.html
+AugmentScale\WebUI\partials\screen-history.html
+AugmentScale\WebUI\partials\screen-login.html
+AugmentScale\WebUI\partials\screen-profiles.html
+AugmentScale\WebUI\partials\screen-second-weigh.html
+AugmentScale\WebUI\partials\screen-trucks.html
+AugmentScale\WebUI\partials\telemetry-bar.html
+AugmentScale\WebUI\partials\verify-report-modal.html
+AugmentScale.Protocol
+AugmentScale.Protocol\AugmentScale.Protocol.csproj
+AugmentScale.Protocol\StabilityDetector.cs
+AugmentScale.Protocol\Xk3190FrameDecoder.cs
+AugmentScale.Protocol\Xk3190FrameEncoder.cs
+AugmentScale.Protocol\Xk3190FrameSplitter.cs
+AugmentScale.ScaleSimulator
+AugmentScale.ScaleSimulator\App.xaml
+AugmentScale.ScaleSimulator\App.xaml.cs
+AugmentScale.ScaleSimulator\AugmentScale.ScaleSimulator.csproj
+AugmentScale.ScaleSimulator\MainWindow.xaml
+AugmentScale.ScaleSimulator\MainWindow.xaml.cs
+AugmentScale.ScaleSimulator\Networking
+AugmentScale.ScaleSimulator\Networking\TcpFrameServer.cs
+AugmentScale.ScaleSimulator\Simulation
+AugmentScale.ScaleSimulator\Simulation\SimulatorEngine.cs
+AugmentScale.ScaleSimulator\SimulatorSettings.cs
+AugmentScale.slnx
+AugmentScale.Tests
+AugmentScale.Tests\AugmentScale.Tests.csproj
+AugmentScale.Tests\DatabaseTests.cs
+AugmentScale.Tests\ProtocolTests.cs
+AugmentScale.Tests\SimulatorEngineTests.cs
+AugmentScale.Tests\SimulatorProtocolTests.cs
+docs
+docs\codebase
+docs\codebase\.codebase-scan.txt
+OPEN_RAW_DB.md
+start-dev-sim.ps1
+tools
+tools\Get-DbKey.ps1
+USER_MANUAL.md
+
+=== STACK DETECTION (manifest files) ===
+
+--- AugmentScale.slnx ---
+<Solution>
+  <Project Path="AugmentScale.Tests/AugmentScale.Tests.csproj" />
+  <Project Path="AugmentScale/AugmentScale.csproj" />
+  <Project Path="AugmentScale.Protocol/AugmentScale.Protocol.csproj" />
+  <Project Path="AugmentScale.ScaleSimulator/AugmentScale.ScaleSimulator.csproj" />
+</Solution>
+
+
+=== ENTRY POINTS ===
+No common entry points found. Check 'main' or 'scripts.start' in manifest files above.
+
+=== LINTING AND FORMATTING CONFIG ===
+No linting or formatting config files found in project root.
+
+=== ENVIRONMENT VARIABLE TEMPLATES ===
+No .env.example or .env.template found. Identify required environment variables by searching the code and config for environment variable reads.
+
+=== TODO / FIXME / HACK (production code only, test dirs excluded) ===
+None found.
+
+=== GIT RECENT COMMITS (last 20) ===
+d8f508a Fix Xk3190 frame splitting and handle stream read timeouts
+ae240f3 Add operator profile management screen and supervisor workflows
+70a1931 Blur nav tab on click and allow keyboard shortcuts
+7715595 Optimize startup performance and add boot state endpoint
+66a7a69 Constrain window size to screen work area
+36676cd Add reading capture and PIN reset support
+92cd554 Update print report layout and fallback logic
+cc0c070 Redesign history screen table layout and sorting
+ac5f539 Remove Meghna to Augment
+34db1ce Add printable history reports with PIN security and SHA-256 verification
+bbf3a97 Add dynamic dashboard stats to footer
+1ca70c8 Add permanent vehicle deletion and rename trucks to vehicles
+d8f5dcb Add column sorting to pending tickets table
+20f4709 Add data refresh functionality and UI controls
+84c127f Add manual database refresh and auto-register vehicle features
+fbb3b7e Update keyboard-focused table row styles in dashboard
+63c258c Refactor print slip metadata layout and rendering
+f35d0e5 Fix WebView2 focus loss on window activation
+1218611 Add ticket direction badge to second weigh screen
+51cceb4 Fix elapsed time calculations and live UI updates for tickets
+
+=== HIGH-CHURN FILES (last 90 days, top 20) ===
+  11 desktop_app/AugmentScale/WebUI/index.html
+  10 desktop_app/AugmentScale/WebUI/js/state.js
+   8 desktop_app/AugmentScale.Tests/DatabaseTests.cs
+   8 desktop_app/AugmentScale/WebUI/js/html-loader.js
+   8 desktop_app/USER_MANUAL.md
+   7 desktop_app/AugmentScale/Services/DatabaseService.cs
+   6 desktop_app/AugmentScale/Services/BridgeService.cs
+   6 desktop_app/AugmentScale/WebUI/js/main.js
+   6 desktop_app/AugmentScale/WebUI/partials/modals.html
+   6 desktop_app/AugmentScale/WebUI/partials/telemetry-bar.html
+   6 desktop_app/AugmentScale/WebUI/js/screens/history.js
+   6 desktop_app/AugmentScale/WebUI/js/screens/dashboard.js
+   5 desktop_app/AugmentScale/WebUI/js/keyboard.js
+   5 desktop_app/AugmentScale/MainWindow.xaml.cs
+   5 desktop_app/AugmentScale/WebUI/js/screens/first-weigh.js
+   5 desktop_app/AugmentScale/WebUI/css/dashboard.css
+   4 desktop_app/AugmentScale/App.xaml.cs
+   4 desktop_app/AugmentScale/Services/ConfigService.cs
+   4 desktop_app/AugmentScale/WebUI/js/screens/trucks.js
+   4 desktop_app/AugmentScale/WebUI/js/print.js
+
+=== MONOREPO SIGNALS ===
+No monorepo signals detected.
+
+=== CODE METRICS ===
+Total files scanned: 118
+Total lines of code: 17934
+
+Files by language:
+  Other: 56
+  C#: 33
+  JavaScript: 29
+
+Top 10 largest files:
+AugmentScale\WebUI\css\fonts\ibm-plex-sans-500.ttf: 200.5KB
+AugmentScale\WebUI\css\fonts\ibm-plex-sans-600.ttf: 200.5KB
+AugmentScale\WebUI\css\fonts\ibm-plex-sans-400.ttf: 200.4KB
+AugmentScale\WebUI\css\fonts\ibm-plex-sans-700.ttf: 200.4KB
+AugmentScale\WebUI\css\fonts\jetbrains-mono-500.ttf: 109.6KB
+AugmentScale\WebUI\css\fonts\jetbrains-mono-600.ttf: 109.5KB
+AugmentScale\WebUI\css\fonts\jetbrains-mono-700.ttf: 109.5KB
+AugmentScale\WebUI\css\fonts\jetbrains-mono-800.ttf: 109.5KB
+AugmentScale\Services\DatabaseService.cs: 102.0KB
+AugmentScale\WebUI\avatars\frame-3.svg: 73.3KB
+
+=== CI/CD PIPELINES ===
+No CI/CD pipelines detected.
+
+=== CONTAINERS & ORCHESTRATION ===
+No containerization configs detected.
+
+=== SECURITY & COMPLIANCE ===
+No security configs detected.
+
+=== PERFORMANCE & TESTING ===
+No performance testing configs detected.
+
+=== SCAN COMPLETE ===
