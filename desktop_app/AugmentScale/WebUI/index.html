@@ -8,6 +8,19 @@
     <!-- Inline empty icon: suppress the browser's automatic /favicon.ico request -->
     <link rel="icon" href="data:," />
 
+    <!-- Apply the saved theme before the first paint so switching to dark mode never flashes light -->
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('weighbridge-theme') || 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+
+
     <!-- Industrial fonts bundled locally: IBM Plex Sans for the UI, JetBrains Mono for telemetry -->
     <link rel="stylesheet" href="css/fonts.css?v=prod2" />
 
@@ -27,11 +40,17 @@
   </head>
 
   <body>
+    <script>
+      document.body.classList.toggle(
+        'dark-mode',
+        document.documentElement.getAttribute('data-theme') === 'dark'
+      );
+    </script>
     <div id="app">
       <!-- Partials loaded at runtime by js/html-loader.js -->
     </div>
 
     <!-- Application Scripts -->
-    <script type="module" src="js/main.js?v=prod12"></script>
+    <script type="module" src="js/main.js?v=prod13"></script>
   </body>
 </html>

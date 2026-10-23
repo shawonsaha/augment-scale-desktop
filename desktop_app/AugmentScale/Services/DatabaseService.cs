@@ -15,10 +15,27 @@ namespace AugmentScale.Services;
 /// transaction together with its audit, outbox and (where applicable) print
 /// records.
 /// </summary>
+public sealed record BootStateDto
+{
+    public IReadOnlyList<ProfileDto> Operators { get; init; } = Array.Empty<ProfileDto>();
+    public IReadOnlyList<VehicleDto> Vehicles { get; init; } = Array.Empty<VehicleDto>();
+    public IReadOnlyList<TicketDto> Pending { get; init; } = Array.Empty<TicketDto>();
+    public IReadOnlyList<TicketDto> History { get; init; } = Array.Empty<TicketDto>();
+    public long NextTicketNumber { get; init; }
+    public SyncStatusDto Sync { get; init; } = new();
+}
+
+/// <summary>
+/// SQLCipher-backed local store. Every business mutation runs in one
+/// transaction together with its audit, outbox and (where applicable) print
+/// records.
+/// </summary>
 public sealed class DatabaseService
 {
     private const long FirstTicketNumber = 11353;
     private const long LastHistoricalTicketNumber = 11352;
+    private const int BootHistoryLimit = 1000;
+    private const int DefaultHistoryLimit = 1000;
 
     private static readonly string[] WebUiTimestampFormats =
     {
@@ -320,6 +337,11 @@ public sealed class DatabaseService
     {
         EnsureInitialized();
         using var connection = OpenConnection();
+        return GetOperators(connection);
+    }
+
+    private IReadOnlyList<ProfileDto> GetOperators(SqliteConnection connection)
+    {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT p.id, p.display_name, p.first_name, p.initials, p.avatar_url,
@@ -362,6 +384,11 @@ public sealed class DatabaseService
     {
         EnsureInitialized();
         using var connection = OpenConnection();
+        return GetVehicles(connection);
+    }
+
+    private IReadOnlyList<VehicleDto> GetVehicles(SqliteConnection connection)
+    {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT * FROM vehicles
@@ -594,6 +621,11 @@ public sealed class DatabaseService
     {
         EnsureInitialized();
         using var connection = OpenConnection();
+        return GetPendingTickets(connection);
+    }
+
+    private IReadOnlyList<TicketDto> GetPendingTickets(SqliteConnection connection)
+    {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT * FROM ticket_history
@@ -610,6 +642,15 @@ public sealed class DatabaseService
     {
         EnsureInitialized();
         using var connection = OpenConnection();
+        return GetHistory(connection, limit, status);
+    }
+
+    private IReadOnlyList<TicketDto> GetHistory(SqliteConnection connection, int? limit, string? status)
+    {
+        // Unbounded history pulls would slow startup as tickets accumulate; the
+        // UI pages and filters in memory, so cap the default window and let
+        // callers (date-range views) opt into explicit limits.
+        var effectiveLimit = limit is > 0 ? limit.Value : DefaultHistoryLimit;
         using var cmd = connection.CreateCommand();
         var filter = string.IsNullOrWhiteSpace(status)
             ? string.Empty
@@ -618,11 +659,67 @@ public sealed class DatabaseService
             SELECT * FROM ticket_history
             WHERE organization_id = $org{filter}
             ORDER BY business_at DESC
-            {(limit is > 0 ? "LIMIT $limit" : string.Empty)};
+            LIMIT $limit;
             """;
         cmd.Parameters.AddWithValue("$org", _organizationId);
         if (!string.IsNullOrWhiteSpace(status)) cmd.Parameters.AddWithValue("$status", status);
-        if (limit is > 0) cmd.Parameters.AddWithValue("$limit", limit.Value);
+        cmd.Parameters.AddWithValue("$limit", effectiveLimit);
+        return ReadTickets(connection, null, cmd);
+    }
+
+    /// <summary>
+    /// Fast boot snapshot: one connection, one round-trip for everything the
+    /// workstation shell shows right after launch.
+    /// </summary>
+    public BootStateDto GetBootState()
+    {
+        EnsureInitialized();
+        using var connection = OpenConnection();
+        return new BootStateDto
+        {
+            Operators = GetOperators(connection),
+            Vehicles = GetVehicles(connection),
+            Pending = GetPendingTickets(connection),
+            History = GetHistory(connection, BootHistoryLimit, null),
+            NextTicketNumber = PeekNextTicketNumber(connection, null),
+            Sync = GetSyncStatus(connection),
+        };
+    }
+
+    /// <summary>
+    /// Tickets within a local calendar date range (yyyy-MM-dd). Used to pull
+    /// older ledger data that the boot snapshot intentionally leaves out.
+    /// </summary>
+    public IReadOnlyList<TicketDto> GetHistoryRange(string fromDate, string toDate)
+    {
+        EnsureInitialized();
+        if (!DateOnly.TryParseExact(fromDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var fromDay))
+            throw new InvalidOperationException("Choose a valid history start date.");
+        if (!DateOnly.TryParseExact(toDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var toDay))
+            throw new InvalidOperationException("Choose a valid history end date.");
+        if (fromDay > toDay)
+            throw new InvalidOperationException("The history start date must be before the end date.");
+
+        var fromUtc = fromDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local)
+            .ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        var toUtc = toDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).AddDays(1)
+            .ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+        using var connection = OpenConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT * FROM ticket_history
+            WHERE organization_id = $org
+              AND datetime(business_at) >= datetime($from)
+              AND datetime(business_at) < datetime($to)
+            ORDER BY business_at DESC
+            LIMIT 5000;
+            """;
+        cmd.Parameters.AddWithValue("$org", _organizationId);
+        cmd.Parameters.AddWithValue("$from", fromUtc);
+        cmd.Parameters.AddWithValue("$to", toUtc);
         return ReadTickets(connection, null, cmd);
     }
 
@@ -1214,6 +1311,11 @@ public sealed class DatabaseService
     {
         EnsureInitialized();
         using var connection = OpenConnection();
+        return GetSyncStatus(connection);
+    }
+
+    private SyncStatusDto GetSyncStatus(SqliteConnection connection)
+    {
         int pending;
         using (var cmd = connection.CreateCommand())
         {
@@ -1518,34 +1620,58 @@ public sealed class DatabaseService
             }
         }
 
-        foreach (var dto in results)
+        // One IN (...) query for all tickets instead of a per-ticket print-log
+        // round-trip (N+1) — startup loads hundreds of rows at once.
+        if (results.Count > 0)
         {
-            dto.PrintLog = ReadPrintLog(connection, txn, dto.TicketUuid!);
+            var printLogs = ReadPrintLogs(connection, txn, results.Select(dto => dto.TicketUuid!));
+            if (printLogs.Count > 0)
+            {
+                foreach (var dto in results)
+                {
+                    if (printLogs.TryGetValue(dto.TicketUuid!, out var log)) dto.PrintLog = log;
+                }
+            }
         }
         return results;
     }
 
-    private List<PrintLogEntryDto> ReadPrintLog(SqliteConnection connection, SqliteTransaction? txn,
-        string ticketUuid)
+    private Dictionary<string, List<PrintLogEntryDto>> ReadPrintLogs(SqliteConnection connection,
+        SqliteTransaction? txn, IEnumerable<string> ticketUuids)
     {
+        var uuids = ticketUuids.Where(u => !string.IsNullOrEmpty(u)).Distinct().ToList();
+        if (uuids.Count == 0) return new Dictionary<string, List<PrintLogEntryDto>>();
+
+        var inClause = string.Join(", ", uuids.Select((uuid, index) => $"$ticket{index}"));
+
         using var cmd = connection.CreateCommand();
         cmd.Transaction = txn;
-        cmd.CommandText = """
-            SELECT p.document_type, p.is_reprint, p.copy_number, p.reprint_reason,
+        cmd.CommandText = $"""
+            SELECT p.ticket_id, p.document_type, p.is_reprint, p.copy_number, p.reprint_reason,
                    p.printed_at, COALESCE(pr.display_name, p.printed_by) AS printed_by
             FROM print_jobs p
             LEFT JOIN profiles pr ON pr.id = p.printed_by
-            WHERE p.ticket_id = $ticket
-            ORDER BY p.printed_at, p.copy_number;
+            WHERE p.ticket_id IN ({inClause})
+            ORDER BY p.ticket_id, p.printed_at, p.copy_number;
             """;
-        cmd.Parameters.AddWithValue("$ticket", ticketUuid);
+        for (var i = 0; i < uuids.Count; i++)
+        {
+            cmd.Parameters.AddWithValue($"$ticket{i}", uuids[i]);
+        }
 
-        var list = new List<PrintLogEntryDto>();
+        var list = new Dictionary<string, List<PrintLogEntryDto>>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
+            var ticketUuid = Text(reader, "ticket_id") ?? string.Empty;
+            if (!list.TryGetValue(ticketUuid, out var entries))
+            {
+                entries = new List<PrintLogEntryDto>();
+                list[ticketUuid] = entries;
+            }
+
             var reprint = Number(reader, "is_reprint") == 1;
-            list.Add(new PrintLogEntryDto
+            entries.Add(new PrintLogEntryDto
             {
                 By = Text(reader, "printed_by") ?? "Unknown",
                 At = Text(reader, "printed_at") ?? "",
@@ -1555,6 +1681,13 @@ public sealed class DatabaseService
             });
         }
         return list;
+    }
+
+    private List<PrintLogEntryDto> ReadPrintLog(SqliteConnection connection, SqliteTransaction? txn,
+        string ticketUuid)
+    {
+        var batched = ReadPrintLogs(connection, txn, new[] { ticketUuid });
+        return batched.TryGetValue(ticketUuid, out var entries) ? entries : new List<PrintLogEntryDto>();
     }
 
     private void FillPreviousTripStats(SqliteConnection connection, SqliteTransaction? txn, TicketDto ticket)

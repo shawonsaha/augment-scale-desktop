@@ -61,14 +61,18 @@ public partial class App : Application
             AppLog.Initialize(_config.LogDirectory);
             AppLog.Info("Starting Augment Scale 1.0.0");
 
+            // Constructors are cheap; heavy work happens after Show.
             _database = new DatabaseService(_config);
-            _database.EnsureInitialized();
             _scale = new ScaleReaderService(_config, _database);
             _bridge = new BridgeService(_database, _scale);
 
             var window = new MainWindow(_config, _database, _scale, _bridge);
             MainWindow = window;
             window.Show();
+
+            // Show the window first so the splash mask paints immediately, then
+            // initialize the database while WebView2 spins up in the background.
+            _database.EnsureInitialized();
         }
         catch (Exception ex)
         {

@@ -486,34 +486,55 @@ export function setNextTicketId(id) {
   nextTicketId = Number.isFinite(value) ? Math.max(11353, value) : 11353;
 }
 
-/** Loads all durable state from C# before any screen is initialised. */
+/** Loads all durable state from C# in one round-trip before any screen is initialised. */
 export async function loadProductionData() {
   if (!IS_PRODUCTION) return;
 
-  const [operators, vehicles, pending, history, nextId, sync] = await Promise.all([
-    sendCommand('getOperators'),
-    sendCommand('getVehicles'),
-    sendCommand('getPendingTickets'),
-    sendCommand('getHistory'),
-    sendCommand('getNextTicketNumber'),
-    sendCommand('getSyncStatus'),
-  ]);
+  const boot = await sendCommand('getBootState');
 
-  setOperators(operators || []);
-  setRegisteredTrucks(vehicles || []);
-  setPendingTickets(pending || []);
+  setOperators(boot.operators || []);
+  setRegisteredTrucks(boot.vehicles || []);
+  setPendingTickets(boot.pending || []);
 
-  const all = history || [];
+  const all = boot.history || [];
   setCompletedTickets(all.filter((ticket) => ticket.status === 'completed'));
   setVoidedTickets(all.filter((ticket) => ticket.status === 'voided'));
   setDeletedTickets(all.filter((ticket) => ticket.status === 'deleted'));
-  setNextTicketId(nextId);
+  setNextTicketId(boot.nextTicketNumber);
 
-  state.sync.isHealthy = sync?.isHealthy !== false;
-  state.sync.pendingQueue = sync?.pendingQueue || 0;
-  state.sync.lastSyncTimestamp = sync?.lastSyncTimestamp
-    ? new Date(sync.lastSyncTimestamp)
+  state.sync.isHealthy = boot.sync?.isHealthy !== false;
+  state.sync.pendingQueue = boot.sync?.pendingQueue || 0;
+  state.sync.lastSyncTimestamp = boot.sync?.lastSyncTimestamp
+    ? new Date(boot.sync.lastSyncTimestamp)
     : new Date();
+
+  document.dispatchEvent(new CustomEvent('data:refresh'));
+  document.dispatchEvent(new CustomEvent('vehicle:refresh'));
+}
+
+/** Merges older tickets (fetched on demand by the History date filters) into the
+ *  in-memory ledgers without duplicating rows already loaded at boot. */
+export function mergeHistoryTickets(tickets) {
+  const rows = (tickets || []).filter(Boolean);
+  if (rows.length === 0) return;
+
+  const known = new Set([
+    ...pendingTickets.map((t) => t.id),
+    ...completedTickets.map((t) => t.id),
+    ...voidedTickets.map((t) => t.id),
+    ...deletedTickets.map((t) => t.id),
+  ]);
+  const fresh = rows.filter((t) => !known.has(t.id));
+  if (fresh.length === 0) return;
+
+  for (const ticket of fresh) {
+    switch (ticket.status) {
+      case 'completed': completedTickets.push(ticket); break;
+      case 'voided': voidedTickets.push(ticket); break;
+      case 'deleted': deletedTickets.push(ticket); break;
+      default: pendingTickets.push(ticket); break;
+    }
+  }
 }
 
 /** Verifies the PIN in C# (DPAPI-backed hash) when running in the desktop app. */

@@ -22,15 +22,14 @@ import { loadProductionData } from './state.js';
 import './bridge.js';
 
 async function bootstrap() {
-  await loadPartials();
+  // Pull workstation data from C# while the HTML partials are still being
+  // fetched; both run concurrently so the login screen is ready sooner.
+  const dataTask = loadProductionData().catch((err) => {
+    console.error('Failed to load workstation data from the local database', err);
+  });
 
-  if (IS_PRODUCTION) {
-    try {
-      await loadProductionData();
-    } catch (err) {
-      console.error('Failed to load workstation data from the local database', err);
-    }
-  }
+  await loadPartials();
+  await dataTask;
 
   initSyncEngine();
   initLoginScreen();
@@ -49,6 +48,23 @@ async function bootstrap() {
   renderPendingTicketsTable();
   updateClock();
   setInterval(updateClock, 1000);
+
+  // Everything is bound and the operator list is rendered: let the desktop
+  // shell drop its WebView2 loading mask now instead of a fixed guess.
+  notifyUiReady();
+}
+
+/** Signals the WPF host that the interface can be shown (best effort). */
+function notifyUiReady() {
+  if (!IS_PRODUCTION) return;
+  // Double rAF: first frame flushes layout, second confirms the screen is visible.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        window.chrome.webview.postMessage({ type: 'ui-ready' });
+      } catch {}
+    });
+  });
 }
 
 if (document.readyState === 'loading') {

@@ -66,6 +66,12 @@ public sealed class HistoryQueryRequest
     public string? Status { get; set; }
 }
 
+public sealed class HistoryRangeRequest
+{
+    public string FromDate { get; set; } = string.Empty;
+    public string ToDate { get; set; } = string.Empty;
+}
+
 public sealed class HistoryReportRequest
 {
     public string FromDate { get; set; } = string.Empty;

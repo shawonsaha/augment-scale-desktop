@@ -613,6 +613,95 @@ public class DatabaseServiceTests
     }
 
     [Fact]
+    public void GetBootState_ReturnsEverythingForTheShell()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        var ticket = db.CreateTicket(NewTicket("DM-T-11-2045", 14000));
+        var completed = db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = ticket.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+        // Reuses the seeded plate so no extra vehicle is auto-registered.
+        db.CreateTicket(NewTicket("DM-T-11-2045", 8000));
+
+        var boot = db.GetBootState();
+
+        Assert.Equal(5, boot.Operators.Count);
+        Assert.Equal(5, boot.Vehicles.Count);
+        Assert.Single(boot.Pending);
+        Assert.Contains(boot.History, t => t.Id == completed.Id && t.Status == "completed");
+        Assert.NotNull(boot.Sync);
+        Assert.Equal(11355, boot.NextTicketNumber);
+    }
+
+    [Fact]
+    public void GetHistory_RespectsExplicitLimit()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        var first = db.CreateTicket(NewTicket("TEST-LIM-1", 10000));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = first.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+        var second = db.CreateTicket(NewTicket("TEST-LIM-2", 20000));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = second.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+        var third = db.CreateTicket(NewTicket("TEST-LIM-3", 30000));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = third.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+
+        Assert.Equal(3, db.GetHistory().Count);
+        var limited = db.GetHistory(2);
+        Assert.Equal(2, limited.Count);
+        // Serialized with camelCase naming policy in BridgeService; all three completed tickets exist.
+        Assert.Equal(new[] { third.Id, second.Id }, limited.Select(t => t.Id).ToArray());
+    }
+
+    [Fact]
+    public void GetHistoryRange_FiltersTicketsToTheGivenDateRange()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        // business_at is the completion time for completed tickets and the
+        // first-weigh time for pending ones — mirror the History UI semantics.
+        var yesterday = DateTime.Now.AddDays(-1);
+        var oldRequest = NewTicket("TEST-RANGE-OLD", 11000);
+        oldRequest.FirstTime = yesterday.ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture);
+        var oldTicket = db.CreateTicket(oldRequest);
+
+        var todayRequest = NewTicket("TEST-RANGE-TODAY", 16000);
+        var todayTicket = db.CreateTicket(todayRequest);
+
+        var today = db.GetHistoryRange(DateValue(DateTime.Now), DateValue(DateTime.Now));
+        Assert.Contains(today, t => t.Id == todayTicket.Id);
+        Assert.DoesNotContain(today, t => t.Id == oldTicket.Id);
+
+        var yesterdayRange = db.GetHistoryRange(DateValue(yesterday), DateValue(yesterday));
+        Assert.Contains(yesterdayRange, t => t.Id == oldTicket.Id);
+        Assert.DoesNotContain(yesterdayRange, t => t.Id == todayTicket.Id);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            db.GetHistoryRange(DateValue(DateTime.Now), DateValue(DateTime.Now.AddDays(-1))));
+    }
+
+    [Fact]
     public void HistoryReport_VerificationReportsUnknownReport()
     {
         using var temp = new TempDatabase();

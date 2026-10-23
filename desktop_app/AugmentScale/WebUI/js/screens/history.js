@@ -10,8 +10,10 @@ import {
   getAllTickets,
   getTicketStatus,
   getTicketTimestamp,
+  mergeHistoryTickets,
   voidTicket,
 } from '../state.js';
+import { IS_PRODUCTION, sendCommand } from '../runtime.js';
 import { openReprintModal } from '../print.js';
 import { openReasonDialog } from '../reason-dialog.js';
 import { openHistoryReportModal } from '../history-report.js';
@@ -272,6 +274,78 @@ function getFilteredTickets() {
       return matchesFlags(ticket, selected.flags);
     })
     .sort(compareTickets);
+}
+
+// ─── Older-range loading (boot snapshot keeps only the newest N tickets) ────
+
+let rangeLoading = false;
+// Earliest moment (epoch ms) for which older ledger data has already been pulled.
+let coveredFromMs = Infinity;
+
+/** Method start/end for the active date filter, or null when unbounded. */
+function rangeBoundsMs() {
+  const history = state.history;
+  const today = startOfDay().getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  switch (history.dateFilter) {
+    case 'today':
+      return { from: today, to: null };
+    case 'yesterday':
+      return { from: today - dayMs, to: today };
+    case '7days':
+      return { from: today - 6 * dayMs, to: null };
+    case '30days':
+      return { from: today - 29 * dayMs, to: null };
+    case 'custom': {
+      const from = history.customDateFrom
+        ? startOfDay(new Date(`${history.customDateFrom}T00:00:00`)).getTime()
+        : null;
+      const to = history.customDateTo
+        ? startOfDay(new Date(`${history.customDateTo}T00:00:00`)).getTime() + dayMs
+        : null;
+      return { from, to };
+    }
+    default:
+      return null;
+  }
+}
+
+/** Fetches any ledger rows older than the loaded boot window so custom/long
+ *  date ranges still see full data. Best effort: failures keep the in-memory view. */
+function ensureRangeLoaded() {
+  if (!IS_PRODUCTION || rangeLoading) return;
+  const bounds = rangeBoundsMs();
+  if (!bounds || bounds.from === null) return;
+  if (coveredFromMs <= bounds.from) return;
+
+  const loaded = getAllTickets();
+  const oldestLoaded = loaded.reduce((min, ticket) => {
+    const ts = getTicketTimestamp(ticket);
+    return ts && ts < min ? ts : min;
+  }, Infinity);
+  if (oldestLoaded === Infinity || oldestLoaded <= bounds.from) return;
+
+  const fromDate = toDateInputValue(new Date(bounds.from));
+  const toBound = bounds.to ?? Date.now();
+  const toDate = toDateInputValue(new Date(Math.min(toBound, coveredFromMs - 1)));
+
+  rangeLoading = true;
+  sendCommand('getHistoryRange', { fromDate, toDate })
+    .then((tickets) => mergeHistoryTickets(tickets))
+    .then(() => {
+      coveredFromMs = bounds.from;
+      rangeLoading = false;
+      if (state.currentScreen === 'history-screen') {
+        render();
+        buildFilterPanel();
+      }
+    })
+    .catch((err) => {
+      coveredFromMs = bounds.from;
+      rangeLoading = false;
+      console.warn('Could not load older tickets', err);
+    });
 }
 
 // ─── Sorting ────────────────────────────────────────────────────────────────
@@ -640,6 +714,7 @@ function render() {
   if (!tbody) return;
 
   filtered = getFilteredTickets();
+  ensureRangeLoaded();
 
   const measured = calculatePageSize();
   if (measured !== pageSize) {

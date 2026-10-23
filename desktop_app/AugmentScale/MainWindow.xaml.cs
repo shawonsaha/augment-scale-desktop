@@ -22,6 +22,8 @@ public partial class MainWindow : Window
     private WindowStyle _previousStyle;
     private ResizeMode _previousResizeMode;
     private bool _started;
+    private bool _overlayHidden;
+    private bool _fatalShown;
 
     public MainWindow(
         ConfigService config,
@@ -42,9 +44,17 @@ public partial class MainWindow : Window
         Title = _config.IsDefaultDataDirectory
             ? "Augment Scale"
             : "Augment Scale — TEST DATA";
+        _bridge.UiReady += OnUiReady;
         Loaded += OnLoaded;
         Activated += OnActivated;
         Closing += OnClosing;
+    }
+
+    private void OnUiReady()
+    {
+        // Raised on the UI thread by BridgeService when the interface reports
+        // its first interactive frame; schedule the collapse for safety.
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(CollapseLoadingOverlay));
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -111,12 +121,34 @@ public partial class MainWindow : Window
             return;
         }
 
-        LoadingOverlay.Visibility = Visibility.Collapsed;
+        // The web UI hides this overlay itself once the login screen is rendered
+        // (ui-ready). Keep a fallback so a failed bootstrap still surfaces.
+        StartOverlayFallback();
         FocusWebViewDeferred();
         if (_started) return;
         _started = true;
         _scale.Start();
         AppLog.Info("Scale reader started");
+    }
+
+    private void StartOverlayFallback()
+    {
+        _ = Task.Delay(TimeSpan.FromSeconds(3)).ContinueWith(
+            _ => Dispatcher.BeginInvoke(new Action(CollapseLoadingOverlay)));
+    }
+
+    private void CollapseLoadingOverlay()
+    {
+        if (_fatalShown) return;
+        if (_overlayHidden)
+        {
+            FocusWebViewDeferred();
+            return;
+        }
+        _overlayHidden = true;
+        LoadingOverlay.Visibility = Visibility.Collapsed;
+        AppLog.Info("Workstation interface ready");
+        FocusWebViewDeferred();
     }
 
     private void OnActivated(object? sender, EventArgs e) => FocusWebViewDeferred();
@@ -128,7 +160,7 @@ public partial class MainWindow : Window
 
     private void FocusWebView()
     {
-        if (!IsActive || LoadingOverlay.Visibility != Visibility.Collapsed) return;
+        if (!IsActive || !_overlayHidden) return;
         WebView.Focus();
         Keyboard.Focus(WebView);
     }
@@ -142,6 +174,8 @@ public partial class MainWindow : Window
 
     private void ShowFatal(string message)
     {
+        _fatalShown = true;
+        _overlayHidden = false;
         LoadingOverlay.Visibility = Visibility.Visible;
         LoadingText.Text = message;
     }

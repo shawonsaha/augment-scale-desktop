@@ -25,7 +25,12 @@ export function initThemeToggle() {
     localStorage.setItem('weighbridge-theme', theme);
   }
 
-  const savedTheme = localStorage.getItem('weighbridge-theme') || 'light';
+  // The theme is applied before first paint by the inline script in index.html;
+  // trust that attribute when present and only fall back to localStorage.
+  const savedTheme =
+    document.documentElement.getAttribute('data-theme') ||
+    localStorage.getItem('weighbridge-theme') ||
+    'light';
   setTheme(savedTheme);
 
   toggleBtn.addEventListener('click', () => {

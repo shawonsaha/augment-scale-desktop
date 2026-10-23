@@ -27,6 +27,9 @@ public sealed class BridgeService
     private int _statusPushInFlight;
     private WeightReading? _capturedReading;
 
+    /// <summary>Raised when the web UI signals that its first screen is interactive.</summary>
+    public event Action? UiReady;
+
     public BridgeService(DatabaseService database, ScaleReaderService scale)
     {
         _database = database;
@@ -52,7 +55,28 @@ public sealed class BridgeService
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        _ = HandleMessageAsync(e.WebMessageAsJson);
+        var json = e.WebMessageAsJson;
+        if (IsUiReadyMessage(json))
+        {
+            UiReady?.Invoke();
+            return;
+        }
+        _ = HandleMessageAsync(json);
+    }
+
+    private static bool IsUiReadyMessage(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.ValueKind == JsonValueKind.Object &&
+                   doc.RootElement.TryGetProperty("type", out var type) &&
+                   string.Equals(type.GetString(), "ui-ready", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private async Task HandleMessageAsync(string json)
@@ -66,7 +90,9 @@ public sealed class BridgeService
             if (string.IsNullOrWhiteSpace(envelope.RequestId))
                 envelope.RequestId = Guid.NewGuid().ToString("N");
 
-            var data = await DispatchAsync(envelope.Command, envelope.Payload);
+            // Database work runs on the thread pool so DB latency never stalls
+            // the WPF render thread (splash/UI stays responsive during boot).
+            var data = await Task.Run(() => DispatchAsync(envelope!.Command, envelope.Payload));
             Respond(CommandResponse.Ok(envelope.RequestId, data));
         }
         catch (Exception ex)
@@ -81,6 +107,9 @@ public sealed class BridgeService
     {
         switch (command)
         {
+            case "getBootState":
+                return _database.GetBootState();
+
             case "getOperators":
                 return _database.GetOperators();
 
@@ -102,6 +131,12 @@ public sealed class BridgeService
                 return _database.GetHistory(request.Limit, request.Status);
             }
 
+            case "getHistoryRange":
+            {
+                var request = Deserialize<HistoryRangeRequest>(payload);
+                return _database.GetHistoryRange(request.FromDate, request.ToDate);
+            }
+
             case "getTicket":
             {
                 var request = Deserialize<TicketIdRequest>(payload);
@@ -117,8 +152,9 @@ public sealed class BridgeService
             case "showSystemPrintDialog":
                 if (_webView is null)
                     throw new InvalidOperationException("The print dialog is unavailable.");
-                _webView.ShowPrintUI(CoreWebView2PrintDialogKind.System);
-                return true;
+                // ShowPrintUI must run on the UI thread, but the dispatch itself
+                // now happens on the pool, so hop over and await the dialog.
+                return await ShowPrintDialogOnUi();
 
             case "getNextTicketNumber":
                 return _database.PeekNextTicketNumber();
@@ -200,6 +236,24 @@ public sealed class BridgeService
             default:
                 throw new InvalidOperationException($"Unknown command '{command}'.");
         }
+    }
+
+    private Task<bool> ShowPrintDialogOnUi()
+    {
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        RunOnUi(() =>
+        {
+            try
+            {
+                _webView?.ShowPrintUI(CoreWebView2PrintDialogKind.System);
+                completion.SetResult(true);
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+        });
+        return completion.Task;
     }
 
     private void AttachReading(Action<WeightReading> assign)
