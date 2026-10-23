@@ -133,16 +133,28 @@ public sealed class ScaleReaderService : IDisposable
         ProcessStream(client.GetStream(), settings, "simulator");
     }
 
-    private void ProcessStream(Stream stream, ScaleConnectionSetup settings, string source)
+    // shortcut: temporary test seam for serial timeout coverage; remove this
+    // optional predicate and InternalsVisibleTo when hardware tests exist.
+    internal void ProcessStream(Stream stream, ScaleConnectionSetup settings, string source,
+        Func<bool>? keepRunning = null)
     {
+        keepRunning ??= () => _running && !_stop.IsSet;
         var splitter = new Xk3190FrameSplitter();
         var detector = new StabilityDetector(settings.StabilityWindowMs, settings.StabilityToleranceKg);
         var buffer = new byte[256];
         var invalidFrames = 0;
 
-        while (_running && !_stop.IsSet)
+        while (keepRunning())
         {
-            var read = stream.Read(buffer, 0, buffer.Length);
+            int read;
+            try
+            {
+                read = stream.Read(buffer, 0, buffer.Length);
+            }
+            catch (TimeoutException)
+            {
+                continue;
+            }
             if (read <= 0)
             {
                 if (stream is NetworkStream)

@@ -17,7 +17,6 @@ export const OPERATORS = [
     shift: 'Shift A',
     avatar: 'avatars/frame-9.svg',
     color: '#4C7875',
-    pin: '1234',
   },
   {
     id: 'ak',
@@ -28,7 +27,6 @@ export const OPERATORS = [
     shift: 'Shift A',
     avatar: 'avatars/frame-4.svg',
     color: '#FB9550',
-    pin: '1234',
   },
   {
     id: 'sh',
@@ -39,7 +37,6 @@ export const OPERATORS = [
     shift: 'Shift B',
     avatar: 'avatars/frame-3.svg',
     color: '#475569',
-    pin: '1234',
   },
   {
     id: 'rh',
@@ -50,7 +47,6 @@ export const OPERATORS = [
     shift: 'Shift C',
     avatar: 'avatars/frame-1.svg',
     color: '#F2C2B6',
-    pin: '1234',
   },
   {
     id: 'kh',
@@ -61,7 +57,6 @@ export const OPERATORS = [
     shift: 'Shift B',
     avatar: 'avatars/frame-5.svg',
     color: '#526E7E',
-    pin: '1234',
   },
 ];
 

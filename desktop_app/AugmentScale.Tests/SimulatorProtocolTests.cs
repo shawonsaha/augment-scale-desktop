@@ -150,3 +150,58 @@ public class ScaleReaderTcpTransportTests
         listener.Stop();
     }
 }
+
+public class ScaleReaderSerialTimeoutTests
+{
+    [Fact]
+    public void ProcessStream_ReadTimeout_ContinuesToNextFrame()
+    {
+        using var temp = new TempDatabase();
+        using var reader = new ScaleReaderService(temp.Config, temp.Database);
+        var received = new List<WeightReading>();
+        reader.ReadingReceived += (_, reading) => received.Add(reading);
+
+        var stream = new TimeoutThenFrameStream(Xk3190FrameEncoder.Build(735));
+
+        reader.ProcessStream(stream, new ScaleConnectionSetup(), "hardware",
+            () => stream.ReadCalls < 2);
+
+        var reading = Assert.Single(received);
+        Assert.Equal(735, reading.WeightKg, 6);
+    }
+
+    private sealed class TimeoutThenFrameStream(byte[] frame) : Stream
+    {
+        public int ReadCalls { get; private set; }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ReadCalls++;
+            if (ReadCalls == 1) throw new TimeoutException();
+            frame.CopyTo(buffer, offset);
+            return frame.Length;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+    }
+}

@@ -28,6 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- shortcut: temporary for ScaleReaderService timeout test; remove with the test seam. -->
+    <InternalsVisibleTo Include="AugmentScale.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="WebUI\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Resources\**\*" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Data\Schema\*.sql" />

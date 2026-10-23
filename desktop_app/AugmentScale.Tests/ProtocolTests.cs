@@ -162,6 +162,30 @@ public class Xk3190FrameSplitterTests
         Assert.Single(frames);
         Assert.Equal(735, Xk3190FrameDecoder.Decode(frames[0])!.Value);
     }
+
+    [Fact]
+    public void Feed_TwoNewlineDelimitedFramesInOnePacket_ReturnsBoth()
+    {
+        var splitter = new Xk3190FrameSplitter();
+
+        var frames = splitter.Feed(Encoding.ASCII.GetBytes("= 735.0\r\n= 1200.0\r\n"));
+
+        Assert.Equal(2, frames.Count);
+        Assert.Equal(735, Xk3190FrameDecoder.Decode(frames[0])!.Value);
+        Assert.Equal(1200, Xk3190FrameDecoder.Decode(frames[1])!.Value);
+    }
+
+    [Fact]
+    public void Feed_MixedLineEndings_DoesNotMergeFrames()
+    {
+        var splitter = new Xk3190FrameSplitter();
+
+        var frames = splitter.Feed(Encoding.ASCII.GetBytes("= 735.0\n= 1200.0\r\n"));
+
+        Assert.Equal(2, frames.Count);
+        Assert.Equal(735, Xk3190FrameDecoder.Decode(frames[0])!.Value);
+        Assert.Equal(1200, Xk3190FrameDecoder.Decode(frames[1])!.Value);
+    }
 }
 
 public class StabilityDetectorTests

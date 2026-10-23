@@ -36,7 +36,9 @@ public sealed class Xk3190FrameSplitter
         while (true)
         {
             var start = IndexOf(_buffer, Xk3190FrameDecoder.STX);
-            var newline = Math.Max(IndexOf(_buffer, (byte)'\r'), IndexOf(_buffer, (byte)'\n'));
+            var cr = IndexOf(_buffer, (byte)'\r');
+            var lf = IndexOf(_buffer, (byte)'\n');
+            var newline = cr < 0 ? lf : lf < 0 ? cr : Math.Min(cr, lf);
 
             // Newline-delimited frame before the next STX.
             if (newline >= 0 && (start < 0 || newline < start))
