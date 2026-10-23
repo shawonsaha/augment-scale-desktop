@@ -34,6 +34,11 @@ public partial class MainWindow : Window
         _scale = scale;
         _bridge = bridge;
         InitializeComponent();
+
+        var work = SystemParameters.WorkArea;
+        if (Width > work.Width) Width = work.Width;
+        if (Height > work.Height) Height = work.Height;
+
         Title = _config.IsDefaultDataDirectory
             ? "Augment Scale"
             : "Augment Scale — TEST DATA";
