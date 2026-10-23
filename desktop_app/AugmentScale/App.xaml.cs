@@ -108,16 +108,19 @@ public partial class App : Application
     private static void ResetPin(string? operatorId)
     {
         var config = new ConfigService();
+        var database = new DatabaseService(config);
+        var operators = database.GetOperators();
+
         if (string.IsNullOrWhiteSpace(operatorId))
         {
-            var ids = string.Join(", ", config.Setup.Operators.Select(op => op.Id));
+            var ids = string.Join(", ", operators.Select(op => op.Id));
             MessageBox.Show(
                 $"Usage: AugmentScale.exe --reset-pin <operator-id>{Environment.NewLine}{Environment.NewLine}Operators: {ids}",
                 "Reset PIN", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var profile = config.Setup.Operators.FirstOrDefault(op =>
+        var profile = operators.FirstOrDefault(op =>
             string.Equals(op.Id, operatorId, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(op.Code, operatorId, StringComparison.OrdinalIgnoreCase));
         if (profile is null)
@@ -139,7 +142,7 @@ public partial class App : Application
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Enter a new 4-digit PIN for {profile.DisplayName} ({profile.Id}):",
+            Text = $"Enter a new 4-digit PIN for {profile.Name} ({profile.Id}):",
             TextWrapping = TextWrapping.Wrap,
         });
         panel.Children.Add(pinBox);
@@ -183,7 +186,7 @@ public partial class App : Application
                 return;
             }
 
-            MessageBox.Show($"PIN for {profile.DisplayName} was updated.", "Reset PIN",
+            MessageBox.Show($"PIN for {profile.Name} was updated.", "Reset PIN",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             window.Close();
         };

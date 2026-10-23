@@ -510,6 +510,7 @@ export async function loadProductionData() {
 
   document.dispatchEvent(new CustomEvent('data:refresh'));
   document.dispatchEvent(new CustomEvent('vehicle:refresh'));
+  document.dispatchEvent(new CustomEvent('operators:refresh'));
 }
 
 /** Merges older tickets (fetched on demand by the History date filters) into the
@@ -540,6 +541,40 @@ export function mergeHistoryTickets(tickets) {
 /** Verifies the PIN in C# (DPAPI-backed hash) when running in the desktop app. */
 export async function authenticateOperator(operatorId, pin) {
   return sendCommand('authenticatePin', { operatorId, pin });
+}
+
+/** Reloads the operator list and keeps the signed-in profile in sync. */
+export async function refreshOperators() {
+  if (!IS_PRODUCTION) return OPERATORS;
+
+  const operators = await sendCommand('getOperators');
+  setOperators(operators || []);
+  if (state.activeOperator) {
+    const current = OPERATORS.find((op) => op.id === state.activeOperator.id);
+    if (current) state.activeOperator = current;
+  }
+  document.dispatchEvent(new CustomEvent('operators:refresh'));
+  return OPERATORS;
+}
+
+export function unlockProfileAdmin(operatorId, pin) {
+  return sendCommand('unlockProfileAdmin', { operatorId, pin });
+}
+
+export function createProfile(payload) {
+  return sendCommand('createProfile', payload);
+}
+
+export function updateProfile(payload) {
+  return sendCommand('updateProfile', payload);
+}
+
+export function setProfilePin(payload) {
+  return sendCommand('setProfilePin', payload);
+}
+
+export function deactivateProfile(payload) {
+  return sendCommand('deactivateProfile', payload);
 }
 
 export async function captureReading() {

@@ -10,6 +10,7 @@ import { initFirstWeighScreen } from './screens/first-weigh.js';
 import { initSecondWeighScreen } from './screens/second-weigh.js';
 import { initHistoryScreen } from './screens/history.js';
 import { initTrucksScreen } from './screens/trucks.js';
+import { initProfilesScreen } from './screens/profiles.js';
 import { initPrintModal } from './print.js';
 import { initHistoryReport } from './history-report.js';
 import { initVerifyReport } from './verify-report.js';
@@ -38,6 +39,7 @@ async function bootstrap() {
   initSecondWeighScreen();
   initHistoryScreen();
   initTrucksScreen();
+  initProfilesScreen();
   initPrintModal();
   initHistoryReport();
   initVerifyReport();

@@ -253,7 +253,7 @@ Configuration is read from `%LOCALAPPDATA%\AugmentScale\setup.json`. On first la
 
 ### Important PIN warning
 
-Bootstrap PINs are only used when a profile has no stored hash. After the first run, editing `pin` in `setup.json` has no effect, and the `pin` field is cleared. Set the correct PINs **before** the first production login. To reset a PIN later, close the application and run `AugmentScale.exe --reset-pin <operator-id>` from the installation folder, then enter and confirm the new 4-digit PIN. The command only works while the application is closed and only for a configured operator.
+Bootstrap PINs are only used when a profile has no stored hash. After the first run, editing `pin` in `setup.json` has no effect, and the `pin` field is cleared. Set the correct PINs **before** the first production login. To reset a PIN later, a supervisor can use Operators > Change PIN. If no supervisor can sign in, close the application and run `AugmentScale.exe --reset-pin <operator-id>` from the installation folder, then enter and confirm the new 4-digit PIN. The command only works while the application is closed and only for an active operator.
 
 ### Operators
 
@@ -275,13 +275,15 @@ Bootstrap PINs are only used when a profile has no stored hash. After the first 
 
 The seeded demonstration PIN for every operator is `1234`. These are test credentials. Change them before live operation.
 
+`setup.json` seeds profiles only when the matching profile ID does not already exist in the database. Later edits to `displayName`, `role`, `shift`, `avatar`, `color`, or `pin` do not overwrite an existing profile, and a profile removed in the app is not recreated on restart. Use the in-app Operators screen for day-to-day profile changes.
+
 Operator fields:
 
 - `id`: stable internal identifier; lowercase recommended.
 - `code`: short code shown in the interface.
 - `displayName`: full name used on tickets and audit records.
-- `role`: display/audit label. Phase 1 does not enforce role-based permissions in the backend.
-- `shift`: display label.
+- `role`: `Supervisor`, `Senior Operator`, `Operator`, or `Relief Operator`. Supervisors can unlock profile management; other roles cannot.
+- `shift`: `Shift A`, `Shift B`, or `Shift C`.
 - `avatar`: image path under `WebUI/avatars/`.
 - `pin`: exactly 4 digits. Used only for initial provisioning. The login screen is a four-digit PIN interface; longer PINs cannot be entered.
 
@@ -460,7 +462,22 @@ A vehicle with an open ticket cannot be archived or permanently deleted. Complet
 
 Vehicle details and running totals update automatically after ticket commits, completions, and voids. Use the refresh button in the top bar (or `Ctrl+R`) to reload the register, pending tickets, history, and sync status from the database without restarting the application.
 
-### 8.9 Sync status
+### 8.9 Operator profiles
+
+Supervisors manage operator profiles from the Operators tab (`Alt+P`) or the Add New tile on the login screen. Both paths require a supervisor's 4-digit PIN and open a 15-minute management session that ends when you leave the screen or lock the workstation.
+
+The Operators screen supports:
+
+- add a profile (`Alt+N`) with a unique code, role, shift, avatar, color, and 4-digit PIN;
+- edit a profile's name, code, role, shift, avatar, and color;
+- change a profile's PIN;
+- remove a profile with a recorded reason.
+
+Removal is a soft delete: the profile disappears from sign-in and the PIN is erased, but historical tickets keep the operator name that was stored when they were created. Re-adding a removed person creates a new profile with a new ID. You cannot remove your own profile, and the last active supervisor cannot be removed or changed to another role.
+
+Profile changes apply to future tickets; historical records are unchanged. A signed-in operator whose profile was edited keeps working, and the top-bar name and avatar update immediately.
+
+### 8.10 Sync status
 
 The sync indicator shows local outbox activity for Phase 2 readiness. In Phase 1, there is no cloud endpoint, so a successful local save does not mean data reached a server. Treat the local encrypted database as the system of record and maintain backups.
 
@@ -589,6 +606,7 @@ Coverage includes:
 - simulator engine quantization, scenario timing, and corrupt/garbage injection;
 - stability detection;
 - PIN hashing and authentication;
+- supervisor-gated profile creation, editing, PIN changes, and soft deletion;
 - database initialization and seed data;
 - first weigh, completion, reprint, void, and pending deletion;
 - ticket numbering and reuse after deletion;
@@ -619,6 +637,9 @@ Tests create temporary directories and do not require a scale, printer, or exter
 - [ ] Archived vehicle cannot have an open ticket.
 - [ ] Permanently deleting an archived vehicle requires a reason, removes it from the register, and keeps historical tickets.
 - [ ] Restart preserves operators, vehicles, pending tickets, history, and settings.
+- [ ] A supervisor can add, edit, remove, and change the PIN of a profile from Operators.
+- [ ] A non-supervisor cannot open the Operators tab, and a wrong supervisor PIN is rejected.
+- [ ] The last active supervisor and the signed-in profile cannot be removed.
 - [ ] Logs contain startup and scale-health entries.
 
 ---
@@ -697,9 +718,9 @@ An instance is already open, possibly on another desktop session. Close the exis
 
 ### PIN rejected
 
-- PINs are case-insensitive digits only; only digits are accepted.
+- PINs are digits only; only digits are accepted.
 - After five failures, wait 60 seconds.
-- If the PIN is forgotten, there is no in-app reset in Phase 1. Restoring requires administrative intervention; resetting the data directory destroys tickets and is not an acceptable production solution.
+- A supervisor can change a forgotten PIN from Operators > Change PIN. If no supervisor can sign in, close the application and run `AugmentScale.exe --reset-pin <operator-id>` from the installation folder. Do not reset the data directory; that destroys tickets.
 - Confirm Caps Lock/Num Lock state; only the numeric row and keypad digits are accepted.
 
 ### Database or secrets were copied from another computer
@@ -732,7 +753,7 @@ This destroys all local tickets and PINs. Never do this on a production workstat
 - The workstation Windows account is part of the security boundary because DPAPI protects the database key. Use a dedicated, password-protected Windows account and restrict local administrator access.
 - The application denies WebView2 permission requests and disables the context menu and normal developer shortcuts. `Ctrl+Shift+D` is retained for support.
 - PIN lockout is enforced in the UI and stored in the WebView profile. It is not a defense against someone with file-system access to the Windows account.
-- Role labels are displayed for accountability but are not enforced as permissions in Phase 1.
+- Profile management is restricted to the `Supervisor` role and requires a fresh supervisor PIN. The resulting authorization token is held in application memory only and expires after 15 minutes. Other operator actions are not role-restricted.
 - Audit events are stored locally in the encrypted database.
 - The sync outbox is not a backup. Maintain separate encrypted backups of the database and matching secrets file.
 - Treat driver names and phone numbers as personal data. Restrict access to backups and logs.
@@ -743,9 +764,8 @@ This destroys all local tickets and PINs. Never do this on a production workstat
 ## 14. Phase 1 limitations
 
 - No cloud synchronization or remote dashboard. The outbox is prepared for Phase 2.
-- No PIN-change or user-administration screen.
-- No role-based authorization in the backend.
-- No automatic database backup scheduler.
+- Removed profiles cannot be restored in the app; they must be re-added as a new profile.
+- Role-based authorization is limited to operator profile management. No automatic database backup scheduler.
 - No hardware certification against every indicator variant; validation used the XK3190 protocol implementation in this repository.
 - Reprints and voids are not blocked by operator role.
 - The application is Windows-only.

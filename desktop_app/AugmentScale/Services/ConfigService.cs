@@ -115,6 +115,17 @@ public sealed class ConfigService
         }
     }
 
+    public void RemovePin(string profileId)
+    {
+        if (string.IsNullOrWhiteSpace(profileId)) return;
+
+        lock (_gate)
+        {
+            var secrets = LoadOrCreateSecrets();
+            if (secrets.PinHashes.Remove(profileId)) SaveSecrets(secrets);
+        }
+    }
+
     public static string HashPin(string pin)
     {
         var salt = RandomNumberGenerator.GetBytes(16);

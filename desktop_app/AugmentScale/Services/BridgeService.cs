@@ -17,15 +17,21 @@ public sealed class BridgeService
         PropertyNameCaseInsensitive = true,
     };
 
+    private static readonly TimeSpan ProfileAdminSessionLifetime = TimeSpan.FromMinutes(15);
+
     private readonly DatabaseService _database;
     private readonly ScaleReaderService _scale;
     private readonly object _gate = new();
+    private readonly object _adminGate = new();
 
     private CoreWebView2? _webView;
     private SynchronizationContext? _uiContext;
     private int _weightPushInFlight;
     private int _statusPushInFlight;
     private WeightReading? _capturedReading;
+    private string? _profileAdminToken;
+    private ProfileDto? _profileAdminActor;
+    private DateTimeOffset _profileAdminExpiresAt;
 
     /// <summary>Raised when the web UI signals that its first screen is interactive.</summary>
     public event Action? UiReady;
@@ -117,6 +123,37 @@ public sealed class BridgeService
             {
                 var request = Deserialize<PinAuthRequest>(payload);
                 return _database.AuthenticateOperator(request.OperatorId, request.Pin);
+            }
+
+            case "unlockProfileAdmin":
+                return UnlockProfileAdmin(Deserialize<ProfileAdminAuthRequest>(payload));
+
+            case "createProfile":
+            {
+                var request = Deserialize<ProfileWriteRequest>(payload);
+                var actor = RequireProfileAdmin(request.Token);
+                return _database.CreateProfile(request, actor.Id, actor.Name);
+            }
+
+            case "updateProfile":
+            {
+                var request = Deserialize<ProfileWriteRequest>(payload);
+                var actor = RequireProfileAdmin(request.Token);
+                return _database.UpdateProfile(request, actor.Id, actor.Name);
+            }
+
+            case "setProfilePin":
+            {
+                var request = Deserialize<SetProfilePinRequest>(payload);
+                var actor = RequireProfileAdmin(request.Token);
+                return _database.SetProfilePin(request, actor.Id, actor.Name);
+            }
+
+            case "deactivateProfile":
+            {
+                var request = Deserialize<DeactivateProfileRequest>(payload);
+                var actor = RequireProfileAdmin(request.Token);
+                return _database.DeactivateProfile(request, actor.Id, actor.Name);
             }
 
             case "getVehicles":
@@ -235,6 +272,43 @@ public sealed class BridgeService
 
             default:
                 throw new InvalidOperationException($"Unknown command '{command}'.");
+        }
+    }
+
+    private object UnlockProfileAdmin(ProfileAdminAuthRequest request)
+    {
+        var actor = _database.AuthenticateSupervisor(request.OperatorId, request.Pin)
+                    ?? throw new InvalidOperationException("Supervisor PIN is incorrect.");
+
+        var token = Guid.NewGuid().ToString("N");
+        var expiresAt = DateTimeOffset.Now.Add(ProfileAdminSessionLifetime);
+        lock (_adminGate)
+        {
+            _profileAdminToken = token;
+            _profileAdminActor = actor;
+            _profileAdminExpiresAt = expiresAt;
+        }
+
+        return new { token, expiresAt, actor };
+    }
+
+    private ProfileDto RequireProfileAdmin(string token)
+    {
+        lock (_adminGate)
+        {
+            if (string.IsNullOrWhiteSpace(token) ||
+                _profileAdminToken is null ||
+                !string.Equals(token, _profileAdminToken, StringComparison.Ordinal) ||
+                DateTimeOffset.Now > _profileAdminExpiresAt)
+            {
+                _profileAdminToken = null;
+                _profileAdminActor = null;
+                throw new InvalidOperationException(
+                    "The supervisor session expired. Enter the supervisor PIN again.");
+            }
+
+            _profileAdminExpiresAt = DateTimeOffset.Now.Add(ProfileAdminSessionLifetime);
+            return _profileAdminActor!;
         }
     }
 

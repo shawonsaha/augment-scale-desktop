@@ -27,7 +27,7 @@ import { openDiscardWeightDialog } from './screens/second-weigh.js';
  */
 export const NAV_MODIFIER = 'alt';
 
-const NAV_LETTERS = { dashboard: 'D', history: 'H', trucks: 'T' };
+const NAV_LETTERS = { dashboard: 'D', history: 'H', trucks: 'T', profiles: 'P' };
 
 function navChord(e, letter) {
   if (e.key?.toLowerCase() !== letter.toLowerCase()) return false;
@@ -68,7 +68,10 @@ export function initKeyboardShortcuts() {
       state._deleteDialogOpen ||
       state._discardDialogOpen ||
       state._overrideDialogOpen ||
-      state._historyReportOpen
+      state._historyReportOpen ||
+      state._profileAdminUnlockOpen ||
+      state._profileFormOpen ||
+      state._profilePinOpen
     ) {
       return;
     }
@@ -93,6 +96,11 @@ export function initKeyboardShortcuts() {
     if (navChord(e, 't')) {
       e.preventDefault();
       requestNavigation('trucks-screen');
+      return;
+    }
+    if (navChord(e, 'p')) {
+      e.preventDefault();
+      requestNavigation('profiles-screen');
       return;
     }
 

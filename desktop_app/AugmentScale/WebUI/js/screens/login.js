@@ -20,6 +20,7 @@ import {
 } from '../pin-auth.js';
 import { IS_PRODUCTION } from '../runtime.js';
 import { authenticateOperator } from '../state.js';
+import { openProfileManager } from './profiles.js';
 
 export function initLoginScreen() {
   const grid = document.getElementById('avatar-grid');
@@ -121,55 +122,81 @@ export function initLoginScreen() {
     }, 1000);
   }
 
-  // Render Operator Avatars with SVG Artwork & Hotkey Badges
-  grid.innerHTML = '';
-  OPERATORS.forEach((op, index) => {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'avatar-card';
-    card.dataset.operatorId = op.id;
-    card.setAttribute('aria-label', `Select operator ${op.name} (Key ${index + 1})`);
+  function operatorHotkeyMax() {
+    return Math.min(OPERATORS.length, 9);
+  }
 
-    card.innerHTML = `
-      <div class="avatar-box" style="background-color: ${op.color}; position: relative;">
-        <span class="avatar-hotkey-badge">${index + 1}</span>
-        <img src="${op.avatar}" alt="${op.name}" class="avatar-img">
-      </div>
-      <div class="avatar-name">${op.name}</div>
-      <div class="avatar-role">${op.role} • ${op.shift}</div>
-    `;
+  function operatorHintText() {
+    const max = operatorHotkeyMax();
+    if (max === 0) return 'No operator profiles configured';
+    if (max === 1) return 'Press 1 or click your profile';
+    return `Press 1–${max} or click your profile`;
+  }
 
-    card.addEventListener('click', () => {
-      if (state.selectedOperator?.id === op.id) {
-        if (!isLocked) pinInput.focus();
-        return;
-      }
-      selectOperator(op, card);
+  function operatorHintHtml() {
+    const max = operatorHotkeyMax();
+    if (max === 0) return 'Ask a supervisor to add a profile';
+    if (max === 1) return 'Press <kbd class="kbd-key">1</kbd> or click your profile';
+    return `Press <kbd class="kbd-key">1</kbd>–<kbd class="kbd-key">${max}</kbd> or click your profile`;
+  }
+
+  function renderOperatorGrid() {
+    grid.innerHTML = '';
+    OPERATORS.forEach((op, index) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'avatar-card';
+      card.dataset.operatorId = op.id;
+      const hotkey = index < 9 ? ` (Key ${index + 1})` : '';
+      card.setAttribute('aria-label', `Select operator ${op.name}${hotkey}`);
+
+      card.innerHTML = `
+        <div class="avatar-box" style="background-color: ${op.color}; position: relative;">
+          <span class="avatar-hotkey-badge">${index + 1}</span>
+          <img src="${op.avatar}" alt="${op.name}" class="avatar-img">
+        </div>
+        <div class="avatar-name">${op.name}</div>
+        <div class="avatar-role">${op.role} • ${op.shift}</div>
+      `;
+
+      card.addEventListener('click', () => {
+        if (state.selectedOperator?.id === op.id) {
+          if (!isLocked) pinInput.focus();
+          return;
+        }
+        selectOperator(op, card);
+      });
+
+      grid.appendChild(card);
     });
 
-    grid.appendChild(card);
-  });
+    const addNewCard = document.createElement('button');
+    addNewCard.type = 'button';
+    addNewCard.className = 'avatar-card avatar-card-add-new';
+    addNewCard.setAttribute('aria-label', 'Manage operator profiles');
+    addNewCard.innerHTML = `
+      <div class="avatar-box avatar-box-add-new">
+        <svg class="avatar-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </div>
+      <div class="avatar-name">Add New</div>
+      <div class="avatar-role">Supervisor PIN required</div>
+    `;
+    addNewCard.addEventListener('click', () => {
+      if (hapticAudio) hapticAudio.playClick();
+      openProfileManager();
+    });
+    grid.appendChild(addNewCard);
 
-  // "Add New" operator tile
-  const addNewCard = document.createElement('button');
-  addNewCard.type = 'button';
-  addNewCard.className = 'avatar-card avatar-card-add-new';
-  addNewCard.setAttribute('aria-label', 'Add New Operator');
-  addNewCard.innerHTML = `
-    <div class="avatar-box avatar-box-add-new">
-      <svg class="avatar-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19"></line>
-        <line x1="5" y1="12" x2="19" y2="12"></line>
-      </svg>
-    </div>
-    <div class="avatar-name">Add New</div>
-    <div class="avatar-role">Operator</div>
-  `;
-  addNewCard.addEventListener('click', () => {
-    if (hapticAudio) hapticAudio.playClick();
-    showToast('Adding new operators requires Supervisor authorization', 'info');
-  });
-  grid.appendChild(addNewCard);
+    if (!state.selectedOperator) {
+      if (loginSubtitle) loginSubtitle.textContent = operatorHintText();
+      if (footerHint) footerHint.innerHTML = operatorHintHtml();
+    }
+  }
+
+  renderOperatorGrid();
 
   // Step 1: selectOperator -> Step 2: enterPin
   function selectOperator(op, cardElement) {
@@ -268,14 +295,13 @@ export function initLoginScreen() {
 
     if (loginTitle) loginTitle.textContent = "Who's weighing?";
     if (loginSubtitle) {
-      loginSubtitle.textContent = 'Press 1–5 or click your profile';
+      loginSubtitle.textContent = operatorHintText();
       loginSubtitle.style.display = '';
     }
 
     // Reset Footer Hint
     if (footerHint) {
-      footerHint.innerHTML =
-        'Press <kbd class="kbd-key">1</kbd>–<kbd class="kbd-key">5</kbd> or click your profile';
+      footerHint.innerHTML = operatorHintHtml();
     }
 
     // Hide PIN Drawer
@@ -407,10 +433,10 @@ export function initLoginScreen() {
 
     // Keys 1-5 select operator ONLY in selectOperator state
     if (!state.selectedOperator) {
-      if (['1', '2', '3', '4', '5'].includes(e.key)) {
+      if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
         e.preventDefault();
         const num = parseInt(e.key, 10);
-        if (num >= 1 && num <= OPERATORS.length) {
+        if (num >= 1 && num <= operatorHotkeyMax()) {
           const cards = grid.querySelectorAll('.avatar-card');
           if (cards[num - 1]) {
             selectOperator(OPERATORS[num - 1], cards[num - 1]);
@@ -559,4 +585,9 @@ export function initLoginScreen() {
   if (backBtn) {
     backBtn.addEventListener('click', deselectOperator);
   }
+
+  document.addEventListener('operators:refresh', () => {
+    deselectOperator();
+    renderOperatorGrid();
+  });
 }

@@ -108,6 +108,130 @@ public class DatabaseServiceTests
         Assert.All(temp.Database.GetOperators(), op => Assert.True(op.PinSet));
     }
 
+    private static ProfileWriteRequest NewProfile(string code = "TST", string pin = "2468") => new()
+    {
+        DisplayName = "TEST OPERATOR",
+        FirstName = "Test",
+        Code = code,
+        Role = "Operator",
+        Shift = "Shift B",
+        Avatar = "avatars/frame-3.svg",
+        Color = "#475569",
+        Pin = pin,
+    };
+
+    [Fact]
+    public void Profile_CreateUpdateAndDeactivate_PersistAcrossRestart()
+    {
+        using var temp = new TempDatabase();
+
+        var created = temp.Database.CreateProfile(NewProfile(), "mr", "MD. RAJU");
+        Assert.True(temp.Config.AuthenticatePin(created.Id, "2468"));
+        Assert.Contains(temp.Database.GetOperators(), op => op.Id == created.Id);
+
+        var updated = temp.Database.UpdateProfile(new ProfileWriteRequest
+        {
+            Id = created.Id,
+            DisplayName = "TEST OPERATOR UPDATED",
+            FirstName = "Updated",
+            Code = "TS2",
+            Role = "Senior Operator",
+            Shift = "Shift C",
+            Avatar = "avatars/frame-5.svg",
+            Color = "#526E7E",
+        }, "mr", "MD. RAJU");
+        Assert.Equal("TS2", updated.Code);
+
+        var restarted = new DatabaseService(temp.Config);
+        var persisted = restarted.GetOperators().Single(op => op.Id == created.Id);
+        Assert.Equal("TEST OPERATOR UPDATED", persisted.Name);
+        Assert.Equal("Senior Operator", persisted.Role);
+        Assert.Equal("TS2", persisted.Code);
+
+        Assert.True(temp.Database.DeactivateProfile(new DeactivateProfileRequest
+        {
+            ProfileId = created.Id,
+            Reason = "Test cleanup",
+        }, "mr", "MD. RAJU"));
+
+        Assert.DoesNotContain(temp.Database.GetOperators(), op => op.Id == created.Id);
+        Assert.Null(temp.Database.AuthenticateOperator(created.Id, "2468"));
+        Assert.False(temp.Config.HasPin(created.Id));
+
+        var restartedAgain = new DatabaseService(temp.Config);
+        Assert.DoesNotContain(restartedAgain.GetOperators(), op => op.Id == created.Id);
+    }
+
+    [Fact]
+    public void Profile_DeactivatedSeededProfileIsNotRestoredFromSetup()
+    {
+        using var temp = new TempDatabase();
+
+        Assert.True(temp.Database.DeactivateProfile(new DeactivateProfileRequest
+        {
+            ProfileId = "sh",
+            Reason = "Left the company",
+        }, "mr", "MD. RAJU"));
+
+        Assert.DoesNotContain(temp.Database.GetOperators(), op => op.Id == "sh");
+        Assert.False(temp.Config.HasPin("sh"));
+
+        var restarted = new DatabaseService(temp.Config);
+        Assert.DoesNotContain(restarted.GetOperators(), op => op.Id == "sh");
+    }
+
+    [Fact]
+    public void Profile_GuardsDuplicateCodeSelfRemovalAndLastSupervisor()
+    {
+        using var temp = new TempDatabase();
+
+        Assert.Throws<InvalidOperationException>(
+            () => temp.Database.CreateProfile(NewProfile("MR"), "mr", "MD. RAJU"));
+
+        var created = temp.Database.CreateProfile(NewProfile(), "mr", "MD. RAJU");
+        Assert.Throws<InvalidOperationException>(() => temp.Database.DeactivateProfile(
+            new DeactivateProfileRequest { ProfileId = created.Id, Reason = "Self" },
+            created.Id, "TEST OPERATOR"));
+
+        Assert.Throws<InvalidOperationException>(() => temp.Database.DeactivateProfile(
+            new DeactivateProfileRequest { ProfileId = "mr", Reason = "Last supervisor" },
+            "ak", "AKHTER K."));
+
+        Assert.Throws<InvalidOperationException>(() => temp.Database.UpdateProfile(new ProfileWriteRequest
+        {
+            Id = "mr",
+            DisplayName = "MD. RAJU",
+            FirstName = "Raju",
+            Code = "MR",
+            Role = "Operator",
+            Shift = "Shift A",
+            Avatar = "avatars/frame-9.svg",
+            Color = "#4C7875",
+        }, "mr", "MD. RAJU"));
+    }
+
+    [Fact]
+    public void Profile_PinChangeAndSupervisorAuthentication()
+    {
+        using var temp = new TempDatabase();
+
+        Assert.NotNull(temp.Database.AuthenticateSupervisor("mr", "1234"));
+        Assert.Null(temp.Database.AuthenticateSupervisor("sh", "1234"));
+        Assert.Null(temp.Database.AuthenticateSupervisor("mr", "9999"));
+
+        Assert.True(temp.Database.SetProfilePin(new SetProfilePinRequest
+        {
+            ProfileId = "mr",
+            Pin = "4321",
+        }, "mr", "MD. RAJU"));
+
+        Assert.True(temp.Config.AuthenticatePin("mr", "4321"));
+        Assert.False(temp.Config.AuthenticatePin("mr", "1234"));
+        Assert.Throws<InvalidOperationException>(() => temp.Database.SetProfilePin(
+            new SetProfilePinRequest { ProfileId = "mr", Pin = "12" },
+            "mr", "MD. RAJU"));
+    }
+
     [Fact]
     public void CreateTicket_ParsesWebUiFirstTime()
     {

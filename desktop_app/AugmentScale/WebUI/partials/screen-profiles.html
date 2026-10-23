@@ -1,0 +1,229 @@
+<!-- Operator profile management (supervisor only) -->
+<main class="screen" id="profiles-screen">
+  <div class="trucks-screen">
+    <section class="trucks-header">
+      <div class="trucks-title-group">
+        <h2 class="trucks-title">Operator Profiles</h2>
+        <span class="trucks-count-badge" id="profiles-count-badge">0 active</span>
+        <span class="trucks-keyboard-hint">
+          <kbd>Alt+N</kbd> New profile · <kbd>Esc</kbd> Back
+        </span>
+      </div>
+      <div class="trucks-toolbar">
+        <span class="profiles-toolbar-note">Supervisor access required to add, edit or remove profiles</span>
+        <button type="button" class="trucks-new-btn" id="profiles-new-btn">
+          <span aria-hidden="true">＋</span> New Profile
+          <kbd class="kbd-hint">Alt+N</kbd>
+        </button>
+      </div>
+    </section>
+
+    <div class="trucks-main">
+      <div class="trucks-table-container">
+        <table class="trucks-table profiles-table">
+          <thead>
+            <tr>
+              <th class="profiles-col-person">Operator</th>
+              <th class="profiles-col-code">Code</th>
+              <th class="profiles-col-role">Role</th>
+              <th class="profiles-col-shift">Shift</th>
+              <th class="profiles-col-pin">PIN</th>
+              <th class="profiles-col-actions">Action</th>
+            </tr>
+          </thead>
+          <tbody id="profiles-tbody"></tbody>
+        </table>
+      </div>
+
+      <footer class="trucks-footer">
+        <div class="list-footer-left">
+          <button type="button" class="list-back-btn" id="profiles-back">
+            <span aria-hidden="true">←</span> Back <span class="list-back-kbd">Esc</span>
+          </button>
+        </div>
+        <div class="trucks-summary" id="profiles-summary">0 profiles</div>
+      </footer>
+    </div>
+  </div>
+</main>
+
+<!-- Supervisor unlock -->
+<div class="modal-overlay" id="profile-admin-unlock-modal">
+  <form class="modal-content truck-form" id="profile-admin-unlock-form" novalidate>
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title">Supervisor access</h3>
+        <span class="truck-form-sub">Enter a supervisor PIN to manage operator profiles</span>
+      </div>
+      <button type="button" class="modal-close-btn" id="profile-admin-unlock-close" aria-label="Close">
+        ✕
+      </button>
+    </div>
+    <div class="truck-form-body">
+      <div class="truck-form-grid">
+        <label class="truck-field">
+          <span class="truck-field-label">Supervisor</span>
+          <select class="form-input" id="profile-admin-supervisor"></select>
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">PIN</span>
+          <input
+            type="password"
+            class="form-input"
+            id="profile-admin-pin"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="off"
+          />
+        </label>
+      </div>
+      <p class="truck-form-error" id="profile-admin-error" hidden></p>
+    </div>
+    <div class="truck-form-footer">
+      <button type="button" class="btn btn-secondary" id="profile-admin-unlock-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="profile-admin-unlock-submit">Unlock</button>
+    </div>
+  </form>
+</div>
+
+<!-- Add / edit profile -->
+<div class="modal-overlay" id="profile-form-modal">
+  <form class="modal-content truck-form" id="profile-form" novalidate>
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="profile-form-title">New Profile</h3>
+        <span class="truck-form-sub" id="profile-form-sub">Operator details used on tickets and audit records</span>
+      </div>
+      <button type="button" class="modal-close-btn" id="profile-form-close" aria-label="Close">✕</button>
+    </div>
+    <div class="truck-form-body">
+      <div class="truck-form-grid">
+        <label class="truck-field">
+          <span class="truck-field-label">Display Name <span class="fw-required-star">*</span></span>
+          <input type="text" class="form-input" id="profile-form-name" maxlength="80" autocomplete="off" />
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">First Name</span>
+          <input type="text" class="form-input" id="profile-form-first-name" maxlength="80" autocomplete="off" />
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">Code <span class="fw-required-star">*</span></span>
+          <input
+            type="text"
+            class="form-input"
+            id="profile-form-code"
+            maxlength="4"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="e.g. MR"
+          />
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">Role</span>
+          <select class="form-input" id="profile-form-role">
+            <option value="Operator">Operator</option>
+            <option value="Senior Operator">Senior Operator</option>
+            <option value="Relief Operator">Relief Operator</option>
+            <option value="Supervisor">Supervisor</option>
+          </select>
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">Shift</span>
+          <select class="form-input" id="profile-form-shift">
+            <option value="Shift A">Shift A</option>
+            <option value="Shift B">Shift B</option>
+            <option value="Shift C">Shift C</option>
+          </select>
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">Avatar</span>
+          <div class="profiles-avatar-choice">
+            <select class="form-input" id="profile-form-avatar">
+              <option value="avatars/frame-9.svg">Frame 9</option>
+              <option value="avatars/frame-4.svg">Frame 4</option>
+              <option value="avatars/frame-3.svg">Frame 3</option>
+              <option value="avatars/frame-1.svg">Frame 1</option>
+              <option value="avatars/frame-5.svg">Frame 5</option>
+            </select>
+            <img class="profiles-avatar-preview" id="profile-form-avatar-preview" alt="" />
+          </div>
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">Color</span>
+          <input type="color" class="form-input profiles-color-input" id="profile-form-color" value="#4C7875" />
+        </label>
+        <label class="truck-field" id="profile-form-pin-field" hidden>
+          <span class="truck-field-label">PIN <span class="fw-required-star">*</span></span>
+          <input
+            type="password"
+            class="form-input"
+            id="profile-form-pin"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="new-password"
+          />
+        </label>
+        <label class="truck-field" id="profile-form-pin-confirm-field" hidden>
+          <span class="truck-field-label">Confirm PIN <span class="fw-required-star">*</span></span>
+          <input
+            type="password"
+            class="form-input"
+            id="profile-form-pin-confirm"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="new-password"
+          />
+        </label>
+      </div>
+      <p class="truck-form-error" id="profile-form-error" hidden></p>
+    </div>
+    <div class="truck-form-footer">
+      <button type="button" class="btn btn-secondary" id="profile-form-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="profile-form-save">Save Profile</button>
+    </div>
+  </form>
+</div>
+
+<!-- Change PIN -->
+<div class="modal-overlay" id="profile-pin-modal">
+  <form class="modal-content truck-form" id="profile-pin-form" novalidate>
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title">Change PIN</h3>
+        <span class="truck-form-sub" id="profile-pin-sub"></span>
+      </div>
+      <button type="button" class="modal-close-btn" id="profile-pin-close" aria-label="Close">✕</button>
+    </div>
+    <div class="truck-form-body">
+      <div class="truck-form-grid">
+        <label class="truck-field">
+          <span class="truck-field-label">New PIN</span>
+          <input
+            type="password"
+            class="form-input"
+            id="profile-pin-new"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="new-password"
+          />
+        </label>
+        <label class="truck-field">
+          <span class="truck-field-label">Confirm PIN</span>
+          <input
+            type="password"
+            class="form-input"
+            id="profile-pin-confirm"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="new-password"
+          />
+        </label>
+      </div>
+      <p class="truck-form-error" id="profile-pin-error" hidden></p>
+    </div>
+    <div class="truck-form-footer">
+      <button type="button" class="btn btn-secondary" id="profile-pin-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="profile-pin-save">Update PIN</button>
+    </div>
+  </form>
+</div>

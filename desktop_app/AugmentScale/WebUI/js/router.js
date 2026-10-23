@@ -5,7 +5,12 @@ import { state } from './state.js';
 import hapticAudio from './audio.js';
 import { showToast } from './toast.js';
 
-const NAV_SCREENS = new Set(['dashboard-screen', 'history-screen', 'trucks-screen']);
+const NAV_SCREENS = new Set([
+  'dashboard-screen',
+  'history-screen',
+  'trucks-screen',
+  'profiles-screen',
+]);
 const WEIGH_SCREENS = new Set(['first-weigh-screen', 'second-weigh-screen']);
 
 export function showScreen(screenId) {
@@ -28,27 +33,13 @@ export function showScreen(screenId) {
     telemetryBar.style.display = 'flex';
   }
 
-  // Header lock button visibility: hide on login screen (there is no session to lock)
+  // Header lock button visibility: hide when there is no session to lock
   const lockBtn = document.getElementById('btn-lock-workstation');
   if (lockBtn) {
-    lockBtn.style.display = screenId === 'login-screen' ? 'none' : '';
+    lockBtn.style.display = state.activeOperator ? '' : 'none';
   }
 
-  // Update operator pill in top bar
-  const pill = document.getElementById('active-operator-pill');
-  if (pill) {
-    if (state.activeOperator) {
-      pill.style.display = 'flex';
-      const pillImg = document.getElementById('pill-operator-img');
-      if (pillImg && state.activeOperator.avatar) {
-        pillImg.src = state.activeOperator.avatar;
-      }
-      document.getElementById('pill-operator-name').textContent = state.activeOperator.name;
-    } else {
-      pill.style.display = 'none';
-    }
-  }
-
+  updateActiveOperatorPill();
   updateAppNav(screenId);
 
   document.dispatchEvent(new CustomEvent('screenchange', { detail: { screenId } }));
@@ -58,9 +49,31 @@ export function showScreen(screenId) {
   }
 }
 
+/** Refreshes the signed-in operator chip after a profile edit. */
+export function updateActiveOperatorPill() {
+  const pill = document.getElementById('active-operator-pill');
+  if (!pill) return;
+  if (!state.activeOperator) {
+    pill.style.display = 'none';
+    return;
+  }
+
+  pill.style.display = 'flex';
+  const pillImg = document.getElementById('pill-operator-img');
+  if (pillImg && state.activeOperator.avatar) {
+    pillImg.src = state.activeOperator.avatar;
+  }
+  const name = document.getElementById('pill-operator-name');
+  if (name) name.textContent = state.activeOperator.name;
+}
+
 /** True while an operator is mid-weigh; navigation must go through the guards. */
 export function isWeighScreen(screenId = state.currentScreen) {
   return WEIGH_SCREENS.has(screenId);
+}
+
+export function isSupervisor(operator = state.activeOperator) {
+  return String(operator?.role || '').toLowerCase() === 'supervisor';
 }
 
 /** Nav buttons and chords route through here so weigh flows cannot be bypassed. */
@@ -69,6 +82,14 @@ export function requestNavigation(screenId) {
   if (isWeighScreen()) {
     showToast('Finish or discard the current weigh before leaving', 'warning');
     return false;
+  }
+  if (screenId === 'profiles-screen') {
+    if (!isSupervisor()) {
+      showToast('Supervisor access is required to manage profiles', 'warning');
+      return false;
+    }
+    document.dispatchEvent(new CustomEvent('profiles:manage'));
+    return true;
   }
   showScreen(screenId);
   return true;
@@ -84,6 +105,9 @@ export function updateAppNav(screenId = state.currentScreen) {
   if (!visible) return;
 
   nav.querySelectorAll('.app-nav-tab').forEach((tab) => {
+    if (tab.dataset.screen === 'profiles-screen') {
+      tab.hidden = !isSupervisor();
+    }
     const isActive = tab.dataset.screen === screenId;
     tab.classList.toggle('is-active', isActive);
     if (isActive) {
