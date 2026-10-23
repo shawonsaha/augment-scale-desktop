@@ -32,10 +32,12 @@ public static partial class Xk3190FrameDecoder
     {
         byte x = 0;
         foreach (var b in payload) x ^= b;
+        var high = x >> 4;
+        var low = x & 0x0F;
         return
         [
-            (byte)((x <= 9 ? 0x30 : 0x37) + (x >> 4)),
-            (byte)((x <= 9 ? 0x30 : 0x37) + (x & 0x0F))
+            (byte)((high <= 9 ? 0x30 : 0x37) + high),
+            (byte)((low <= 9 ? 0x30 : 0x37) + low)
         ];
     }
 

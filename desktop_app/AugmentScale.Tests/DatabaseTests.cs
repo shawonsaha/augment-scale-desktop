@@ -56,6 +56,29 @@ public class ConfigServiceTests
         Assert.Null(temp.Database.AuthenticateOperator("mr", "9999"));
         Assert.Null(temp.Database.AuthenticateOperator("unknown", "1234"));
     }
+
+    [Fact]
+    public void SetPin_ReplacesExistingPinHash()
+    {
+        using var temp = new TempDatabase();
+
+        temp.Config.SetPin("mr", "4321");
+
+        Assert.True(temp.Config.AuthenticatePin("mr", "4321"));
+        Assert.False(temp.Config.AuthenticatePin("mr", "1234"));
+    }
+
+    [Fact]
+    public void MissingSecrets_WithExistingDatabase_RefusesToCreateNewKey()
+    {
+        using var temp = new TempDatabase();
+        File.Delete(temp.Config.SecretsPath);
+        var freshConfig = new ConfigService(temp.DataDirectory);
+
+        var error = Assert.Throws<InvalidOperationException>(() => _ = freshConfig.Secrets);
+
+        Assert.Contains("existing database", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 public class DatabaseServiceTests
@@ -363,6 +386,18 @@ public class DatabaseServiceTests
 
         Assert.Equal(-2000, completed.NetWeight);
         Assert.True(completed.Override is not null);
+
+        using var connection = db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT override_operator_id, override_operator_name
+            FROM weigh_tickets WHERE id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", completed.TicketUuid!);
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal("mr", reader.GetString(0));
+        Assert.Equal("MD. RAJU", reader.GetString(1));
     }
 
     private static string DateValue(DateTime value) => value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

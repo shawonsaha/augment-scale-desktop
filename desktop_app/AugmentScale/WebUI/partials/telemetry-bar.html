@@ -38,19 +38,19 @@
       <span>SIM</span>
     </div>
 
-    <!-- Robust Cloud Sync Visualizer with Relative Time & Error State -->
+    <!-- Local database and outbox status visualizer -->
     <div class="sync-container" style="position: relative">
       <div
-        class="telemetry-item sync-pill synced"
+        class="telemetry-item sync-pill"
         id="sync-status-pill"
-        title="Cloud Sync Health • Click for details"
+        title="Local Data Health • Click for details"
         role="button"
         tabindex="0"
       >
         <div class="telemetry-dot" id="sync-status-dot"></div>
         <span class="sync-icon" id="sync-status-icon">↑↓</span>
-        <span class="sync-text" id="sync-status-text">Synced</span>
-        <span class="sync-time-detail" id="sync-time-detail">just now</span>
+        <span class="sync-text" id="sync-status-text">Local only</span>
+        <span class="sync-time-detail" id="sync-time-detail">saved locally</span>
       </div>
 
       <!-- Sync Details Popover -->
@@ -58,7 +58,7 @@
         class="sync-popover"
         id="sync-popover"
         role="dialog"
-        aria-label="Cloud Synchronization Health"
+        aria-label="Local Data Health"
       >
         <div class="sync-popover-header">
           <div class="sync-popover-title">
@@ -74,30 +74,30 @@
             >
               <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
             </svg>
-            <span>Cloud Sync Health</span>
+            <span>Local Data Health</span>
           </div>
-          <span class="sync-popover-badge synced" id="popover-status-badge">● Synced</span>
+          <span class="sync-popover-badge" id="popover-status-badge">● Local only</span>
         </div>
         <div class="sync-metrics-list">
           <div class="sync-metric-row">
-            <span>Last Successful Sync:</span>
-            <span class="sync-metric-val" id="popover-last-sync">Just now</span>
+            <span>Cloud Sync:</span>
+            <span class="sync-metric-val" id="popover-last-sync">Not configured</span>
           </div>
           <div class="sync-metric-row">
             <span>Pending Outbox Queue:</span>
             <span class="sync-metric-val" id="popover-pending-count">0 items</span>
           </div>
           <div class="sync-metric-row">
-            <span>Cloud Destination:</span>
-            <span class="sync-metric-val">Supabase Cloud</span>
+            <span>Data Destination:</span>
+            <span class="sync-metric-val">This workstation (SQLite)</span>
           </div>
           <div class="sync-metric-row">
-            <span>Sync Protocol:</span>
-            <span class="sync-metric-val">Two-way HTTPS / Edge</span>
+            <span>Storage:</span>
+            <span class="sync-metric-val">Encrypted local database</span>
           </div>
         </div>
         <div class="sync-popover-actions">
-          <button class="sync-action-btn primary" id="btn-sync-now">↻ Sync Now</button>
+          <button class="sync-action-btn primary" id="btn-sync-now">↻ Check Outbox</button>
         </div>
       </div>
     </div>

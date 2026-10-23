@@ -521,6 +521,13 @@ export async function authenticateOperator(operatorId, pin) {
   return sendCommand('authenticatePin', { operatorId, pin });
 }
 
+export async function captureReading() {
+  if (!IS_PRODUCTION) return;
+  try {
+    await sendCommand('captureReading');
+  } catch {}
+}
+
 /** Persists a first weigh and returns the durable ticket. */
 export async function commitFirstWeigh(ticketData) {
   const saved = await sendCommand('createTicket', {

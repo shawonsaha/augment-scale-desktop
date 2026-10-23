@@ -19,19 +19,18 @@ public sealed class BridgeService
 
     private readonly DatabaseService _database;
     private readonly ScaleReaderService _scale;
-    private readonly PrintService _print;
     private readonly object _gate = new();
 
     private CoreWebView2? _webView;
     private SynchronizationContext? _uiContext;
     private int _weightPushInFlight;
     private int _statusPushInFlight;
+    private WeightReading? _capturedReading;
 
-    public BridgeService(DatabaseService database, ScaleReaderService scale, PrintService print)
+    public BridgeService(DatabaseService database, ScaleReaderService scale)
     {
         _database = database;
         _scale = scale;
-        _print = print;
     }
 
     public void Attach(CoreWebView2 webView)
@@ -137,18 +136,26 @@ public sealed class BridgeService
                     hasReading = _scale.LastReading is not null,
                 };
 
+            case "captureReading":
+                _capturedReading = _scale.LastReading;
+                return new { captured = _capturedReading is not null };
+
             case "createTicket":
             {
                 var request = Deserialize<CreateTicketRequest>(payload);
-                AttachReading(request.WeightKg, reading => request.Reading = reading);
-                return _database.CreateTicket(request);
+                AttachReading(reading => request.Reading = reading);
+                var ticket = _database.CreateTicket(request);
+                _capturedReading = null;
+                return ticket;
             }
 
             case "completeTicket":
             {
                 var request = Deserialize<CompleteTicketRequest>(payload);
-                AttachReading(request.WeightKg, reading => request.Reading = reading);
-                return _database.CompleteTicket(request);
+                AttachReading(reading => request.Reading = reading);
+                var ticket = _database.CompleteTicket(request);
+                _capturedReading = null;
+                return ticket;
             }
 
             case "voidTicket":
@@ -190,26 +197,14 @@ public sealed class BridgeService
                 return new { ticket = result.Ticket, copyNumber = result.CopyNumber };
             }
 
-            case "recordPrint":
-            {
-                var request = Deserialize<ReprintRequest>(payload);
-                var job = _database.RecordPrintJob(request.TicketId, request.DocumentType,
-                    request.OperatorId, request.OperatorName, request.Reason);
-                return job;
-            }
-
             default:
                 throw new InvalidOperationException($"Unknown command '{command}'.");
         }
     }
 
-    private void AttachReading(double weight, Action<WeightReading> assign)
+    private void AttachReading(Action<WeightReading> assign)
     {
-        var reading = _scale.LastReading;
-        if (reading is null) return;
-        if (DateTimeOffset.Now - reading.CapturedAt > TimeSpan.FromSeconds(30)) return;
-        if (Math.Abs(reading.WeightKg - weight) > 1.0) return;
-        assign(reading);
+        if (_capturedReading is not null) assign(_capturedReading);
     }
 
     private static T Deserialize<T>(JsonElement payload) where T : new()

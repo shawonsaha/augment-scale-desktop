@@ -253,7 +253,7 @@ Configuration is read from `%LOCALAPPDATA%\AugmentScale\setup.json`. On first la
 
 ### Important PIN warning
 
-Bootstrap PINs are only used when a profile has no stored hash. After the first run, editing `pin` in `setup.json` has no effect, and the `pin` field is cleared. There is currently no PIN-reset screen. Set the correct PINs **before** the first production login. If a PIN must be changed later, it requires administrative tooling or a full data reset, which destroys ticket history.
+Bootstrap PINs are only used when a profile has no stored hash. After the first run, editing `pin` in `setup.json` has no effect, and the `pin` field is cleared. Set the correct PINs **before** the first production login. To reset a PIN later, close the application and run `AugmentScale.exe --reset-pin <operator-id>` from the installation folder, then enter and confirm the new 4-digit PIN. The command only works while the application is closed and only for a configured operator.
 
 ### Operators
 

@@ -3,7 +3,7 @@
  * Single-ticket workflow, shared HUD, net weight calculation, tare/gross inversion anomaly detection,
  * operator reason override, deferred certificate preview, safe discard dialog.
  */
-import { state, pendingTickets } from '../state.js';
+import { state, pendingTickets, captureReading } from '../state.js';
 import { showScreen } from '../router.js';
 import {
   formatDateTime12H,
@@ -60,7 +60,8 @@ export function initSecondWeighScreen() {
     openReasonDialog({
       id: 'override-reason-modal',
       title: 'Override anyway?',
-      metaHtml: `Ticket #${t.id} · ${t.truckNo} · ${t.material}<br>First: ${tare.toLocaleString('en-US')} kg · Second: ${gross.toLocaleString('en-US')} kg · Net: ${netFormatted}`,
+      meta: `Ticket #${t.id} · ${t.truckNo} · ${t.material}
+First: ${tare.toLocaleString('en-US')} kg · Second: ${gross.toLocaleString('en-US')} kg · Net: ${netFormatted}`,
       prompt: 'Why are you overriding it?',
       reasons: [
         'Truck returned empty or unloaded',
@@ -231,6 +232,7 @@ function doCaptureSecond() {
     second: '2-digit',
   });
   state.secondWeigh.capturedTimestamp = formatDateTime12H(new Date());
+  captureReading();
 
   updateSecondWeighPreview(state.secondWeigh.capturedWeight);
 

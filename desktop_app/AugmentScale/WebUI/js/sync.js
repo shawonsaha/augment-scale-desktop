@@ -84,8 +84,30 @@ export function updateSyncUI() {
     syncPill.className = 'telemetry-item sync-pill syncing';
     if (syncDot) syncDot.className = 'telemetry-dot pulse';
     if (syncIcon) syncIcon.textContent = '↻';
-    if (syncText) syncText.textContent = 'Syncing...';
-    if (syncDetail) syncDetail.textContent = 'connecting';
+    if (syncText) syncText.textContent = 'Checking...';
+    if (syncDetail) syncDetail.textContent = 'local outbox';
+    return;
+  }
+
+  if (IS_PRODUCTION) {
+    syncPill.className = 'telemetry-item sync-pill';
+    if (syncDot) syncDot.className = 'telemetry-dot';
+    if (syncIcon) syncIcon.textContent = '●';
+    if (syncText) syncText.textContent = 'Local only';
+    if (syncDetail) {
+      syncDetail.textContent = state.sync.pendingQueue > 0
+        ? `${state.sync.pendingQueue} pending`
+        : 'saved locally';
+    }
+
+    if (popoverBadge) {
+      popoverBadge.className = 'sync-popover-badge';
+      popoverBadge.textContent = 'Local only';
+    }
+    if (popoverLastSync) popoverLastSync.textContent = 'Not configured';
+    if (popoverPending) {
+      popoverPending.textContent = `${state.sync.pendingQueue} events in local outbox`;
+    }
     return;
   }
 

@@ -21,6 +21,23 @@ public class Xk3190FrameDecoderTests
     }
 
     [Fact]
+    public void Decode_RealHardwareFrame_735Kg_ReturnsValidChecksum()
+    {
+        byte[] frame = [0x02, 0x2B, 0x30, 0x30, 0x30, 0x37, 0x33, 0x35, 0x30, 0x31, 0x41, 0x03];
+
+        Assert.Equal("1A", Encoding.ASCII.GetString(
+            Xk3190FrameDecoder.ComputeChecksum(frame.AsSpan(1, 8))));
+
+        var decoded = Xk3190FrameDecoder.Decode(frame);
+
+        Assert.NotNull(decoded);
+        Assert.Equal(735, decoded!.Value);
+        Assert.True(decoded.ChecksumValid);
+        Assert.Equal("3141", decoded.ChecksumExpected);
+        Assert.Equal("3141", decoded.ChecksumActual);
+    }
+
+    [Fact]
     public void Decode_KnownPositiveFrame_ReturnsWeightAndValidChecksum()
     {
         var frame = BuildFrame("+", "000735", '0');

@@ -197,6 +197,14 @@ public sealed class ConfigService
             }
         }
 
+        if (File.Exists(DatabasePath))
+        {
+            throw new InvalidOperationException(
+                $"The existing database could not be unlocked because '{Path.GetFileName(_secretsPath)}' " +
+                "is missing or unreadable. Restore the matching secrets.dat file, or move the database aside, " +
+                "instead of creating a new encryption key.");
+        }
+
         var secrets = new AppSecrets
         {
             DatabaseKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),

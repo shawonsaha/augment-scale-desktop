@@ -290,7 +290,7 @@ export function openReprintModal(ticket) {
     title: ticket.secondWeight
       ? `Reprint certificate #${ticket.id}?`
       : `Reprint first-weigh slip #${ticket.id}?`,
-    metaHtml: `${ticket.truckNo || ''} — ${ticket.material || 'Material'}${ticket.secondWeight ? '' : '<br><strong>First weight only</strong> — first-weigh slip will be printed'}`,
+    meta: `${ticket.truckNo || ''} — ${ticket.material || 'Material'}${ticket.secondWeight ? '' : '\nFirst weight only — first-weigh slip will be printed'}`,
     prompt: 'Reason for reprint:',
     reasons: ['Customer requested copy', 'Original lost', 'Bad print quality', 'Other'],
     confirmLabel: 'Print Copy',

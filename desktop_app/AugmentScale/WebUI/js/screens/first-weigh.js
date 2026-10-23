@@ -19,10 +19,11 @@ import {
   peekNextTicketId,
   consumeTicketId,
   commitFirstWeigh,
+  captureReading,
 } from '../state.js';
 import { IS_PRODUCTION } from '../runtime.js';
 import { showScreen } from '../router.js';
-import { formatDateTime12H, formatElapsed } from '../utils.js';
+import { escapeHtml, formatDateTime12H, formatElapsed } from '../utils.js';
 import hapticAudio from '../audio.js';
 import { showToast } from '../toast.js';
 import { mountHud } from '../hud.js';
@@ -727,6 +728,7 @@ export function doCaptureFirstWeigh() {
     second: '2-digit',
   });
   state.firstWeigh.capturedTimestamp = formatDateTime12H(new Date());
+  captureReading();
 
   if (hapticAudio) hapticAudio.playCapture();
 
@@ -862,7 +864,7 @@ function renderTruckSuggestions(suggestions, container) {
       (s, index) => `
       <div class="fw-suggestion-item ${index === selectedSuggestionIndex ? 'selected' : ''}" data-index="${index}">
         <div class="fw-suggestion-main">
-          <span class="fw-suggestion-plate">${s.plate}</span>
+          <span class="fw-suggestion-plate">${escapeHtml(s.plate)}</span>
           ${
             s.hasOpenTicket
               ? `<span class="fw-suggestion-badge" style="color: #d97706; background: rgba(245, 158, 11, 0.12);">OPEN #${s.openTicketId}</span>`
@@ -870,7 +872,7 @@ function renderTruckSuggestions(suggestions, container) {
           }
         </div>
         <div class="fw-suggestion-sub">
-          ${[s.driver, s.client].filter(Boolean).join(' • ')}
+          ${[s.driver, s.client].filter(Boolean).map(escapeHtml).join(' • ')}
         </div>
       </div>
     `

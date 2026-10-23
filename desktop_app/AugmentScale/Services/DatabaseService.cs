@@ -40,7 +40,10 @@ public sealed class DatabaseService
     private readonly ConfigService _config;
     private readonly AuditService _audit;
     private readonly object _initGate = new();
+    private readonly object _healthGate = new();
     private bool _initialized;
+    private bool _healthPruned;
+    private SqliteConnection? _healthConnection;
 
     private string _organizationId = string.Empty;
     private string _siteId = string.Empty;
@@ -1036,7 +1039,7 @@ public sealed class DatabaseService
             ("$gross", gross), ("$tare", tare), ("$net", net),
             ("$overridden", req.Override is null ? 0 : 1),
             ("$overrideReason", (object?)req.Override?.Reason ?? DBNull.Value),
-            ("$overrideOpId", (object?)req.Override?.Operator ?? DBNull.Value),
+            ("$overrideOpId", req.Override is null ? DBNull.Value : (object)OperatorId(req.OperatorId)),
             ("$overrideOpName", (object?)req.Override?.Operator ?? DBNull.Value),
             ("$overrideDetails", (object?)overrideJson ?? DBNull.Value),
             ("$overrideAt", req.Override is null ? DBNull.Value : overrideAt.ToString("O")),
@@ -1207,42 +1210,6 @@ public sealed class DatabaseService
         return (updated, nextCopy);
     }
 
-    public PrintJobRecord RecordPrintJob(long ticketNumber, string? documentType, string operatorId,
-        string operatorName, string? reason = null)
-    {
-        EnsureInitialized();
-        using var connection = OpenConnection();
-        using var txn = connection.BeginTransaction();
-        var ticket = GetTicketByNumber(connection, txn, ticketNumber)
-            ?? throw new InvalidOperationException($"Ticket #{ticketNumber} was not found.");
-        var type = documentType is "first_weigh_slip" or "weighbridge_certificate"
-            ? documentType
-            : ticket.Status is "completed" or "voided" ? "weighbridge_certificate" : "first_weigh_slip";
-
-        int copy;
-        using (var cmd = connection.CreateCommand())
-        {
-            cmd.Transaction = txn;
-            cmd.CommandText = """
-                SELECT COALESCE(MAX(copy_number), 0) + 1 FROM print_jobs
-                WHERE ticket_id = $ticket AND document_type = $type;
-                """;
-            cmd.Parameters.AddWithValue("$ticket", ticket.Uuid);
-            cmd.Parameters.AddWithValue("$type", type);
-            copy = Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
-        }
-
-        var jobId = InsertPrintJob(connection, txn, ticket.Uuid, type, copy, copy > 1,
-            copy > 1 ? reason : null, operatorId, DateTimeOffset.Now);
-        var name = ResolveOperatorName(connection, txn, operatorId, operatorName);
-        _audit.InsertMutation(connection, txn, _organizationId, _workstationId,
-            "print_jobs", jobId, "print", operatorId, name,
-            new { ticketId = ticketNumber, documentType = type, copyNumber = copy, reason },
-            reason: reason);
-        txn.Commit();
-        return new PrintJobRecord(jobId, type, copy);
-    }
-
     public SyncStatusDto GetSyncStatus()
     {
         EnsureInitialized();
@@ -1273,22 +1240,36 @@ public sealed class DatabaseService
     public void RecordScaleHealth(string eventType, string details, DateTimeOffset? at = null)
     {
         EnsureInitialized();
-        using var connection = OpenConnection();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO scale_health_events (
-                id, organization_id, workstation_id, weighbridge_id,
-                event_type, details, occurred_at
-            ) VALUES ($id, $org, $ws, $wb, $type, $details, $at);
-            """;
-        cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-        cmd.Parameters.AddWithValue("$org", _organizationId);
-        cmd.Parameters.AddWithValue("$ws", _workstationId);
-        cmd.Parameters.AddWithValue("$wb", _weighbridgeId);
-        cmd.Parameters.AddWithValue("$type", eventType);
-        cmd.Parameters.AddWithValue("$details", details);
-        cmd.Parameters.AddWithValue("$at", (at ?? DateTimeOffset.Now).ToString("O"));
-        cmd.ExecuteNonQuery();
+        lock (_healthGate)
+        {
+            _healthConnection ??= OpenConnection();
+            if (!_healthPruned)
+            {
+                _healthPruned = true;
+                using var prune = _healthConnection.CreateCommand();
+                prune.CommandText = """
+                    DELETE FROM scale_health_events
+                    WHERE julianday(occurred_at) < julianday('now', '-30 days');
+                    """;
+                try { prune.ExecuteNonQuery(); } catch (SqliteException) { }
+            }
+
+            using var cmd = _healthConnection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO scale_health_events (
+                    id, organization_id, workstation_id, weighbridge_id,
+                    event_type, details, occurred_at
+                ) VALUES ($id, $org, $ws, $wb, $type, $details, $at);
+                """;
+            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            cmd.Parameters.AddWithValue("$org", _organizationId);
+            cmd.Parameters.AddWithValue("$ws", _workstationId);
+            cmd.Parameters.AddWithValue("$wb", _weighbridgeId);
+            cmd.Parameters.AddWithValue("$type", eventType);
+            cmd.Parameters.AddWithValue("$details", details);
+            cmd.Parameters.AddWithValue("$at", (at ?? DateTimeOffset.Now).ToString("O"));
+            cmd.ExecuteNonQuery();
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -1844,5 +1825,3 @@ public sealed class DatabaseService
         public string Status => Dto.Status;
     }
 }
-
-public sealed record PrintJobRecord(string Id, string DocumentType, int CopyNumber);
