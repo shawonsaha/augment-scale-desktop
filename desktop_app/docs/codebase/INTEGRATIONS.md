@@ -8,11 +8,11 @@
 |--------|---------------------------|---------|------------|-------------|------------------|----------|
 | Yaohua XK3190-D10 Indicator | Inbound hardware serial (RS-232) or TCP | Continuous live weight streaming (~15 fps) at 9600 baud for display, capture, and ticket weights | None (direct serial/TCP stream) | High | Reader catches port errors, marks the scale disconnected, retries every 3 s; UI shows a yellow status indicator and "Scale disconnected" toast, preserves captured readings, and remains usable with manual entry fallback | `AugmentScale/Services/ScaleReaderService.cs:65-123`, `AugmentScale/Resources/setup.json:18-27` |
 | Development scale simulator | Inbound TCP loopback (`TCP:127.0.0.1:9876`) | Emits synthetic XK3190 frames for development | None (loopback only) | Low (dev only) | Same reader/reconnect path; the server accepts one client at a time | `AugmentScale.ScaleSimulator/Networking/TcpFrameServer.cs`, `start-dev-sim.ps1` |
-| SQLCipher 4 / SQLite | Embedded database engine (local file I/O) | Encrypted local transactional persistence and system of record | 256-bit random database key (SQLCipher AES-256) supplied via connection string | High | Startup fails with an actionable error if the database cannot be unlocked; no automatic data loss | `AugmentScale/Services/DatabaseService.cs:126-140`, `AugmentScale/AugmentScale.csproj:26`, `ConfigService.cs:211-221` |
+| SQLCipher 4 / SQLite | Embedded database engine (local file I/O) | Encrypted local transactional persistence and system of record | 256-bit random database key (SQLCipher AES-256) supplied via connection string | High | Startup fails with an actionable error if the database cannot be unlocked; no automatic data loss | `AugmentScale/Data/DatabaseContext.cs` (`OpenConnection`), `AugmentScale/AugmentScale.csproj:26`, `ConfigService.cs:211-221` |
 | Microsoft Edge WebView2 | Embedded browser runtime | Chromium rendering engine for the HTML/CSS/JS interface and postMessage bridge | Local virtual host `app.augmentscale.local`; permission requests denied; new windows blocked | High | Missing runtime or navigation failure shows a WPF error/retry overlay | `AugmentScale/MainWindow.xaml.cs:64-113` |
 | Windows DPAPI | Operating-system security API | Hardware/user-bound encryption for the database key and PIN hashes | Windows `CurrentUser` scope plus app entropy `AugmentScale.Secrets.v1` | High | Unreadable secrets with an existing database throws; recovery requires restoring `secrets.dat` | `AugmentScale/Services/ConfigService.cs:17`, `:185-267` |
 | Windows Print System | Native OS subsystem / outbound browser print | First-weigh slips, second-weigh slips, and weight certificates | OS user printer permissions | Medium | Uses the browser print dialog; cancel leaves the ticket state unchanged. A `showSystemPrintDialog` bridge command calling WebView2 `ShowPrintUI` exists but has no WebUI caller | `AugmentScale/Services/BridgeService.cs:315-331`, `WebUI/js/print.js:368-411`, `USER_MANUAL.md:17` |
-| Cloud Sync / Supabase | Planned outbound REST/PostgREST cloud sync (Phase 2) | Upload `outbox_events` in a future release | Not implemented; no URL, key, or HTTP client exists; future JWT / device key `[TODO]` | Low (Phase 2) | Outbox rows accumulate locally; production UI reports "Local only" | `USER_MANUAL.md:21`, `V001_InitialSchema.sql:328-346`, `DatabaseService.cs:1630-1652`, `WebUI/js/sync.js:92-111` |
+| Cloud Sync / Supabase | Planned outbound REST/PostgREST cloud sync (Phase 2) | Upload `outbox_events` in a future release | Not implemented; no URL, key, or HTTP client exists; future JWT / device key `[TODO]` | Low (Phase 2) | Outbox rows accumulate locally; production UI reports "Local only" | `USER_MANUAL.md:21`, `V001_InitialSchema.sql:328-346`, `Data/Services/SyncStatusService.cs`, `WebUI/js/sync.js:92-111` |
 | Application log files | Local file append | Startup, scale, and unhandled-error diagnostics | OS file ACLs | Medium | Logging swallows file-write failures; the app continues | `AugmentScale/Services/AppLog.cs:7-53` |
 | Single-instance mutex | OS kernel object | Prevent two app instances per session from sharing the database | Windows named mutex `Local\AugmentScale.SingleInstance` | Medium | Second instance shows a message and exits | `AugmentScale/App.xaml.cs:21-31` |
 
@@ -22,7 +22,7 @@ No HTTP APIs, message queues, email/SMS, payment, identity-provider, API gateway
 
 | Store | Role | What is stored | Access layer / format | Key risk | Evidence |
 |-------|------|----------------|-----------------------|----------|----------|
-| SQLite with SQLCipher 4 (`augment-scale.db`) | Primary local system of record | Organization/site/weighbridge/workstation, scale profiles, profiles/roles, vehicles, customers, products, drivers, weigh tickets, captures, corrections, print jobs, audit events, sync outbox/cursors, and scale health | `Microsoft.Data.Sqlite` in `DatabaseService.cs`; UUID strings for entities, integer ticket numbers starting at 11353, ISO-8601 `"O"` timestamp strings | Accidental external write bypassing transaction/audit rules; loss of the DPAPI key renders the database unreadable; no built-in backup | `AugmentScale/Services/DatabaseService.cs`, `Data/Schema/V001_InitialSchema.sql`, `DatabaseService.cs:36-38`, `OPEN_RAW_DB.md` |
+| SQLite with SQLCipher 4 (`augment-scale.db`) | Primary local system of record | Organization/site/weighbridge/workstation, scale profiles, profiles/roles, vehicles, customers, products, drivers, weigh tickets, captures, corrections, print jobs, audit events, sync outbox/cursors, and scale health | `Microsoft.Data.Sqlite` in `Data/DatabaseContext.cs`, `Data/Repositories/`, and `Data/Services/`; UUID strings for entities, integer ticket numbers starting at 11353, ISO-8601 `"O"` timestamp strings | Accidental external write bypassing transaction/audit rules; loss of the DPAPI key renders the database unreadable; no built-in backup | `AugmentScale/Data/`, `Data/Schema/V001_InitialSchema.sql`, `Data/Repositories/TicketRepository.cs` (ticket-number constants), `OPEN_RAW_DB.md` |
 | DPAPI secret file (`secrets.dat`) | Credential store | Base64 SQLCipher database key and per-profile PBKDF2 PIN hashes | DPAPI-protected JSON using `System.Security.Cryptography.ProtectedData`; atomic replace via `secrets.dat.tmp` | DPAPI is user-bound; file deletion or corruption causes permanent loss of the database passphrase; no rotation/recovery workflow | `AugmentScale/Services/ConfigService.cs:17-42`, `:185-267`, `OPEN_RAW_DB.md:151-177` |
 | Local JSON configuration (`setup.json`) | Bootstrap configuration | Organization, site, weighbridge, scale connection, and bootstrap operator list | `System.Text.Json` in `ConfigService.cs`; copied from `Resources/setup.json` on first run; bootstrap `pin` fields are removed after hashing | Incorrect COM port or connection configuration breaks the scale reader; defaults include demo business data and PIN `1234` | `AugmentScale/Services/ConfigService.cs:61-70`, `:163-183`, `:229-257`, `Resources/setup.json` |
 | `logs/app-YYYYMMDD.log` | Diagnostics | Startup, scale, and unhandled-exception messages | Plain text, one event per line with timestamp and level | Deleted after 30 days; no shipping or alerting | `AugmentScale/Services/AppLog.cs:24-53` |
@@ -58,14 +58,14 @@ No HTTP APIs, message queues, email/SMS, payment, identity-provider, API gateway
   - Malformed or checksum-invalid frames are counted and dropped. Stable readings require at least 3 samples over the configured 500 ms window within 10 kg (`AugmentScale.Protocol/StabilityDetector.cs`, `ScaleReaderService.cs:142-198`).
   - On disconnect, the WebUI shows a yellow status indicator and a toast; captured readings are preserved and manual entry remains available.
 - Persistence:
-  - SQLite is opened with foreign keys on and a 5-second busy timeout (`DatabaseService.cs:138`).
-  - Mutations use explicit transactions; audit and outbox writes share the transaction, so a failed mutation does not leave a misleading audit row (`AuditService.cs:8-10`, `DatabaseService.cs:1318-1368`).
+  - SQLite is opened with foreign keys on and a 5-second busy timeout (`Data/DatabaseContext.cs` (`OpenConnection`)).
+  - Mutations use explicit transactions; audit and outbox writes share the transaction, so a failed mutation does not leave a misleading audit row (`AuditService.cs:8-10`, `Data/Repositories/TicketRepository.cs` (`CreateTicket`), `Data/DatabaseContext.cs` (`InsertOutbox`)).
   - No write-ahead/backup/restore automation is built into the app; the operator manual documents copying the data directory and the dev launcher supports `-BackupDatabase`.
 - Bridge/UI:
   - Each command has a 30-second JavaScript timeout and rejects the caller on failure (`runtime.js:47-69`).
   - `BridgeService` catches exceptions so a single command failure does not crash the host (`BridgeService.cs:96-108`).
 - Cloud:
-  - No retry, backoff, or delivery worker exists. Outbox events remain in SQLCipher indefinitely until a future Phase 2 consumer is built (`DatabaseService.cs:2176-2200`).
+  - No retry, backoff, or delivery worker exists. Outbox events remain in SQLCipher indefinitely until a future Phase 2 consumer is built (`Data/DatabaseContext.cs` (`InsertOutbox`)).
 - Single workstation:
   - The process mutex prevents concurrent instances; there is no multi-user or multi-workstation locking beyond SQLite transactions (`App.xaml.cs:21-31`).
 
@@ -74,8 +74,8 @@ No HTTP APIs, message queues, email/SMS, payment, identity-provider, API gateway
 - Logging around external calls: serial connection lifecycle, WebView2 startup, and port errors are logged to `AppLog.cs` and recorded in the `scale_health_events` database table (`ScaleReaderService.cs:86`).
 - Application log: rolling daily text logs with `INFO`/`ERROR`, including unhandled exceptions and stack traces (`AppLog.cs:20-35`).
 - Audit trail: `audit_events` captures before/after JSON, actor, workstation, reason, and timestamp in the same transaction as the mutation (`AuditService.cs:18-75`).
-- Outbox: `outbox_events` records entity changes for future sync; `GetSyncStatus` counts pending rows and reads the latest `sync_cursors` timestamp (`DatabaseService.cs:1630-1652`).
-- Scale health: `scale_health_events` records connection, port-error, and frame-validation events; pruned to 30 days on the first write per process (`DatabaseService.cs:1655-1679`).
+- Outbox: `outbox_events` records entity changes for future sync; `GetSyncStatus` counts pending rows and reads the latest `sync_cursors` timestamp (`Data/Services/SyncStatusService.cs`).
+- Scale health: `scale_health_events` records connection, port-error, and frame-validation events; pruned to 30 days on the first write per process (`Data/Services/ScaleHealthService.cs`).
 - Metrics/tracing coverage: none configured.
 - Missing visibility gaps: no metrics, distributed tracing, structured JSON logging, log shipping, health endpoint, alerting, or correlation ID beyond the per-command `requestId` in `runtime.js`. No remote telemetry or cloud/network telemetry exists in Phase 1 (local offline deployment).
 
@@ -83,6 +83,7 @@ No HTTP APIs, message queues, email/SMS, payment, identity-provider, API gateway
 
 - `AugmentScale/Services/ScaleReaderService.cs`
 - `AugmentScale/Services/DatabaseService.cs`
+- `AugmentScale/Data/`
 - `AugmentScale/Services/ConfigService.cs`
 - `AugmentScale/Services/AuditService.cs`
 - `AugmentScale/Services/AppLog.cs`

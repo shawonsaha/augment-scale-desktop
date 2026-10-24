@@ -5,12 +5,34 @@ AugmentScale\App.xaml
 AugmentScale\App.xaml.cs
 AugmentScale\AugmentScale.csproj
 AugmentScale\Data
+AugmentScale\Data\DatabaseContext.cs
+AugmentScale\Data\JsonDefaults.cs
+AugmentScale\Data\Provisioner.cs
+AugmentScale\Data\Repositories
+AugmentScale\Data\Repositories\IOperatorRepository.cs
+AugmentScale\Data\Repositories\ITicketRepository.cs
+AugmentScale\Data\Repositories\IVehicleRepository.cs
+AugmentScale\Data\Repositories\OperatorRepository.cs
+AugmentScale\Data\Repositories\TicketRepository.cs
+AugmentScale\Data\Repositories\VehicleRepository.cs
 AugmentScale\Data\Schema
 AugmentScale\Data\Schema\V001_InitialSchema.sql
+AugmentScale\Data\SchemaMigrator.cs
+AugmentScale\Data\Services
+AugmentScale\Data\Services\BootStateService.cs
+AugmentScale\Data\Services\HistoryReportService.cs
+AugmentScale\Data\Services\IBootStateService.cs
+AugmentScale\Data\Services\IReportService.cs
+AugmentScale\Data\Services\IScaleHealthService.cs
+AugmentScale\Data\Services\ISyncStatusService.cs
+AugmentScale\Data\Services\ScaleHealthService.cs
+AugmentScale\Data\Services\SyncStatusService.cs
+AugmentScale\Data\SqliteHelpers.cs
 AugmentScale\MainWindow.xaml
 AugmentScale\MainWindow.xaml.cs
 AugmentScale\Models
 AugmentScale\Models\AuditEvent.cs
+AugmentScale\Models\BootStateDto.cs
 AugmentScale\Models\Commands
 AugmentScale\Models\Commands\CommandEnvelope.cs
 AugmentScale\Models\Commands\ProfileCommands.cs
@@ -197,12 +219,12 @@ f35d0e5 Fix WebView2 focus loss on window activation
 No monorepo signals detected.
 
 === CODE METRICS ===
-Total files scanned: 118
-Total lines of code: 17934
+Total files scanned: 145
+Total lines of code: 18036 (code/config lines; CSS, HTML, Markdown, and font binaries excluded)
 
 Files by language:
-  Other: 56
-  C#: 33
+  Other: 63
+  C#: 53
   JavaScript: 29
 
 Top 10 largest files:
@@ -214,8 +236,13 @@ AugmentScale\WebUI\css\fonts\jetbrains-mono-500.ttf: 109.6KB
 AugmentScale\WebUI\css\fonts\jetbrains-mono-600.ttf: 109.5KB
 AugmentScale\WebUI\css\fonts\jetbrains-mono-700.ttf: 109.5KB
 AugmentScale\WebUI\css\fonts\jetbrains-mono-800.ttf: 109.5KB
-AugmentScale\Services\DatabaseService.cs: 102.0KB
 AugmentScale\WebUI\avatars\frame-3.svg: 73.3KB
+AugmentScale\WebUI\avatars\frame-4.svg: 73.1KB
+
+Largest C#/JS source: AugmentScale\WebUI\js\screens\first-weigh.js: 58.1KB,
+AugmentScale\WebUI\js\screens\history.js: 45.5KB,
+AugmentScale\Data\Repositories\TicketRepository.cs: 37.5KB,
+AugmentScale.Tests\DatabaseTests.cs: 30.0KB.
 
 === CI/CD PIPELINES ===
 No CI/CD pipelines detected.

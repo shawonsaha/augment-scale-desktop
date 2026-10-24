@@ -7,9 +7,9 @@
 | Path | Purpose | Evidence |
 |------|---------|----------|
 | `AugmentScale/` | Main WPF host application project: lifecycle, window, services, models, schema, resources, and the embedded WebUI | `AugmentScale/AugmentScale.csproj`, `AugmentScale/App.xaml.cs` |
-| `AugmentScale/Services/` | Core backend services: serial scale reader, SQLCipher database, bridge IPC, DPAPI config, audit logging, file logging | `AugmentScale/Services/` |
-| `AugmentScale/Models/` | C# record models, DTOs, setup/secrets models, and command request/response contracts | `AugmentScale/Models/` |
-| `AugmentScale/Data/Schema/` | Embedded SQL database migration scripts (`V001_InitialSchema.sql`) | `AugmentScale/Data/Schema/` |
+| `AugmentScale/Services/` | Core backend services: serial scale reader, thin `DatabaseService` facade, bridge IPC, DPAPI config, audit logging, file logging | `AugmentScale/Services/` |
+| `AugmentScale/Models/` | C# record models, DTOs (including `BootStateDto`), setup/secrets models, and command request/response contracts | `AugmentScale/Models/` |
+| `AugmentScale/Data/` | Persistence infrastructure: `DatabaseContext`, `SchemaMigrator`, `Provisioner`, SQLite helpers, domain repositories, and domain services; `Data/Schema/` holds embedded SQL migrations (`V001_InitialSchema.sql`) | `AugmentScale/Data/` |
 | `AugmentScale/Resources/` | Default bootstrap configuration template (`setup.json`) | `AugmentScale/Resources/setup.json` |
 | `AugmentScale/WebUI/` | HTML, CSS, JavaScript (native ES modules), SVGs, partials, and font assets loaded in WebView2 | `AugmentScale/WebUI/index.html` |
 | `AugmentScale.Protocol/` | Standalone class library for XK3190-D10 continuous framing, XOR checksum, encoding/decoding, and stability detection | `AugmentScale.Protocol/AugmentScale.Protocol.csproj`, `Xk3190FrameSplitter.cs`, `StabilityDetector.cs` |
@@ -27,7 +27,7 @@
 
 - **Main runtime entry:** `AugmentScale/App.xaml.cs` (`App.OnStartup`, `:17-87`) acquires the single-instance mutex, initializes `ConfigService`, constructs `DatabaseService`, `ScaleReaderService`, and `BridgeService`, shows `MainWindow`, then calls `DatabaseService.EnsureInitialized()` so the splash can paint while SQLCipher opens. `App.xaml` does not declare a `StartupUri`; the window is created explicitly.
 - **UI boot entry:** `AugmentScale/MainWindow.xaml.cs` (`OnLoaded`, `:60-113`) verifies the WebView2 runtime, maps the virtual host `app.augmentscale.local` to the `WebUI` folder, attaches `BridgeService`, and navigates to `https://app.augmentscale.local/index.html`. The scale reader starts only after navigation succeeds (`:115-132`).
-- **Web entry:** `AugmentScale/WebUI/index.html` loads `js/main.js` as a module (`:55`); `main.js` runs `bootstrap()` after `DOMContentLoaded` (`:25-76`). `loadProductionData()` calls `getBootState`, which returns operators, vehicles, pending tickets, up to 1,000 history tickets, next ticket number, and sync status (`WebUI/js/main.js:25-57`, `WebUI/js/state.js:485-509`, `DatabaseService.cs:987-1001`).
+- **Web entry:** `AugmentScale/WebUI/index.html` loads `js/main.js` as a module (`:55`); `main.js` runs `bootstrap()` after `DOMContentLoaded` (`:25-76`). `loadProductionData()` calls `getBootState`, which returns operators, vehicles, pending tickets, up to 1,000 history tickets, next ticket number, and sync status (`WebUI/js/main.js:25-57`, `WebUI/js/state.js:485-509`, `Data/Services/BootStateService.cs`).
 - **Secondary entry points:**
   - CLI PIN reset: `AugmentScale.exe --reset-pin <operator-id>` opens a WPF PIN-reset dialog, then exits (`App.xaml.cs:42-55`, `:108-195`).
   - Development simulator entry: `AugmentScale.ScaleSimulator/App.xaml.cs` and `MainWindow.xaml.cs` boot the simulator GUI.
@@ -40,7 +40,7 @@
 |----------|-------------------|------------------------|
 | App shell (`App.xaml.cs`, `MainWindow.xaml.cs`) | Process lifecycle, single-instance guard, WebView2 initialization, window/fullscreen handling, loading overlay, fatal-error display | SQL, serial I/O, business rules |
 | Configuration/secrets (`AugmentScale/Services/ConfigService.cs`) | Data-directory selection, `setup.json`, DPAPI-protected `secrets.dat`, PBKDF2 PIN hashes, paths resolution | Ticket, vehicle, or UI business rules |
-| Persistence (`AugmentScale/Services/DatabaseService.cs`, `AuditService.cs`) | Schema migration, provisioning, profiles, vehicles, ticket lifecycle, history/report queries, outbox/audit writes, scale health | UI state, DOM rendering, serial byte parsing |
+| Persistence (`AugmentScale/Services/DatabaseService.cs`, `AugmentScale/Data/`, `AuditService.cs`) | Schema migration, provisioning, profiles, vehicles, ticket lifecycle, history/report queries, outbox/audit writes, scale health | UI state, DOM rendering, serial byte parsing |
 | Models and commands (`AugmentScale/Models/`) | Immutable DTOs, domain models, setup/secrets models, command payloads, request/response envelopes | Persistence SQL, database queries, WebView2 calls, business-logic mutations |
 | Protocol (`AugmentScale.Protocol/`) | Frame byte splitting, XOR checksum validation, frame decoding/encoding, stability variance math | UI elements, database connections, serial port OS handles |
 | Scale transport (`AugmentScale/Services/ScaleReaderService.cs`) | COM port lifecycle, TCP socket client, reconnect loop, raw byte stream pump, status messages | Ticket persistence, business validations, UI layout |
@@ -58,7 +58,7 @@
   - HTML screen partials: `screen-` prefix (`partials/screen-history.html`); modals are grouped in `partials/modals.html`.
   - Database migrations: `V###_Description.sql` (`V001_InitialSchema.sql`).
 - Directory organization pattern:
-  - C# backend: layer-based (`Services/`, `Models/`, `Models/Commands/`, `Data/Schema/`, `Resources/`).
+  - C# backend: layer-based (`Services/`, `Models/`, `Models/Commands/`, `Data/`, `Data/Repositories/`, `Data/Services/`, `Data/Schema/`, `Resources/`).
   - WebUI frontend: screen/feature-based (`WebUI/js/screens/*.js`, `WebUI/partials/screen-*.html`, shared modules in `WebUI/js/*.js`, CSS in `WebUI/css/`).
 - Import aliasing or path conventions:
   - C# uses file-scoped namespaces (`namespace AugmentScale.Services;`) and implicit global usings; no path aliases.
@@ -76,6 +76,7 @@
 - `AugmentScale/WebUI/js/main.js`
 - `AugmentScale/WebUI/js/html-loader.js`
 - `AugmentScale/Services/`
+- `AugmentScale/Data/`
 - `AugmentScale/Models/`
 - `AugmentScale.Protocol/`
 - `AugmentScale.ScaleSimulator/`

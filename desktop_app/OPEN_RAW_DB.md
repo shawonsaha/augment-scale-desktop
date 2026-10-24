@@ -45,7 +45,7 @@ augment-scale.db
 It is a SQLite database encrypted with SQLCipher. The application uses
 `Microsoft.Data.Sqlite` together with `SQLitePCLRaw.bundle_e_sqlcipher`
 (`AugmentScale/AugmentScale.csproj:25-26`) and supplies a random key through
-`SqliteConnectionStringBuilder.Password` (`AugmentScale/Services/DatabaseService.cs:77-91`).
+`SqliteConnectionStringBuilder.Password` in `AugmentScale/Data/DatabaseContext.cs` (`OpenConnection`).
 
 The file header is encrypted, so the first bytes do **not** contain the usual
 `SQLite format 3` signature. That is expected. A raw hex dump or a normal SQLite
@@ -808,8 +808,9 @@ SELECT COUNT(*) FROM weigh_tickets;
 
 - `AugmentScale/Services/ConfigService.cs` - data directory, `secrets.dat`, DPAPI,
   key generation, database path.
-- `AugmentScale/Services/DatabaseService.cs` - SQLCipher connection and schema
-  migrations.
+- `AugmentScale/Data/DatabaseContext.cs` - SQLCipher connection and database key
+  handling.
+- `AugmentScale/Data/SchemaMigrator.cs` - schema migrations.
 - `AugmentScale/AugmentScale.csproj` - `Microsoft.Data.Sqlite` and
   `SQLitePCLRaw.bundle_e_sqlcipher` package references.
 - `AugmentScale/Data/Schema/V001_InitialSchema.sql` - table definitions.

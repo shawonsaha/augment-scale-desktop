@@ -16,8 +16,8 @@
 | Dependency | Version | Role in system | Evidence |
 |------------|---------|----------------|----------|
 | `Microsoft.Web.WebView2` | 1.0.4258.31 | Embedded Chromium web host for the local HTML/CSS/JS interface; provides the postMessage RPC channel | `AugmentScale/AugmentScale.csproj:24`, `AugmentScale/MainWindow.xaml.cs:75-98` |
-| `Microsoft.Data.Sqlite.Core` | 10.0.2 | SQLite ADO.NET database provider | `AugmentScale/AugmentScale.csproj:25`, `AugmentScale/Services/DatabaseService.cs:126-140` |
-| `SQLitePCLRaw.bundle_e_sqlcipher` | 2.1.11 | SQLCipher 4 native provider for AES-256 database encryption at rest | `AugmentScale/AugmentScale.csproj:26`, `AugmentScale/Services/DatabaseService.cs:74-78`, `DatabaseService.cs:133` |
+| `Microsoft.Data.Sqlite.Core` | 10.0.2 | SQLite ADO.NET database provider | `AugmentScale/AugmentScale.csproj:25`, `AugmentScale/Data/DatabaseContext.cs` (`OpenConnection`) |
+| `SQLitePCLRaw.bundle_e_sqlcipher` | 2.1.11 | SQLCipher 4 native provider for AES-256 database encryption at rest | `AugmentScale/AugmentScale.csproj:26`, `AugmentScale/Data/DatabaseContext.cs` (`SqliteInitialized`, `OpenConnection`) |
 | `System.IO.Ports` | 10.0.13 | Serial communications for the Yaohua XK3190-D10 RS-232 indicator; also used indirectly by the simulator's TCP transport | `AugmentScale/AugmentScale.csproj:27`, `AugmentScale/Services/ScaleReaderService.cs:100-123` |
 | WPF (`UseWPF=true`) | .NET 10 in-box | Native Windows window shell, single-instance mutex, system dialogs, fullscreen/F11 handling, and loading overlay | `AugmentScale/AugmentScale.csproj:5`, `AugmentScale/MainWindow.xaml`, `AugmentScale/App.xaml.cs:108-195` |
 | `System.Text.Json` | .NET 10 in-box | WebView2 command/response serialization, setup/secrets files, and outbox payloads | `AugmentScale/Services/BridgeService.cs:14-18`, `AugmentScale/Services/ConfigService.cs:23-28` |
@@ -79,7 +79,7 @@ Self-contained publish:
 dotnet publish AugmentScale\AugmentScale.csproj -c Release -r win-x64 --self-contained true -o ".\publish\win-x64-selfcontained"
 ```
 
-There is no lint command. A full run on 2026-10-24 produced `Passed: 77, Failed: 0, Total: 77` in 54 seconds; another documented run of the same suite took approximately 63 seconds. Evidence: `USER_MANUAL.md:90-119` and the test command above.
+There is no lint command. A full run on 2026-10-24 after the persistence refactor produced `Passed: 77, Failed: 0, Total: 77` in roughly 26–34 seconds across post-refactor runs (29 seconds before the refactor). Evidence: `USER_MANUAL.md:90-119` and the test command above.
 
 ### 5) Environment and Config
 
@@ -111,6 +111,7 @@ There is no lint command. A full run on 2026-10-24 produced `Passed: 77, Failed:
 - `AugmentScale.slnx`
 - `AugmentScale/Resources/setup.json`
 - `AugmentScale/Services/ConfigService.cs`
+- `AugmentScale/Data/DatabaseContext.cs`
 - `AugmentScale/Services/AppLog.cs`
 - `USER_MANUAL.md`
 - `start-dev-sim.ps1`

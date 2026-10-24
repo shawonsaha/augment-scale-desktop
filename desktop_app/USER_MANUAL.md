@@ -73,8 +73,9 @@ prototype-to-production/
       AugmentScale.csproj         WPF application project
       App.xaml(.cs)               Startup, single-instance guard, crash logging
       MainWindow.xaml(.cs)        WebView2 host
-      Services/                   Config, database, scale, bridge, printing, logging
+      Services/                   Config, database facade, scale, bridge, printing, logging
       Models/                     DTOs and IPC command contracts
+      Data/                       Persistence context, repositories, domain services
       Data/Schema/                Embedded SQL migration scripts
       Resources/setup.json        Default bootstrap configuration
       WebUI/                      HTML/CSS/JS user interface and partials

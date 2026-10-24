@@ -7,10 +7,10 @@
 | Item | Rule | Example | Evidence |
 |------|------|---------|----------|
 | Files | C# PascalCase type names; WebUI JavaScript/HTML/CSS kebab-case; SQL migrations use a `V###_Description` prefix | `DatabaseService.cs`, `html-loader.js`, `screen-dashboard.html`, `V001_InitialSchema.sql` | `AugmentScale/Services/`, `AugmentScale/WebUI/`, `AugmentScale/Data/Schema/` |
-| Functions/methods | C# PascalCase; JavaScript camelCase | `EnsureInitialized()`, `initDashboard()`, `loadProductionData`, `renderRows` | `DatabaseService.cs:107`, `main.js:8`, `WebUI/js/state.js` |
+| Functions/methods | C# PascalCase; JavaScript camelCase | `EnsureInitialized()`, `initDashboard()`, `loadProductionData`, `renderRows` | `Data/DatabaseContext.cs` (`EnsureInitialized`), `main.js:8`, `WebUI/js/state.js` |
 | Types/interfaces | C# PascalCase; `sealed` for services/DTO helpers; `record` for immutable messages | `DatabaseService`, `TicketDto`, `CommandEnvelope`, `CreateTicketRequest` | `AugmentScale/Services/`, `AugmentScale/Models/` |
-| Variables/fields | C# private fields `_camelCase`, local variables `camelCase`; JavaScript `camelCase` | `_database`, `_organizationId`, `isStable`, `pendingTickets` | `BridgeService.cs:22`, `DatabaseService.cs:28-64`, `state.js:5` |
-| Constants/env vars | C# PascalCase; JavaScript `UPPER_SNAKE_CASE` or module-local uppercase | `FirstTicketNumber`, `ProfileAdminSessionLifetime`, `Iterations`, `IS_PRODUCTION`, `MAX_ATTEMPTS`, `PIN_LENGTH` | `DatabaseService.cs:36-38`, `BridgeService.cs:20`, `ConfigService.cs:15`, `runtime.js:9`, `pin-auth.js:10-11` |
+| Variables/fields | C# private fields `_camelCase`, local variables `camelCase`; JavaScript `camelCase` | `_database`, `_organizationId`, `isStable`, `pendingTickets` | `BridgeService.cs:22`, `Data/DatabaseContext.cs`, `state.js:5` |
+| Constants/env vars | C# PascalCase; JavaScript `UPPER_SNAKE_CASE` or module-local uppercase | `FirstTicketNumber`, `ProfileAdminSessionLifetime`, `Iterations`, `IS_PRODUCTION`, `MAX_ATTEMPTS`, `PIN_LENGTH` | `Data/Repositories/TicketRepository.cs`, `BridgeService.cs:20`, `ConfigService.cs:15`, `runtime.js:9`, `pin-auth.js:10-11` |
 | HTML | kebab-case IDs/classes; screen partials prefixed `screen-` | `screen-history`, `profile-pin-modal`, `sync-status-pill` | `WebUI/partials/`, `WebUI/index.html` |
 | CSS | kebab-case classes; screen-scoped files; shared custom properties in `tokens.css` | `.weigh-layout`, `.sync-popover`, `--color-bg` | `WebUI/css/` |
 | Test methods | `MethodOrFeature_Scenario_ExpectedResult` / `Method_Scenario_ExpectedBehavior` | `CreateTicket_NewPlate_AutoRegistersVehicle`, `Feed_PartialFrame_IsBufferedUntilCompleted`, `TicketLifecycle_CreateCompleteReprintVoid` | `AugmentScale.Tests/DatabaseTests.cs`, `ProtocolTests.cs` |
@@ -24,7 +24,7 @@
 - Most relevant enforced rules: `<Nullable>enable</Nullable>` and `<ImplicitUsings>enable</ImplicitUsings>` in the C# projects. `TreatWarningsAsErrors` is not explicitly enforced. All projects target Windows x64.
 - Run commands: there is no formatter or linter command. `dotnet build AugmentScale.slnx -c Debug` is the only static gate.
 - Observed formatting:
-  - C#: 4-space indentation, file-scoped namespaces, one type per file, XML doc comments on service classes and non-obvious methods (`DatabaseService.cs:11-17`, `AuditService.cs:8-10`).
+  - C#: 4-space indentation, file-scoped namespaces, one type per file, XML doc comments on service classes and non-obvious methods (`Services/DatabaseService.cs`, `AuditService.cs:8-10`).
   - JavaScript: 2-space indentation, single quotes, semicolons, trailing commas in multiline literals, JSDoc-style block comments at the top of larger modules (`state.js:1-8`, `sync.js:1-6`).
   - CSS: 2-space indentation and section comments.
 - Comment convention: explain intent or constraints, not syntax. The codebase uses explicit `shortcut:` markers for temporary tradeoffs (`AugmentScale.csproj:31`, `ScaleReaderService.cs:136`, `pin-auth.js:5`).
@@ -34,7 +34,8 @@
 - C#:
   - `using` directives at the top; `System.*` namespaces first, then third-party packages (`Microsoft.Web.WebView2`, `Microsoft.Data.Sqlite`), then internal project namespaces (`AugmentScale.Models`, `AugmentScale.Services`).
   - File-scoped namespace declarations (`namespace AugmentScale.Services;`).
-  - Constructor injection of collaborators; optional dependencies are nullable with defaults (`DatabaseService.cs:94`, `BridgeService.cs:28-48`).
+  - Constructor injection of collaborators; optional dependencies are nullable with defaults (`Services/DatabaseService.cs` constructor, `BridgeService.cs:28-48`).
+  - Persistence follows the domain split under `AugmentScale/Data/`: public interfaces, `internal sealed` implementations, one `DatabaseContext` per `DatabaseService`, and manual composition in the facade. New SQL belongs in the owning repository/service, not the facade.
   - No index/barrel files; types are imported directly.
   - `InternalsVisibleTo("AugmentScale.Tests")` is used for test seams and is marked as temporary (`AugmentScale.csproj:31-32`, `ScaleReaderService.cs:136`).
 - JavaScript:
@@ -51,13 +52,13 @@
 ### 4) Error and Logging Conventions
 
 - C# error handling:
-  - Expected business failures return result tuples such as `(bool Ok, string? Error)` instead of exceptions (`DatabaseService.cs:790`, `:870`).
+  - Expected business failures return result tuples such as `(bool Ok, string? Error)` instead of exceptions (`Data/Repositories/VehicleRepository.cs` (`ArchiveVehicle`, `DeleteVehicle`)).
   - Invalid state/data throws typed exceptions such as `InvalidOperationException`, `ArgumentException`, or `TimeoutException`.
   - `BridgeService` catches all exceptions, logs them, and returns `CommandResponse.Fail(ex.Message)` (`BridgeService.cs:96-108`). Raw exception messages therefore reach the UI and may include file paths or SQLite details.
   - Startup and unhandled exceptions are written through `AppLog.Error` and shown in a WPF `MessageBox` (`App.xaml.cs:76-84`, `:197-231`).
   - Global WPF handlers cover `DispatcherUnhandledException`, `AppDomain.CurrentDomain.UnhandledException`, and `TaskScheduler.UnobservedTaskException` (`App.xaml.cs:33-40`).
 - Logging style: no logging framework. `AppLog` is a minimal static rolling file logger (`AppLog.cs:7-53`) that writes `[yyyy-MM-dd HH:mm:ss.fff] [LEVEL] message` to `%LOCALAPPDATA%\AugmentScale\logs\app-YYYYMMDD.log` and deletes files older than 30 days. Levels used are `INFO` and `ERROR`.
-- Audit logging: business mutations call `AuditService.InsertMutation` inside the same SQLite transaction, then insert an `outbox_events` row. Audit rows store before/after JSON and an optional reason (`AuditService.cs:8-10`, `:18-75`; `DatabaseService.cs:912-916`).
+- Audit logging: business mutations call `AuditService.InsertMutation` inside the same SQLite transaction, then insert an `outbox_events` row via `DatabaseContext.InsertOutbox`. Audit rows store before/after JSON and an optional reason (`AuditService.cs:8-10`, `:18-75`; `Data/DatabaseContext.cs`).
 - JavaScript error handling:
   - `sendCommand` rejects on `success: false` or a 30-second timeout (`runtime.js:47-69`).
   - Screen handlers catch bridge errors and render a field-level error or toast; there is no global error boundary (`login.js:327-430`, `profiles.js:292-385`).
@@ -80,6 +81,7 @@
 - `AugmentScale/Services/AuditService.cs`
 - `AugmentScale/Services/BridgeService.cs:104-109`
 - `AugmentScale/Services/DatabaseService.cs`
+- `AugmentScale/Data/`
 - `AugmentScale/Services/ConfigService.cs`
 - `AugmentScale/WebUI/js/main.js`
 - `AugmentScale/WebUI/js/html-loader.js`

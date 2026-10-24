@@ -29,9 +29,9 @@ WPF App.OnStartup
 
 1. **Startup:** `App.OnStartup` acquires the single-instance mutex, initializes `ConfigService`, constructs the services, shows `MainWindow`, then calls `DatabaseService.EnsureInitialized()` so the splash can paint while SQLCipher opens (`App.xaml.cs:17-87`). The `--reset-pin` branch opens a WPF dialog and exits before normal startup (`App.xaml.cs:42-55`).
 2. **WebView2 boot:** `MainWindow.OnLoaded` checks the WebView2 runtime, maps `app.augmentscale.local` to the `WebUI` folder, attaches `BridgeService`, and navigates to `index.html` (`MainWindow.xaml.cs:60-98`). Permission requests are denied, new windows are blocked, and the scale reader starts only after navigation succeeds (`:92-93`, `:115-132`).
-3. **Boot payload:** `main.js` starts `loadProductionData()` and HTML partial loading concurrently. `loadProductionData()` calls `getBootState`, which returns operators, vehicles, pending tickets, up to 1,000 history tickets, the next ticket number, and sync status (`WebUI/js/main.js:25-57`, `WebUI/js/state.js:485-509`, `DatabaseService.cs:987-1001`).
+3. **Boot payload:** `main.js` starts `loadProductionData()` and HTML partial loading concurrently. `loadProductionData()` calls `getBootState`, which returns operators, vehicles, pending tickets, up to 1,000 history tickets, the next ticket number, and sync status (`WebUI/js/main.js:25-57`, `WebUI/js/state.js:485-509`, `Data/Services/BootStateService.cs`).
 4. **Operator action:** The WebUI calls `sendCommand` in `runtime.js` (for example `createTicket` or `completeTicket`), which posts `{command, payload, requestId}` through `window.chrome.webview.postMessage` to the WebView2 host and rejects after 30 seconds (`WebUI/js/runtime.js:47-69`).
-5. **Transactional mutation:** `BridgeService.HandleMessageAsync` deserializes the envelope, runs `DispatchAsync` on the thread pool, and posts a `commandResponse` back on the UI thread. `DatabaseService` executes ticket creation/completion, capture recording, audit append, and outbox staging in one explicit SQLite transaction (`BridgeService.cs:88-110`, `DatabaseService.cs:1318-1368`).
+5. **Transactional mutation:** `BridgeService.HandleMessageAsync` deserializes the envelope, runs `DispatchAsync` on the thread pool, and posts a `commandResponse` back on the UI thread. `DatabaseService` executes ticket creation/completion, capture recording, audit append, and outbox staging in one explicit SQLite transaction (`BridgeService.cs:88-110`, `Data/Repositories/TicketRepository.cs` (`CreateTicket`)).
 6. **Telemetry push and output:** The scale thread reads raw bytes via `SerialPort` or `TcpClient` with 500 ms read timeouts, splits XK3190 frames at STX/ETX boundaries, verifies the XOR checksum and sign/weight digits, and applies `StabilityDetector` (default 500 ms window, 10 kg tolerance, at least 3 samples). `BridgeService.OnReadingReceived` coalesces in-flight pushes and invokes `window.ScaleApp.onWeightData(...)` via `ExecuteScriptAsync` (`ScaleReaderService.cs:138-198`, `BridgeService.cs:355-374`). The UI updates state, shows a toast, renders the printable certificate preview, and requests system print through `window.print()`. A `showSystemPrintDialog` bridge command exists that would call WebView2 `ShowPrintUI`, but no WebUI code invokes it (see `CONCERNS.md`).
 
 ### 3) Layer/Module Responsibilities
@@ -40,7 +40,7 @@ WPF App.OnStartup
 |-----------------|------|--------------|----------|
 | WPF shell / app host | Process lifetime, single-instance mutex, WebView2 setup, fullscreen/F11, loading overlay, fatal-error display | SQL, scale parsing, ticket rules | `App.xaml.cs`, `MainWindow.xaml.cs` |
 | Configuration/secrets | Data-directory selection, `setup.json`, DPAPI-protected `secrets.dat`, PBKDF2 PIN hashes, paths resolution | Serial communication, ticket or vehicle business rules | `Services/ConfigService.cs` |
-| Persistence | Schema migrations, provisioning, profiles, vehicles, ticket lifecycle, history/report queries, outbox/audit writes, scale health, DTO mappings | UI state, DOM rendering, WPF controls, serial byte parsing | `Services/DatabaseService.cs`, `Services/AuditService.cs` |
+| Persistence | Schema migrations, provisioning, profiles, vehicles, ticket lifecycle, history/report queries, outbox/audit writes, scale health, DTO mappings | UI state, DOM rendering, WPF controls, serial byte parsing | `Services/DatabaseService.cs` (facade), `Data/DatabaseContext.cs`, `Data/Repositories/`, `Data/Services/`, `Services/AuditService.cs` |
 | `AugmentScale.Protocol` | Frame boundary splitting, XOR checksum calculation, numeric parsing, frame encoding, stability rolling-window variance | UI rendering, file I/O, database tables, COM port handles | `AugmentScale.Protocol/Xk3190FrameDecoder.cs`, `Xk3190FrameEncoder.cs`, `Xk3190FrameSplitter.cs`, `StabilityDetector.cs` |
 | Scale transport | COM port lifecycle, TCP socket client, reconnection loop (3 s backoff), raw byte stream pump, status messages | Business validations, ticket numbering, SQL queries, UI layout | `Services/ScaleReaderService.cs` |
 | Bridge | WebView2 message deserialization, command validation/routing, JSON serialization, UI thread marshaling, request/response correlation, push telemetry throttling, 15-minute supervisor session token | Direct SQL queries (delegates to `DatabaseService`), business rules beyond authorization gating | `Services/BridgeService.cs` |
@@ -55,25 +55,26 @@ WPF App.OnStartup
 | Manual composition root | `App.xaml.cs:57-75` | Four small services are wired explicitly; no DI container or lifetime framework is needed |
 | Command request/response envelope | `CommandEnvelope.cs`, `BridgeService.cs:88-110`, `runtime.js:47-69` | Provides a Promise-like RPC interface over WebView2 postMessage with correlation IDs and a 30-second timeout |
 | Event push / observer | `ScaleReaderService.ReadingReceived` and `StatusChanged`; `BridgeService.OnReadingReceived` | Decouples the blocking serial thread from WPF/WebView2 and coalesces pushes while one is in flight |
-| Transactional outbox (local-first) | `DatabaseService.cs`, `V001_InitialSchema.sql:328-346`, `:1623-1652` | Atomically stages events for a future cloud sync worker alongside business data; `GetSyncStatus` counts pending rows |
+| Transactional outbox (local-first) | `Data/DatabaseContext.cs` (`InsertOutbox`), `Data/Services/SyncStatusService.cs`, `V001_InitialSchema.sql:328-346` | Atomically stages events for a future cloud sync worker alongside business data; `GetSyncStatus` counts pending rows |
 | Append-only audit log | `AuditService.cs`, `V001_InitialSchema.sql:303-326` | Ensures non-repudiable history of mutations with actor, workstation, reason, and before/after snapshots in the same transaction |
 | Virtual host folder mapping | `MainWindow.xaml.cs:89-90` | Maps `app.augmentscale.local` to `WebUI/` without CORS friction and blocks external web navigation |
 | Sliding-window stability tracking | `StabilityDetector.cs` | Calculates weight variance over a configurable window to verify the scale has settled before capture |
 | DTO mapping at the boundary | `Models/*Dto.cs`, `Models/Commands/*` | Keeps camelCase JSON payloads separate from database rows and C# models |
-| Idempotent provisioning/upsert | `DatabaseService.Provision` (`:188-312`) uses `ON CONFLICT` and seeds only when empty | Makes every startup safe to run against an existing database |
+| Idempotent provisioning/upsert | `Data/Provisioner.cs` uses `ON CONFLICT` and seeds only when empty | Makes every startup safe to run against an existing database |
+| Domain repositories behind interfaces | `Services/DatabaseService.cs` composes `Data/Repositories/*` and `Data/Services/*`; implementations are `internal sealed` | Keeps SQL in focused units while preserving one public entry point and manual composition |
 | Short-lived authorization token | `BridgeService.UnlockProfileAdmin` / `RequireProfileAdmin` (`:278-313`) | Avoids resending the supervisor PIN on every profile mutation; the token slides for 15 minutes and is process-local |
 | Dual-mode UI | `IS_PRODUCTION` in `runtime.js:9-11`; seeded arrays in `state.js` | The same UI can run as a browser demo or against the C# host |
 
 ### 5) Known Architectural Risks
 
-- **God-class database service:** `DatabaseService.cs` is 2,280 lines and owns schema migrations, provisioning, profiles, vehicles, tickets, corrections, reports, sync status, and scale health. Changes to unrelated domains collide in one file, and tests for one area may require the whole service.
+- **Thin facade is the only composition root:** `DatabaseService.cs` manually wires the domain repositories and services; there is no DI container. Adding a persistence domain requires updating the facade constructor and properties, and the internal implementations are not independently resolvable. Keep composition changes localized to `DatabaseService`.
 - **DPAPI single-user machine lock-in:** `secrets.dat` uses Windows DPAPI `CurrentUser` scope. The database cannot be decrypted by another Windows user account or on another machine without extracting the key via `tools/Get-DbKey.ps1`; loss of the file is unrecoverable.
 - **PIN authentication is only as strong as a 4-digit PIN plus a browser-local lockout:** Production verification runs in C# (`ConfigService.AuthenticatePin`), but failed-attempt counters live in `localStorage`, so clearing browser storage resets the lockout and there is no server-side rate limit (`WebUI/js/pin-auth.js:44-112`, `BridgeService.cs:122-126`).
 - **In-memory WebUI state duplication:** `WebUI/js/state.js` maintains full client-side collections (`pendingTickets`, `vehicles`, `operators`). Large datasets could degrade browser memory performance, and client arrays can drift from SQLite.
-- **Outbox written but never delivered:** `GetSyncStatus` always reports `IsHealthy = true` and the production UI labels sync as "Local only" (`DatabaseService.cs:1630-1652`, `WebUI/js/sync.js:92-111`). Cloud sync is a planned Phase 2 capability, not an implemented integration.
-- **No JavaScript build, type checker, or automated UI test layer:** Large screens (`first-weigh.js` 1,680 lines, `history.js` 1,329 lines) rely on manual browser/desktop verification.
-- **One new SQLCipher connection per database-backed command:** Operations run synchronously inside `Task.Run` (`BridgeService.cs:101`, `DatabaseService.cs:126-140`). This is acceptable for one operator but provides no pooling or multi-workstation concurrency model.
-- **Single schema migration:** Schema evolution has one migration (`V001_InitialSchema.sql`) recorded in `schema_version`; there is no migration runner beyond the `version < 1` branch (`DatabaseService.cs:143-174`). A second schema version requires new code `[TODO]`.
+- **Outbox written but never delivered:** `GetSyncStatus` always reports `IsHealthy = true` and the production UI labels sync as "Local only" (`Data/Services/SyncStatusService.cs`, `WebUI/js/sync.js:92-111`). Cloud sync is a planned Phase 2 capability, not an implemented integration.
+- **No JavaScript build, type checker, or automated UI test layer:** Large screens (`first-weigh.js` 1,487 lines, `history.js` 1,176 lines) rely on manual browser/desktop verification.
+- **One new SQLCipher connection per database-backed command:** Operations run synchronously inside `Task.Run` (`BridgeService.cs:101`, `Data/DatabaseContext.cs` (`OpenConnection`)). This is acceptable for one operator but provides no pooling or multi-workstation concurrency model.
+- **Single schema migration:** Schema evolution has one migration (`V001_InitialSchema.sql`) recorded in `schema_version`; there is no migration runner beyond the `version < 1` branch (`Data/SchemaMigrator.cs`). A second schema version requires new code `[TODO]`.
 - **DevTools enabled in all builds:** `AreDevToolsEnabled = true` and a `Ctrl+Shift+D` shortcut allow a local operator to inspect or modify the page runtime and bridge API (`MainWindow.xaml.cs:82`, `:192-198`).
 
 ### 6) Evidence
@@ -82,6 +83,10 @@ WPF App.OnStartup
 - `AugmentScale/MainWindow.xaml.cs`
 - `AugmentScale/Services/BridgeService.cs`
 - `AugmentScale/Services/DatabaseService.cs`
+- `AugmentScale/Data/DatabaseContext.cs`
+- `AugmentScale/Data/Repositories/`
+- `AugmentScale/Data/Services/`
+- `AugmentScale/Models/BootStateDto.cs`
 - `AugmentScale/Services/ScaleReaderService.cs`
 - `AugmentScale/Services/ConfigService.cs`
 - `AugmentScale/Services/AuditService.cs`

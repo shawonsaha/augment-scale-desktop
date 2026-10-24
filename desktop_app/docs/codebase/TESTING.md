@@ -32,13 +32,13 @@ dotnet test AugmentScale.slnx -c Debug --logger "console;verbosity=detailed"
 dotnet build AugmentScale.slnx -c Debug
 ```
 
-A full run on 2026-10-24 returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77` in 54 seconds. Another documented run of the same 77 tests took approximately 63 seconds. There is no separate unit/integration/e2e command split and no coverage command or threshold configured; use `dotnet test --filter` ad hoc if needed. Evidence: `AugmentScale.Tests/AugmentScale.Tests.csproj`, `USER_MANUAL.md:104-119`.
+A full run on 2026-10-24 after the persistence refactor returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77` in roughly 26–34 seconds across post-refactor runs (29 seconds before the refactor). There is no separate unit/integration/e2e command split and no coverage command or threshold configured; use `dotnet test --filter` ad hoc if needed. Evidence: `AugmentScale.Tests/AugmentScale.Tests.csproj`, `USER_MANUAL.md:104-119`.
 
 ### 2) Test Layout
 
 | File | Classes / focus | Approximate cases | Evidence |
 |------|-----------------|-------------------|----------|
-| `AugmentScale.Tests/DatabaseTests.cs` | `TempDatabase` helper, `ConfigServiceTests`, `DatabaseServiceTests`; PIN/secrets, provisioning, profiles, vehicles, ticket lifecycle, boot state, history, report integrity | 26 `[Fact]` cases | `DatabaseTests.cs:8-36`, `:38-82`, `:84-841` |
+| `AugmentScale.Tests/DatabaseTests.cs` | `TempDatabase` helper, `ConfigServiceTests`, `DatabaseServiceTests`; PIN/secrets, provisioning, profiles, vehicles, ticket lifecycle, boot state, history, report integrity (exercises the `DatabaseService` facade and its domain repositories/services) | 26 `[Fact]` cases | `DatabaseTests.cs:8-36`, `:38-82`, `:84-715` |
 | `AugmentScale.Tests/ProtocolTests.cs` | Frame decoding, checksum rejection, splitter buffering, decimal/negative weights, stability window/tolerance | 14 `[Fact]` + 1 `[Theory]` (2 cases) = 16 | `ProtocolTests.cs` |
 | `AugmentScale.Tests/SimulatorEngineTests.cs` | Manual mode quantization, corruption/garbage injection, tare/load cycles, motion | 8 `[Fact]` cases | `SimulatorEngineTests.cs` |
 | `AugmentScale.Tests/SimulatorProtocolTests.cs` | Encoder/decoder round-trips, clamping, TCP name parsing, live loopback transport, read-timeout continuation | 5 `[Fact]` + 4 `[Theory]` (22 cases) = 27 | `SimulatorProtocolTests.cs` |
@@ -89,7 +89,7 @@ A full run on 2026-10-24 returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77`
 ### 5) Coverage and Quality Signals
 
 - Coverage tool + threshold: `[TODO]` — no Coverlet/`coverlet.collector`, no automated code coverage tool, and no threshold configured in build scripts or project files. No published coverage report exists.
-- Current reported signal: 77/77 tests pass; 0 failed, 0 skipped; 54 seconds on the 2026-10-24 run (approximately 63 seconds in another run).
+- Current reported signal: 77/77 tests pass; 0 failed, 0 skipped; roughly 26–34 seconds across 2026-10-24 post-refactor runs (29 seconds before the refactor).
 - Strengths: high-value ticket lifecycle, vehicle/ticket interaction, encrypted database provisioning, report snapshot integrity, and protocol edge cases are covered.
 - Known gaps/flaky areas:
   - No tests for `BridgeService` command routing, authorization expiry, JSON mapping, or the 30-second timeout.
@@ -97,8 +97,8 @@ A full run on 2026-10-24 returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77`
   - No automated tests for any WebUI screen, `runtime.js`, `state.js`, `html-loader.js`, or print flow.
   - No hardware-in-the-loop serial test and no test for the reconnect delay.
   - No CI job, pre-commit hook, branch-protection evidence, linting, or coverage gate; the suite is run manually.
-  - Full test suite takes over 60 seconds because multiple database tests each perform PBKDF2 key derivations (100,000 iterations per seeded operator).
-- Maintenance signals: `DatabaseTests.cs` is 841 lines and centralizes many domains; adding unrelated features tends to extend this file.
+  - Full test suite takes roughly 25–35 seconds because multiple database tests each perform PBKDF2 key derivations (100,000 iterations per seeded operator).
+- Maintenance signals: `DatabaseTests.cs` is 715 lines and centralizes many domains; adding unrelated features tends to extend this file. The persistence split is covered through the `DatabaseService` facade; there are no repository-specific test classes yet.
 
 ### 6) Evidence
 
@@ -108,6 +108,8 @@ A full run on 2026-10-24 returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77`
 - `AugmentScale.Tests/SimulatorEngineTests.cs`
 - `AugmentScale.Tests/SimulatorProtocolTests.cs`
 - `AugmentScale/Services/ScaleReaderService.cs`
+- `AugmentScale/Data/Repositories/`
+- `AugmentScale/Data/Services/`
 - `AugmentScale/AugmentScale.csproj`
 - `USER_MANUAL.md`
 - Terminal execution output of `dotnet test AugmentScale.slnx -c Debug`
