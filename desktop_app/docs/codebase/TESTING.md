@@ -1,4 +1,4 @@
-# Testing
+# Testing Patterns
 
 ## Core Sections (Required)
 
@@ -11,16 +11,28 @@
 | Runner | xunit.runner.visualstudio 3.1.4 | `AugmentScale.Tests/AugmentScale.Tests.csproj:14` |
 | Target | `net10.0-windows`, x64 | `AugmentScale.Tests/AugmentScale.Tests.csproj:3-8` |
 | Projects under test | App, Protocol, and ScaleSimulator | `AugmentScale.Tests/AugmentScale.Tests.csproj:17-21` |
+| Assertion/mocking tools | Built-in `Xunit.Assert`, custom loopback TCP servers (`TcpListener`), custom stream implementations (`TimeoutThenFrameStream`) | `SimulatorProtocolTests.cs`, `ScaleReaderService.cs:136-141` |
 
 Commands (from `desktop_app/`):
 
 ```powershell
+# Run all tests
 dotnet test AugmentScale.slnx -c Debug
+
+# Run the suite through the test project
 dotnet test AugmentScale.Tests\AugmentScale.Tests.csproj -c Debug
+
+# Run a specific test class
+dotnet test AugmentScale.slnx -c Debug --filter "FullyQualifiedName~ProtocolTests"
+
+# Run tests with detailed console logger
+dotnet test AugmentScale.slnx -c Debug --logger "console;verbosity=detailed"
+
+# Build only (the project's only static gate)
 dotnet build AugmentScale.slnx -c Debug
 ```
 
-A full run on 2026-10-24 returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77` in 54 seconds. There is no separate unit/integration/e2e command split and no coverage command or threshold configured; use `dotnet test --filter` ad hoc if needed. Evidence: `AugmentScale.Tests/AugmentScale.Tests.csproj`, `USER_MANUAL.md:104-119`.
+A full run on 2026-10-24 returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77` in 54 seconds. Another documented run of the same 77 tests took approximately 63 seconds. There is no separate unit/integration/e2e command split and no coverage command or threshold configured; use `dotnet test --filter` ad hoc if needed. Evidence: `AugmentScale.Tests/AugmentScale.Tests.csproj`, `USER_MANUAL.md:104-119`.
 
 ### 2) Test Layout
 
@@ -31,15 +43,17 @@ A full run on 2026-10-24 returned `Passed: 77, Failed: 0, Skipped: 0, Total: 77`
 | `AugmentScale.Tests/SimulatorEngineTests.cs` | Manual mode quantization, corruption/garbage injection, tare/load cycles, motion | 8 `[Fact]` cases | `SimulatorEngineTests.cs` |
 | `AugmentScale.Tests/SimulatorProtocolTests.cs` | Encoder/decoder round-trips, clamping, TCP name parsing, live loopback transport, read-timeout continuation | 5 `[Fact]` + 4 `[Theory]` (22 cases) = 27 | `SimulatorProtocolTests.cs` |
 
-Test data is created per test in `%TEMP%\AugmentScaleTests\<guid>` by `TempDatabase`, which deletes the directory in `Dispose` (`DatabaseTests.cs:8-36`). No shared database fixture exists.
+- Test file placement pattern: separate test project at `AugmentScale.Tests/` referencing the production projects (`AugmentScale`, `AugmentScale.Protocol`, `AugmentScale.ScaleSimulator`).
+- Naming convention: files named `*Tests.cs`; test methods follow `Method_Scenario_ExpectedBehavior` (e.g. `TicketLifecycle_CreateCompleteReprintVoid`, `HistoryReport_RejectsWrongPinWithoutAuditAndHashesSuccessfulSnapshot`).
+- Setup files and isolation: `DatabaseTests.cs:8-36` defines `TempDatabase : IDisposable`, which creates an isolated SQLCipher instance in `%TEMP%\AugmentScaleTests\<guid>` per test and deletes it on disposal. No shared database fixture exists.
 
 ### 3) Test Scope Matrix
 
 | Scope | Covered? | Typical target | Notes |
 |-------|----------|----------------|-------|
-| Unit | Yes | Protocol framing/splitter, stability detector, simulator engine, PIN hashing | Deterministic fixtures; no mocks |
-| Integration | Yes | SQLCipher database, provisioning, ticket/report lifecycle, loopback TCP transport | Real temp files and real TCP, no external services |
-| E2E | No | Operator flows in WPF/WebView2, print, real scale | No UI automation or hardware-in-the-loop suite |
+| Unit | Yes | `AugmentScale.Protocol` (decoders, splitters, encoders, stability variance), simulator engine, PIN hashing | Fast, pure CPU tests with deterministic fixtures; no mocks |
+| Integration | Yes | `DatabaseService`, `ConfigService`, `ScaleReaderService` TCP stream | Executes real migrations, transactions, PBKDF2 hashing, and loopback TCP sockets |
+| E2E | No | WebView2 full user interface, print, real scale | `[TODO]` WebUI interactions are currently tested manually in a browser and the desktop shell |
 
 | Area | Unit | Integration | E2E/UI | Notes |
 |------|------|-------------|--------|-------|
@@ -64,23 +78,26 @@ Test data is created per test in `%TEMP%\AugmentScaleTests\<guid>` by `TempDatab
 ### 4) Mocking and Isolation Strategy
 
 - No mocking library is used. Tests exercise real implementations.
-- Database isolation: a fresh temporary directory and a real SQLCipher database per test (`TempDatabase`, `DatabaseTests.cs:8-36`).
-- Network isolation: simulator transport tests bind a loopback TCP server and use the production `ScaleReaderService` to read frames (`SimulatorProtocolTests.cs`, `TcpFrameServer.cs`).
+- Database isolation: a fresh temporary directory and a real SQLCipher database per test (`TempDatabase`, `DatabaseTests.cs:8-36`). Each instance creates isolated encryption keys, schema, and tables; no test touches production data at `%LOCALAPPDATA%\AugmentScale`.
+- Network/serial isolation: `ScaleReaderService` supports `TCP:host:port` connections, allowing tests to run against an in-process `TcpListener` instead of physical COM ports. Simulator transport tests bind a loopback TCP server and use the production reader (`SimulatorProtocolTests.cs`, `TcpFrameServer.cs`).
+- Stream simulation: subclasses of `System.IO.Stream` (e.g. `TimeoutThenFrameStream`) verify serial timeout recovery without hardware.
 - Time/date isolation: history-date tests insert tickets with explicit timestamps rather than changing the system clock (`DatabaseTests.cs:653-674`).
-- Hardware/timeout seam: `ScaleReaderService.ProcessStream` accepts an internal `keepRunning` predicate and tests get access through `InternalsVisibleTo`; the source marks this as temporary (`ScaleReaderService.cs:136-141`, `AugmentScale.csproj:31-32`).
-- Determinism: protocol fixtures and simulator quantization are deterministic; the TCP transport test depends on loopback timing and is the most timing-sensitive test.
+- Hardware/timeout seam: `ScaleReaderService.ProcessStream` accepts an internal `keepRunning` predicate, and tests access it through `InternalsVisibleTo`; the source marks this as temporary (`ScaleReaderService.cs:136-141`, `AugmentScale.csproj:31-32`).
+- Determinism: protocol fixtures and simulator quantization are deterministic; `SimulatorProtocolTests.TcpTransport_PublishesDecodedReadings` depends on loopback timing and is the most timing-sensitive test.
+- Common failure mode: file locking on temporary-directory deletion (`IOException` in `TempDatabase.Dispose`) is handled gracefully.
 
 ### 5) Coverage and Quality Signals
 
-- Current signal: 77/77 tests pass; 0 failed, 0 skipped, 54 seconds.
+- Coverage tool + threshold: `[TODO]` — no Coverlet/`coverlet.collector`, no automated code coverage tool, and no threshold configured in build scripts or project files. No published coverage report exists.
+- Current reported signal: 77/77 tests pass; 0 failed, 0 skipped; 54 seconds on the 2026-10-24 run (approximately 63 seconds in another run).
 - Strengths: high-value ticket lifecycle, vehicle/ticket interaction, encrypted database provisioning, report snapshot integrity, and protocol edge cases are covered.
-- Coverage tooling: none. No Coverlet/`coverlet.collector`, no threshold, and no published coverage report.
-- Notable gaps:
+- Known gaps/flaky areas:
   - No tests for `BridgeService` command routing, authorization expiry, JSON mapping, or the 30-second timeout.
   - No tests for `MainWindow`/WebView2 startup, navigation failure, DevTools, or virtual-host security settings.
   - No automated tests for any WebUI screen, `runtime.js`, `state.js`, `html-loader.js`, or print flow.
   - No hardware-in-the-loop serial test and no test for the reconnect delay.
-  - No CI job, pre-commit hook, or branch-protection evidence; the suite is manual.
+  - No CI job, pre-commit hook, branch-protection evidence, linting, or coverage gate; the suite is run manually.
+  - Full test suite takes over 60 seconds because multiple database tests each perform PBKDF2 key derivations (100,000 iterations per seeded operator).
 - Maintenance signals: `DatabaseTests.cs` is 841 lines and centralizes many domains; adding unrelated features tends to extend this file.
 
 ### 6) Evidence
@@ -93,3 +110,4 @@ Test data is created per test in `%TEMP%\AugmentScaleTests\<guid>` by `TempDatab
 - `AugmentScale/Services/ScaleReaderService.cs`
 - `AugmentScale/AugmentScale.csproj`
 - `USER_MANUAL.md`
+- Terminal execution output of `dotnet test AugmentScale.slnx -c Debug`
