@@ -1,7 +1,7 @@
 import {
   HISTORY_REPORT_PAGE_CSS,
   renderHistoryReportDocument,
-} from './history-report-document.js?v=archive2';
+} from './history-report-document.js?v=archive3';
 
 function installPageStyles() {
   if (document.getElementById('history-report-page-style')) return;

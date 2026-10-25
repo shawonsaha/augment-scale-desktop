@@ -265,7 +265,7 @@ export function renderHistoryReportDocument(documentElement, report) {
           <h2>Reprint register</h2>
           <table class="report-table report-table--appendix">
             <thead>
-              <tr><th>Ticket</th><th>Copy</th><th>Reprinted by</th><th>Timestamp</th><th>Reason</th></tr>
+              <tr><th>Ticket</th><th>Copy</th><th>Reason</th><th>Reprinted by</th><th>Timestamp</th></tr>
             </thead>
             <tbody>
               ${reprints
@@ -274,9 +274,9 @@ export function renderHistoryReportDocument(documentElement, report) {
                     <tr>
                       <td>#${row.ticket.id}</td>
                       <td>${escapeHtml(row.copy)}</td>
+                      <td>${escapeHtml(row.reason)}</td>
                       <td>${escapeHtml(row.by)}</td>
                       <td>${escapeHtml(formatFullDateTime(row.at) || '—')}</td>
-                      <td>${escapeHtml(row.reason)}</td>
                     </tr>
                   `
                 )

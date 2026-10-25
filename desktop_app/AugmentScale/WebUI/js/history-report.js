@@ -11,7 +11,7 @@ import {
   HISTORY_REPORT_PAGE_CSS,
   renderHistoryReportDocument,
   summarizeTickets,
-} from './history-report-document.js?v=prod16';
+} from './history-report-document.js?v=prod17';
 import { openVerifyReportModal } from './verify-report.js';
 
 const PAGE_STYLE_ID = 'history-report-page-style';
