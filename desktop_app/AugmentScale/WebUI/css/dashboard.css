@@ -227,6 +227,7 @@
   flex: 1;
 }
 
+.action-dir-btn,
 .fw-dir-btn {
   flex: 1;
   width: 100%;
@@ -294,48 +295,67 @@
 }
 
 /* Hover and Active Transitions for Direction Buttons */
+.action-dir-btn:hover,
 .fw-dir-btn:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 
+.action-dir-btn:active,
 .fw-dir-btn:active {
   transform: translateY(1px) scale(0.98);
 }
 
+.action-dir-btn:focus-visible,
 .fw-dir-btn:focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
 
 /* Light Mode Hover */
-.action-dir-btn-in:hover {
+.action-dir-btn-in:hover,
+.first-weigh-buttons .action-dir-btn-in:hover {
   background: var(--primitive-teal-700);
   border-color: var(--primitive-teal-800);
   color: #ffffff;
 }
 
-.action-dir-btn-in:hover .action-dir-sub {
+.action-dir-btn-in:hover .action-dir-title,
+.first-weigh-buttons .action-dir-btn-in:hover .action-dir-title {
+  color: #ffffff;
+}
+
+.action-dir-btn-in:hover .action-dir-sub,
+.first-weigh-buttons .action-dir-btn-in:hover .action-dir-sub {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.action-dir-btn-in:hover .action-dir-kbd {
+.action-dir-btn-in:hover .action-dir-kbd,
+.first-weigh-buttons .action-dir-btn-in:hover .action-dir-kbd {
   background: rgba(255, 255, 255, 0.22);
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.4);
 }
 
-.action-dir-btn-out:hover {
+.action-dir-btn-out:hover,
+.first-weigh-buttons .action-dir-btn-out:hover {
   background: var(--primitive-teal-700);
   border-color: var(--primitive-teal-800);
   color: #ffffff;
 }
 
-.action-dir-btn-out:hover .action-dir-sub {
+.action-dir-btn-out:hover .action-dir-title,
+.first-weigh-buttons .action-dir-btn-out:hover .action-dir-title {
+  color: #ffffff;
+}
+
+.action-dir-btn-out:hover .action-dir-sub,
+.first-weigh-buttons .action-dir-btn-out:hover .action-dir-sub {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.action-dir-btn-out:hover .action-dir-kbd {
+.action-dir-btn-out:hover .action-dir-kbd,
+.first-weigh-buttons .action-dir-btn-out:hover .action-dir-kbd {
   background: rgba(255, 255, 255, 0.22);
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.4);
@@ -343,40 +363,66 @@
 
 /* Dark Mode Hover */
 body.dark-mode .action-dir-btn-in:hover,
-:root[data-theme='dark'] .action-dir-btn-in:hover {
+:root[data-theme='dark'] .action-dir-btn-in:hover,
+body.dark-mode .first-weigh-buttons .action-dir-btn-in:hover,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-in:hover {
   background: var(--color-brand);
   border-color: #5eead4;
   color: var(--primitive-slate-950);
   box-shadow: 0 4px 16px rgba(45, 212, 191, 0.4);
 }
 
+body.dark-mode .action-dir-btn-in:hover .action-dir-title,
+:root[data-theme='dark'] .action-dir-btn-in:hover .action-dir-title,
+body.dark-mode .first-weigh-buttons .action-dir-btn-in:hover .action-dir-title,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-in:hover .action-dir-title {
+  color: var(--primitive-slate-950);
+}
+
 body.dark-mode .action-dir-btn-in:hover .action-dir-sub,
-:root[data-theme='dark'] .action-dir-btn-in:hover .action-dir-sub {
+:root[data-theme='dark'] .action-dir-btn-in:hover .action-dir-sub,
+body.dark-mode .first-weigh-buttons .action-dir-btn-in:hover .action-dir-sub,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-in:hover .action-dir-sub {
   color: rgba(2, 6, 23, 0.8);
 }
 
 body.dark-mode .action-dir-btn-in:hover .action-dir-kbd,
-:root[data-theme='dark'] .action-dir-btn-in:hover .action-dir-kbd {
+:root[data-theme='dark'] .action-dir-btn-in:hover .action-dir-kbd,
+body.dark-mode .first-weigh-buttons .action-dir-btn-in:hover .action-dir-kbd,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-in:hover .action-dir-kbd {
   background: rgba(2, 6, 23, 0.2);
   color: var(--primitive-slate-950);
   border-color: rgba(2, 6, 23, 0.35);
 }
 
 body.dark-mode .action-dir-btn-out:hover,
-:root[data-theme='dark'] .action-dir-btn-out:hover {
+:root[data-theme='dark'] .action-dir-btn-out:hover,
+body.dark-mode .first-weigh-buttons .action-dir-btn-out:hover,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-out:hover {
   background: var(--color-brand);
   border-color: #5eead4;
   color: var(--primitive-slate-950);
   box-shadow: 0 4px 16px rgba(45, 212, 191, 0.4);
 }
 
+body.dark-mode .action-dir-btn-out:hover .action-dir-title,
+:root[data-theme='dark'] .action-dir-btn-out:hover .action-dir-title,
+body.dark-mode .first-weigh-buttons .action-dir-btn-out:hover .action-dir-title,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-out:hover .action-dir-title {
+  color: var(--primitive-slate-950);
+}
+
 body.dark-mode .action-dir-btn-out:hover .action-dir-sub,
-:root[data-theme='dark'] .action-dir-btn-out:hover .action-dir-sub {
+:root[data-theme='dark'] .action-dir-btn-out:hover .action-dir-sub,
+body.dark-mode .first-weigh-buttons .action-dir-btn-out:hover .action-dir-sub,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-out:hover .action-dir-sub {
   color: rgba(2, 6, 23, 0.8);
 }
 
 body.dark-mode .action-dir-btn-out:hover .action-dir-kbd,
-:root[data-theme='dark'] .action-dir-btn-out:hover .action-dir-kbd {
+:root[data-theme='dark'] .action-dir-btn-out:hover .action-dir-kbd,
+body.dark-mode .first-weigh-buttons .action-dir-btn-out:hover .action-dir-kbd,
+:root[data-theme='dark'] .first-weigh-buttons .action-dir-btn-out:hover .action-dir-kbd {
   background: rgba(2, 6, 23, 0.2);
   color: var(--primitive-slate-950);
   border-color: rgba(2, 6, 23, 0.35);

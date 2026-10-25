@@ -253,13 +253,14 @@
   transition: all var(--spring-duration-fast) ease;
 }
 
-.fw-dir-btn:hover:not(.active) {
+.fw-direction-buttons .fw-dir-btn:hover:not(.active) {
   background: var(--surface-card-hover);
   border-color: var(--border-focus);
   color: var(--text-primary);
   transform: translateY(-1px);
 }
 
+.fw-direction-buttons .fw-dir-btn:focus-visible,
 .fw-dir-btn:focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 1px;
