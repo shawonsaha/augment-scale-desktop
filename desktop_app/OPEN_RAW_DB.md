@@ -9,9 +9,9 @@ supplied. The key is stored separately from the database and is protected by Win
 DPAPI.
 
 > **Read-only first.** The application writes tickets, weight captures, audit events,
-> outbox events, and print jobs in transactions. Editing the raw database bypasses
-> those rules and can corrupt the audit trail. Open a copy, or use read-only mode,
-> unless you have a specific recovery task and a backup.
+> outbox events, print jobs, and archive run state in transactions. Editing the raw
+> database bypasses those rules and can corrupt the audit trail. Open a copy, or use
+> read-only mode, unless you have a specific recovery task and a backup.
 
 ---
 
@@ -63,6 +63,7 @@ browser will report "file is not a database" until the key is provided.
 | Encrypted database | `%LOCALAPPDATA%\AugmentScale\augment-scale.db` | `ConfigService.cs:49` |
 | Protected secrets (contains the DB key) | `%LOCALAPPDATA%\AugmentScale\secrets.dat` | `ConfigService.cs:43` |
 | Configuration | `%LOCALAPPDATA%\AugmentScale\setup.json` | `ConfigService.cs:42` |
+| Automatic PDF archive | `%LOCALAPPDATA%\AugmentScale\archives` | `ConfigService.ArchiveDirectory` |
 | Logs | `%LOCALAPPDATA%\AugmentScale\logs\app-YYYYMMDD.log` | `ConfigService.cs:51` |
 | WebView2 cache | `%LOCALAPPDATA%\AugmentScale\WebView2` | `ConfigService.cs:50` |
 
@@ -132,8 +133,8 @@ To create a timestamped backup before the run:
 ```
 
 Backups are written to `%LOCALAPPDATA%\AugmentScale\backups\<timestamp>\` and
-include `augment-scale.db`, `secrets.dat`, `setup.json`, `simulator.json`, and any
-`-wal` or `-shm` files that exist.
+include `augment-scale.db`, `secrets.dat`, `setup.json`, `simulator.json`, the
+`archives\` folder, and any `-wal` or `-shm` files that exist.
 
 The application window title shows `Augment Scale — TEST DATA` whenever the
 resolved data directory is not `%LOCALAPPDATA%\AugmentScale`. A live run keeps the
@@ -199,6 +200,7 @@ $backup = Join-Path $env:USERPROFILE 'Desktop\AugmentScale-backup'
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $source 'augment-scale.db') -Destination $backup
 Copy-Item -LiteralPath (Join-Path $source 'secrets.dat') -Destination $backup
+Copy-Item -LiteralPath (Join-Path $source 'archives') -Destination $backup -Recurse
 ```
 
 ---
@@ -381,6 +383,7 @@ your build exposes encryption settings elsewhere, apply the same values listed a
 | `weight_captures` | Individual scale readings and stability data |
 | `print_jobs` | Print and reprint history |
 | `audit_events` | Audit trail and hash chain fields |
+| `archive_runs` | Automatic PDF archive runs, status, retry counters, and relative file paths |
 | `outbox_events` | Pending synchronization events |
 | `vehicles`, `customers`, `drivers`, `products` | Master data |
 | `profiles`, `user_roles` | Operators and roles |
@@ -598,6 +601,7 @@ Expected result for the current version:
 | version | name |
 |---|---|
 | 1 | InitialSchema |
+| 2 | ArchiveRuns |
 
 List the tables:
 
@@ -608,6 +612,7 @@ SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;
 Expected tables:
 
 ```text
+archive_runs
 audit_events
 customers
 drivers
@@ -653,6 +658,12 @@ LIMIT 20;
 SELECT id, entity_type, entity_id, action, actor_display_name, created_at
 FROM audit_events
 ORDER BY created_at DESC
+LIMIT 20;
+
+SELECT id, kind, period_start, period_end, status, file_path,
+       attempt_count, error_message, completed_at
+FROM archive_runs
+ORDER BY period_end DESC, created_at DESC
 LIMIT 20;
 ```
 
@@ -736,6 +747,26 @@ Pass that directory to the helper:
 .\tools\Get-DbKey.ps1 -DataDir (Join-Path $env:TEMP 'augment-scale-dev')
 ```
 
+### An archive PDF is missing or a run is failed
+
+Inspect `archive_runs` before changing anything:
+
+```sql
+SELECT kind, period_start, period_end, status, attempt_count,
+       next_attempt_at, file_path, error_message
+FROM archive_runs
+ORDER BY period_end DESC, created_at DESC
+LIMIT 20;
+```
+
+- `file_path` is relative to the `archives\` directory.
+- `skipped` means the period had no tickets; no PDF is expected.
+- `failed` means the last attempt failed. Use **Archive now** in the application rather
+  than editing the row.
+- Do not delete `archive_runs` rows to force regeneration. The unique period index
+  prevents duplicate daily reports. If a `succeeded` row's file is missing, restore the
+  PDF from backup or contact support instead of editing the row.
+
 ### The key cannot be decrypted on another machine
 
 That is expected. `secrets.dat` is DPAPI-protected for the current Windows user and
@@ -800,6 +831,7 @@ PRAGMA key = 'BASE64_KEY_HERE';
 SELECT * FROM schema_version;
 SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;
 SELECT COUNT(*) FROM weigh_tickets;
+SELECT * FROM archive_runs ORDER BY period_end DESC LIMIT 20;
 ```
 
 ---
@@ -813,6 +845,9 @@ SELECT COUNT(*) FROM weigh_tickets;
 - `AugmentScale/Data/SchemaMigrator.cs` - schema migrations.
 - `AugmentScale/AugmentScale.csproj` - `Microsoft.Data.Sqlite` and
   `SQLitePCLRaw.bundle_e_sqlcipher` package references.
-- `AugmentScale/Data/Schema/V001_InitialSchema.sql` - table definitions.
+- `AugmentScale/Data/Schema/V001_InitialSchema.sql` - base table definitions.
+- `AugmentScale/Data/Schema/V002_ArchiveRuns.sql` - automatic PDF archive run log.
+- `AugmentScale/Data/Repositories/ArchiveRunRepository.cs` - archive run queries and state transitions.
+- `AugmentScale/Services/PdfArchiveService.cs` - archive scheduling, retry, and file placement.
 - `start-dev-sim.ps1` - development data directory and simulator launcher.
 - `USER_MANUAL.md` - data locations, backup rules, and operational guidance.

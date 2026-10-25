@@ -1,3 +1,4 @@
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -13,6 +14,7 @@ public partial class App : Application
     private ScaleReaderService? _scale;
     private DatabaseService? _database;
     private BridgeService? _bridge;
+    private PdfArchiveService? _archive;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -68,11 +70,21 @@ public partial class App : Application
 
             var window = new MainWindow(_config, _database, _scale, _bridge);
             MainWindow = window;
+
+            _archive = new PdfArchiveService(
+                _database,
+                new WebViewPdfArchiveRenderer(
+                    () => window.EnvironmentReady,
+                    Path.Combine(AppContext.BaseDirectory, "WebUI")),
+                _config);
+            _bridge.Archive = _archive;
+
             window.Show();
 
             // Show the window first so the splash mask paints immediately, then
             // initialize the database while WebView2 spins up in the background.
             _database.EnsureInitialized();
+            _archive.Start();
         }
         catch (Exception ex)
         {
@@ -88,6 +100,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { _archive?.Dispose(); } catch (Exception ex) { AppLog.Error("Archive shutdown failed", ex); }
         try { _scale?.Dispose(); } catch (Exception ex) { AppLog.Error("Scale shutdown failed", ex); }
         _singleInstance?.ReleaseMutex();
         _singleInstance?.Dispose();

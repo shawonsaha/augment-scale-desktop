@@ -39,6 +39,42 @@ internal sealed class HistoryReportService : IReportService
             .FirstOrDefault(op => op.Id.Equals(req.OperatorId, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException("The signed-in operator was not found.");
 
+        return GenerateReport(fromDate, toDate, operatorProfile.Id, operatorProfile.Name,
+            auditEmpty: true) ?? throw new InvalidOperationException("The report could not be generated.");
+    }
+
+    public HistoryReportDto? GenerateArchiveReport(DateOnly fromDate, DateOnly toDate)
+    {
+        if (fromDate > toDate)
+            throw new InvalidOperationException("The archive start date must be before the end date.");
+
+        return GenerateReport(fromDate, toDate, "system", "Automatic archive", auditEmpty: false);
+    }
+
+    public DateOnly? GetEarliestReportDate()
+    {
+        _db.EnsureInitialized();
+        using var connection = _db.OpenConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT MIN(datetime(business_at))
+            FROM ticket_history
+            WHERE organization_id = $org;
+            """;
+        cmd.Parameters.AddWithValue("$org", _db.OrganizationId);
+
+        var value = Convert.ToString(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (!DateTime.TryParseExact(value, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var utc))
+            return null;
+
+        return DateOnly.FromDateTime(utc.ToLocalTime());
+    }
+
+    private HistoryReportDto? GenerateReport(DateOnly fromDate, DateOnly toDate,
+        string operatorId, string operatorName, bool auditEmpty)
+    {
+        _db.EnsureInitialized();
         var fromLocal = fromDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
         var toLocal = toDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).AddDays(1);
         var fromUtc = fromLocal.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
@@ -48,6 +84,15 @@ internal sealed class HistoryReportService : IReportService
         using var txn = connection.BeginTransaction();
 
         var tickets = _tickets.ReadTicketsForReport(connection, txn, fromUtc, toUtc);
+        if (!auditEmpty && tickets.Count == 0)
+        {
+            txn.Rollback();
+            return null;
+        }
+
+        var rangeLabel = fromDate == toDate
+            ? fromDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
+            : $"{fromDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)} – {toDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)}";
         var now = DateTimeOffset.Now;
         var report = new HistoryReportDto
         {
@@ -57,13 +102,11 @@ internal sealed class HistoryReportService : IReportService
             SiteName = _db.Config.Setup.Site.Name,
             WeighbridgeName = _db.Config.Setup.Weighbridge.Name,
             WorkstationName = Environment.MachineName,
-            RangeLabel = fromDate == toDate
-                ? fromDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
-                : $"{fromDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)} – {toDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)}",
-            FromDate = req.FromDate,
-            ToDate = req.ToDate,
-            OperatorId = operatorProfile.Id,
-            OperatorName = operatorProfile.Name,
+            RangeLabel = rangeLabel,
+            FromDate = fromDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ToDate = toDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            OperatorId = operatorId,
+            OperatorName = operatorName,
             Tickets = tickets.ToList(),
         };
 
@@ -97,7 +140,7 @@ internal sealed class HistoryReportService : IReportService
 
         _db.Audit.InsertMutation(connection, txn, _db.OrganizationId, _db.WorkstationId,
             "history_report", report.ReportId, "generate",
-            operatorProfile.Id, operatorProfile.Name,
+            operatorId, operatorName,
             new
             {
                 report.ReportId,
@@ -114,7 +157,7 @@ internal sealed class HistoryReportService : IReportService
                 report.Summary.NetKg,
                 CanonicalJson = canonicalJson,
             },
-            reason: report.RangeLabel);
+            reason: rangeLabel);
 
         txn.Commit();
         return report;

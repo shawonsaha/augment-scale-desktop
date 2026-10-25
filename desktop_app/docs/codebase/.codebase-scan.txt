@@ -9,6 +9,7 @@ AugmentScale\Data\DatabaseContext.cs
 AugmentScale\Data\JsonDefaults.cs
 AugmentScale\Data\Provisioner.cs
 AugmentScale\Data\Repositories
+AugmentScale\Data\Repositories\ArchiveRunRepository.cs
 AugmentScale\Data\Repositories\IOperatorRepository.cs
 AugmentScale\Data\Repositories\ITicketRepository.cs
 AugmentScale\Data\Repositories\IVehicleRepository.cs
@@ -17,6 +18,7 @@ AugmentScale\Data\Repositories\TicketRepository.cs
 AugmentScale\Data\Repositories\VehicleRepository.cs
 AugmentScale\Data\Schema
 AugmentScale\Data\Schema\V001_InitialSchema.sql
+AugmentScale\Data\Schema\V002_ArchiveRuns.sql
 AugmentScale\Data\SchemaMigrator.cs
 AugmentScale\Data\Services
 AugmentScale\Data\Services\BootStateService.cs
@@ -31,6 +33,8 @@ AugmentScale\Data\SqliteHelpers.cs
 AugmentScale\MainWindow.xaml
 AugmentScale\MainWindow.xaml.cs
 AugmentScale\Models
+AugmentScale\Models\ArchiveRunDto.cs
+AugmentScale\Models\ArchiveStatusDto.cs
 AugmentScale\Models\AuditEvent.cs
 AugmentScale\Models\BootStateDto.cs
 AugmentScale\Models\Commands
@@ -53,8 +57,12 @@ AugmentScale\Services\AuditService.cs
 AugmentScale\Services\BridgeService.cs
 AugmentScale\Services\ConfigService.cs
 AugmentScale\Services\DatabaseService.cs
+AugmentScale\Services\IPdfArchiveRenderer.cs
+AugmentScale\Services\PdfArchiveService.cs
 AugmentScale\Services\ScaleReaderService.cs
+AugmentScale\Services\WebViewPdfArchiveRenderer.cs
 AugmentScale\WebUI
+AugmentScale\WebUI\archive-report.html
 AugmentScale\WebUI\avatars
 AugmentScale\WebUI\avatars\frame-1.svg
 AugmentScale\WebUI\avatars\frame-3.svg
@@ -62,6 +70,7 @@ AugmentScale\WebUI\avatars\frame-4.svg
 AugmentScale\WebUI\avatars\frame-5.svg
 AugmentScale\WebUI\avatars\frame-9.svg
 AugmentScale\WebUI\css
+AugmentScale\WebUI\css\archive-report.css
 AugmentScale\WebUI\css\base.css
 AugmentScale\WebUI\css\dashboard.css
 AugmentScale\WebUI\css\fonts
@@ -79,9 +88,11 @@ AugmentScale\WebUI\css\trucks.css
 AugmentScale\WebUI\css\weigh.css
 AugmentScale\WebUI\index.html
 AugmentScale\WebUI\js
+AugmentScale\WebUI\js\archive-report.js
 AugmentScale\WebUI\js\audio.js
 AugmentScale\WebUI\js\bridge.js
 AugmentScale\WebUI\js\confirm-dialog.js
+AugmentScale\WebUI\js\history-report-document.js
 AugmentScale\WebUI\js\history-report.js
 AugmentScale\WebUI\js\html-loader.js
 AugmentScale\WebUI\js\hud.js
@@ -136,6 +147,7 @@ AugmentScale.slnx
 AugmentScale.Tests
 AugmentScale.Tests\AugmentScale.Tests.csproj
 AugmentScale.Tests\DatabaseTests.cs
+AugmentScale.Tests\PdfArchiveTests.cs
 AugmentScale.Tests\ProtocolTests.cs
 AugmentScale.Tests\SimulatorEngineTests.cs
 AugmentScale.Tests\SimulatorProtocolTests.cs
@@ -172,6 +184,9 @@ No .env.example or .env.template found. Identify required environment variables 
 None found.
 
 === GIT RECENT COMMITS (last 20) ===
+d60c608 Refactor data access layer into repositories and domain service
+d8dbb61 Remove obsolete codebase documentation files
+2ca772b Add codebase documentation from deepseek and gemini analyses
 d8f508a Fix Xk3190 frame splitting and handle stream read timeouts
 ae240f3 Add operator profile management screen and supervisor workflows
 70a1931 Blur nav tab on click and allow keyboard shortcuts
@@ -189,9 +204,6 @@ d8f5dcb Add column sorting to pending tickets table
 84c127f Add manual database refresh and auto-register vehicle features
 fbb3b7e Update keyboard-focused table row styles in dashboard
 63c258c Refactor print slip metadata layout and rendering
-f35d0e5 Fix WebView2 focus loss on window activation
-1218611 Add ticket direction badge to second weigh screen
-51cceb4 Fix elapsed time calculations and live UI updates for tickets
 
 === HIGH-CHURN FILES (last 90 days, top 20) ===
   11 desktop_app/AugmentScale/WebUI/index.html
@@ -219,13 +231,13 @@ f35d0e5 Fix WebView2 focus loss on window activation
 No monorepo signals detected.
 
 === CODE METRICS ===
-Total files scanned: 145
-Total lines of code: 18036 (code/config lines; CSS, HTML, Markdown, and font binaries excluded)
+Total files scanned: 157
+Total lines of code: 18496 (code/config lines; CSS, HTML, Markdown, and font binaries excluded)
 
 Files by language:
-  Other: 63
-  C#: 53
-  JavaScript: 29
+  Other: 66
+  C#: 60
+  JavaScript: 31
 
 Top 10 largest files:
 AugmentScale\WebUI\css\fonts\ibm-plex-sans-500.ttf: 200.5KB

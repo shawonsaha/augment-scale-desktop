@@ -255,6 +255,57 @@
   color: var(--text-primary);
 }
 
+.sync-metric-row[hidden] {
+  display: none;
+}
+
+.sync-metric-val--error {
+  max-width: 185px;
+  color: var(--color-danger);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.sync-archive-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sync-archive-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+.sync-archive-run strong {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-archive-run span {
+  text-align: right;
+}
+
+.sync-archive-run.is-failed strong,
+.sync-archive-run.is-failed span {
+  color: var(--color-danger);
+}
+
+.sync-archive-empty {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
 .sync-popover-actions {
   display: flex;
   gap: var(--space-2);

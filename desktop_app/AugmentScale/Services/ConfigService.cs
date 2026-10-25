@@ -57,6 +57,7 @@ public sealed class ConfigService
     public string DatabasePath => Path.Combine(_dataDirectory, "augment-scale.db");
     public string WebViewDataDirectory => Path.Combine(_dataDirectory, "WebView2");
     public string LogDirectory => Path.Combine(_dataDirectory, "logs");
+    public string ArchiveDirectory => Path.Combine(_dataDirectory, "archives");
 
     public SetupConfig Setup
     {

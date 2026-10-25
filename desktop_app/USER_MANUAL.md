@@ -15,6 +15,7 @@ Augment Scale is a local weighbridge workstation application. It replaces the br
 - reads live weight from a Yaohua XK3190-D10 indicator over a serial (RS-232/USB-serial) connection;
 - stores vehicles, tickets, print history, and audit events in an encrypted SQLCipher database;
 - prints first-weigh slips and completed weight certificates through the Windows print system;
+- generates an automatic PDF archive of each completed business day and a one-time baseline report;
 - tracks reprints, voids, pending-ticket deletions, and operator identity in an audit trail;
 - works with the standalone scale simulator for training and acceptance testing without a physical scale.
 
@@ -73,15 +74,15 @@ prototype-to-production/
       AugmentScale.csproj         WPF application project
       App.xaml(.cs)               Startup, single-instance guard, crash logging
       MainWindow.xaml(.cs)        WebView2 host
-      Services/                   Config, database facade, scale, bridge, printing, logging
+      Services/                   Config, database facade, scale, bridge, printing, PDF archive, logging
       Models/                     DTOs and IPC command contracts
       Data/                       Persistence context, repositories, domain services
-      Data/Schema/                Embedded SQL migration scripts
+      Data/Schema/                Embedded SQL migration scripts (V001, V002)
       Resources/setup.json        Default bootstrap configuration
       WebUI/                      HTML/CSS/JS user interface and partials
     AugmentScale.Protocol/        Shared XK3190 framing, checksum, stability, encoder
     AugmentScale.ScaleSimulator/  Standalone GUI scale simulator (development only)
-    AugmentScale.Tests/           xUnit protocol, transport and database tests
+    AugmentScale.Tests/           xUnit protocol, transport, database, and archive tests
     start-dev-sim.ps1             Simulator launcher (isolated or live database)
     USER_MANUAL.md                This document
 ```
@@ -174,6 +175,7 @@ dotnet build AugmentScale.slnx -c Debug
 | Configuration | `%LOCALAPPDATA%\AugmentScale\setup.json` |
 | Protected secrets | `%LOCALAPPDATA%\AugmentScale\secrets.dat` |
 | Encrypted database | `%LOCALAPPDATA%\AugmentScale\augment-scale.db` |
+| Automatic PDF archive | `%LOCALAPPDATA%\AugmentScale\archives\` |
 | Logs | `%LOCALAPPDATA%\AugmentScale\logs\app-YYYYMMDD.log` |
 | WebView2 cache | `%LOCALAPPDATA%\AugmentScale\WebView2\` |
 
@@ -193,6 +195,8 @@ Back up these two files together while the application is closed:
 %LOCALAPPDATA%\AugmentScale\augment-scale.db
 %LOCALAPPDATA%\AugmentScale\secrets.dat
 ```
+
+Also back up the `archives\` folder. Archive PDFs are generated from the database, but the files are the delivered business records and should not be lost.
 
 - `secrets.dat` can only be decrypted by the same Windows user on the same Windows installation/machine. Copying it to another user or computer will not work.
 - If `secrets.dat` is lost, the database cannot be decrypted.
@@ -230,7 +234,7 @@ This writes vehicle, ticket, audit, and outbox rows to
 (`COM1` by default) when the application exits. The database itself is not restored.
 
 Add `-BackupDatabase` to copy the database, secrets, configuration, simulator
-settings, and any `-wal`/`-shm` files to
+settings, archive PDFs, and any `-wal`/`-shm` files to
 `%LOCALAPPDATA%\AugmentScale\backups\<timestamp>\` before launch.
 
 The window title shows `Augment Scale — TEST DATA` when the active data directory is
@@ -482,6 +486,29 @@ Profile changes apply to future tickets; historical records are unchanged. A sig
 
 The sync indicator shows local outbox activity for Phase 2 readiness. In Phase 1, there is no cloud endpoint, so a successful local save does not mean data reached a server. Treat the local encrypted database as the system of record and maintain backups.
 
+The same popover shows automatic PDF archive status. It reports pending, failed, and recent archive runs, the last successful period, and the last error. When a failed run exists, **Archive now** retries failed runs only; it does not create a partial PDF for the current day.
+
+### 8.11 Automatic PDF archive
+
+The application archives each completed business day as a PDF:
+
+- **Baseline:** on first launch, it creates one report from the earliest ticket through yesterday. If there are no tickets in that range, the baseline is recorded as skipped.
+- **Daily:** it creates one PDF per missed day. Empty days are recorded as skipped and do not produce a PDF.
+- **Schedule:** while the application is open, it targets 00:05 local time for the previous day. If the workstation is off, the missed days are processed on the next launch.
+- **Folders:**
+
+```text
+archives\baseline\augment-scale-baseline-through-YYYY-MM-DD.pdf
+archives\daily\YYYY\MM\augment-scale-YYYY-MM-DD.pdf
+```
+
+- **Retries:** automatic failures retry after 1 minute, 5 minutes, 15 minutes, 1 hour, and 6 hours, up to five attempts. After that, use **Archive now** in the Sync popover.
+- **Scope:** a ticket is assigned to a day by `business_at` (`completed_at`, then `voided_at`, then `deleted_at`, then `created_at`). The report includes the same tickets as the History report for that day.
+- **Retention:** archive PDFs are kept indefinitely; the application does not delete old reports.
+- **Limitation:** the application must be running to generate an archive. There is no Windows service or cloud archive copy.
+
+The database records each run in `archive_runs`. The PDF path stored there is relative to the `archives\` folder.
+
 ---
 
 ## 9. Printing
@@ -494,6 +521,7 @@ The application renders the slip or certificate in the WebView and calls the Win
 - The first weigh slip and the completed certificate use different layouts.
 - Each print is recorded with operator, document type, copy number, and timestamp.
 - A reprint always requires a reason.
+- The automatic daily archive uses the same report layout and renders A4 PDFs through WebView2, without opening the print dialog.
 
 If the print dialog does not open:
 
@@ -537,7 +565,7 @@ Requirements and behavior:
 - Close Augment Scale first. The launcher refuses to start if another instance is running.
 - The launcher prints the selected mode and the full database path before launching. Live mode uses `%LOCALAPPDATA%\AugmentScale\augment-scale.db`.
 - Vehicle, ticket, audit, and outbox writes are real. Back up the database and `secrets.dat` before destructive testing.
-- Add `-BackupDatabase` to create an automatic backup under `%LOCALAPPDATA%\AugmentScale\backups\<timestamp>\`.
+- Add `-BackupDatabase` to create an automatic backup under `%LOCALAPPDATA%\AugmentScale\backups\<timestamp>\`, including the database, secrets, configuration, and `archives\` PDFs.
 - When the application exits, the launcher restores only `scaleConnection.portName` in `setup.json`. The database and other configuration changes remain.
 - If the launcher is forcibly terminated, automatic restore cannot run. Edit `setup.json` manually or restore it from the backup.
 - The `scale_connection_profiles` table keeps the simulator transport until the next normal application launch re-provisions it from the restored `setup.json`.
@@ -612,7 +640,8 @@ Coverage includes:
 - first weigh, completion, reprint, void, and pending deletion;
 - ticket numbering and reuse after deletion;
 - open-ticket guards for vehicle archiving;
-- anomalous-net override persistence.
+- anomalous-net override persistence;
+- archive schema, report generation, baseline/daily scheduling, empty-day skips, retry/backoff, and manual retry.
 
 Tests create temporary directories and do not require a scale, printer, or external network. The transport test uses loopback TCP only.
 
@@ -641,7 +670,11 @@ Tests create temporary directories and do not require a scale, printer, or exter
 - [ ] A supervisor can add, edit, remove, and change the PIN of a profile from Operators.
 - [ ] A non-supervisor cannot open the Operators tab, and a wrong supervisor PIN is rejected.
 - [ ] The last active supervisor and the signed-in profile cannot be removed.
-- [ ] Logs contain startup and scale-health entries.
+- [ ] Automatic archive records the baseline (with a PDF when tickets exist) and creates daily PDFs in the expected folders.
+- [ ] Empty archive days are skipped without creating a PDF.
+- [ ] Sync popover shows archive status, last run, and last error.
+- [ ] Failed archive runs can be retried with **Archive now**.
+- [ ] Logs contain startup, scale-health, and archive entries.
 
 ---
 
@@ -717,6 +750,15 @@ An instance is already open, possibly on another desktop session. Close the exis
 - Restart the application.
 - Use History > Reprint to retry after resolving the printer issue.
 
+### Archive PDF was not created
+
+1. Open the Sync popover and check the archive status and last error.
+2. Confirm the application was running after 00:05, or restart it to process missed days.
+3. Check the log for `Archive failed` entries.
+4. Confirm the `archives\` folder is writable and has free disk space.
+5. If a failed run remains, click **Archive now** in the Sync popover.
+6. Do not delete `archive_runs` rows or edit the database to force a retry.
+
 ### PIN rejected
 
 - PINs are digits only; only digits are accepted.
@@ -757,7 +799,8 @@ This destroys all local tickets and PINs. Never do this on a production workstat
 - Profile management is restricted to the `Supervisor` role and requires a fresh supervisor PIN. The resulting authorization token is held in application memory only and expires after 15 minutes. Other operator actions are not role-restricted.
 - Audit events are stored locally in the encrypted database.
 - The sync outbox is not a backup. Maintain separate encrypted backups of the database and matching secrets file.
-- Treat driver names and phone numbers as personal data. Restrict access to backups and logs.
+- Archive PDFs are plain files outside SQLCipher. They contain the same business and personal data as the database; restrict access to the `archives\` folder and include it in backups.
+- Treat driver names and phone numbers as personal data. Restrict access to backups, archive PDFs, and logs.
 - Do not install untrusted browser extensions or debug the production WebView with remote tools enabled.
 
 ---
@@ -767,6 +810,7 @@ This destroys all local tickets and PINs. Never do this on a production workstat
 - No cloud synchronization or remote dashboard. The outbox is prepared for Phase 2.
 - Removed profiles cannot be restored in the app; they must be re-added as a new profile.
 - Role-based authorization is limited to operator profile management. No automatic database backup scheduler.
+- Automatic PDF archives are local-only and are generated only while the application is running. There is no Windows service, off-machine archive copy, or cloud PDF storage.
 - No hardware certification against every indicator variant; validation used the XK3190 protocol implementation in this repository.
 - Reprints and voids are not blocked by operator role.
 - The application is Windows-only.
@@ -784,6 +828,7 @@ When reporting a problem, provide:
 - relevant lines from `%LOCALAPPDATA%\AugmentScale\logs\app-YYYYMMDD.log`;
 - serial port name and indicator model;
 - exact steps that reproduced the problem;
-- ticket number, if the issue concerns a specific transaction.
+- ticket number, if the issue concerns a specific transaction;
+- archive run period and status, if the issue concerns a missing PDF.
 
 Do not send `secrets.dat` or unencrypted database exports through email or chat.

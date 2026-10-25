@@ -4,7 +4,7 @@
 
 ### 1) Architectural Style
 
-- **Primary style:** Hybrid native desktop host + embedded WebUI (a layered desktop monolith) with an event-driven WebView2 bridge, transactional outbox, and append-only audit trail.
+- **Primary style:** Hybrid native desktop host + embedded WebUI (a layered desktop monolith) with an event-driven WebView2 bridge, transactional outbox, append-only audit trail, and a background PDF archive scheduler that reuses the WebUI report renderer.
 - **Why this classification:** A native C# WPF host owns OS-level concerns — the single-instance mutex, serial port I/O (~15 fps), DPAPI secret protection, SQLCipher encryption, and printing — while Microsoft Edge WebView2 executes a zero-dependency ES module client application. The UI talks to C# through an asynchronous JSON request/response command envelope, and the scale reader pushes reading/status events back into the page (`BridgeService.cs`, `ScaleReaderService.cs`, `MainWindow.xaml.cs`).
 - **Primary constraints:**
   - Air-gapped / offline-first execution: no cloud connectivity is required for full weighbridge ticketing operations; one encrypted local database per workstation (`ConfigService.cs:51-59`).
@@ -25,9 +25,10 @@ WPF App.OnStartup
   -> scale thread -> splitter/decoder/checksum/stability
   -> BridgeService push -> ScaleApp.onWeightData
   -> print / outbox
+  -> PdfArchiveService scheduler -> archive_runs -> hidden WebView2 -> PrintToPdfAsync
 ```
 
-1. **Startup:** `App.OnStartup` acquires the single-instance mutex, initializes `ConfigService`, constructs the services, shows `MainWindow`, then calls `DatabaseService.EnsureInitialized()` so the splash can paint while SQLCipher opens (`App.xaml.cs:17-87`). The `--reset-pin` branch opens a WPF dialog and exits before normal startup (`App.xaml.cs:42-55`).
+1. **Startup:** `App.OnStartup` acquires the single-instance mutex, initializes `ConfigService`, constructs the services, shows `MainWindow`, then calls `DatabaseService.EnsureInitialized()` so the splash can paint while SQLCipher opens (`App.xaml.cs`). After initialization it starts `PdfArchiveService`, which uses `MainWindow.EnvironmentReady` to wait for the shared WebView2 environment before rendering archive PDFs. The `--reset-pin` branch opens a WPF dialog and exits before normal startup (`App.xaml.cs`).
 2. **WebView2 boot:** `MainWindow.OnLoaded` checks the WebView2 runtime, maps `app.augmentscale.local` to the `WebUI` folder, attaches `BridgeService`, and navigates to `index.html` (`MainWindow.xaml.cs:60-98`). Permission requests are denied, new windows are blocked, and the scale reader starts only after navigation succeeds (`:92-93`, `:115-132`).
 3. **Boot payload:** `main.js` starts `loadProductionData()` and HTML partial loading concurrently. `loadProductionData()` calls `getBootState`, which returns operators, vehicles, pending tickets, up to 1,000 history tickets, the next ticket number, and sync status (`WebUI/js/main.js:25-57`, `WebUI/js/state.js:485-509`, `Data/Services/BootStateService.cs`).
 4. **Operator action:** The WebUI calls `sendCommand` in `runtime.js` (for example `createTicket` or `completeTicket`), which posts `{command, payload, requestId}` through `window.chrome.webview.postMessage` to the WebView2 host and rejects after 30 seconds (`WebUI/js/runtime.js:47-69`).
@@ -40,7 +41,8 @@ WPF App.OnStartup
 |-----------------|------|--------------|----------|
 | WPF shell / app host | Process lifetime, single-instance mutex, WebView2 setup, fullscreen/F11, loading overlay, fatal-error display | SQL, scale parsing, ticket rules | `App.xaml.cs`, `MainWindow.xaml.cs` |
 | Configuration/secrets | Data-directory selection, `setup.json`, DPAPI-protected `secrets.dat`, PBKDF2 PIN hashes, paths resolution | Serial communication, ticket or vehicle business rules | `Services/ConfigService.cs` |
-| Persistence | Schema migrations, provisioning, profiles, vehicles, ticket lifecycle, history/report queries, outbox/audit writes, scale health, DTO mappings | UI state, DOM rendering, WPF controls, serial byte parsing | `Services/DatabaseService.cs` (facade), `Data/DatabaseContext.cs`, `Data/Repositories/`, `Data/Services/`, `Services/AuditService.cs` |
+| Persistence | Schema migrations, provisioning, profiles, vehicles, ticket lifecycle, history/report queries, archive run log, outbox/audit writes, scale health, DTO mappings | UI state, DOM rendering, WPF controls, serial byte parsing | `Services/DatabaseService.cs` (facade), `Data/DatabaseContext.cs`, `Data/Repositories/`, `Data/Services/`, `Services/AuditService.cs` |
+| PDF archive | Baseline/daily scheduling, missed-day catch-up, retry/backoff, staging/atomic file placement, archive status for the Sync UI, offscreen WebView2 PDF rendering | Ticket business rules, direct SQL, UI layout | `Services/PdfArchiveService.cs`, `Services/IPdfArchiveRenderer.cs`, `Services/WebViewPdfArchiveRenderer.cs`, `Data/Repositories/ArchiveRunRepository.cs`, `WebUI/archive-report.*` |
 | `AugmentScale.Protocol` | Frame boundary splitting, XOR checksum calculation, numeric parsing, frame encoding, stability rolling-window variance | UI rendering, file I/O, database tables, COM port handles | `AugmentScale.Protocol/Xk3190FrameDecoder.cs`, `Xk3190FrameEncoder.cs`, `Xk3190FrameSplitter.cs`, `StabilityDetector.cs` |
 | Scale transport | COM port lifecycle, TCP socket client, reconnection loop (3 s backoff), raw byte stream pump, status messages | Business validations, ticket numbering, SQL queries, UI layout | `Services/ScaleReaderService.cs` |
 | Bridge | WebView2 message deserialization, command validation/routing, JSON serialization, UI thread marshaling, request/response correlation, push telemetry throttling, 15-minute supervisor session token | Direct SQL queries (delegates to `DatabaseService`), business rules beyond authorization gating | `Services/BridgeService.cs` |
@@ -64,6 +66,9 @@ WPF App.OnStartup
 | Domain repositories behind interfaces | `Services/DatabaseService.cs` composes `Data/Repositories/*` and `Data/Services/*`; implementations are `internal sealed` | Keeps SQL in focused units while preserving one public entry point and manual composition |
 | Short-lived authorization token | `BridgeService.UnlockProfileAdmin` / `RequireProfileAdmin` (`:278-313`) | Avoids resending the supervisor PIN on every profile mutation; the token slides for 15 minutes and is process-local |
 | Dual-mode UI | `IS_PRODUCTION` in `runtime.js:9-11`; seeded arrays in `state.js` | The same UI can run as a browser demo or against the C# host |
+| Background scheduler with durable run log | `PdfArchiveService`, `ArchiveRunRepository`, `archive_runs` | Serializes archive work, survives restarts, catches up missed days, and retries failed runs without duplicating periods |
+| Shared report renderer | `WebUI/js/history-report-document.js`, `history-report.js`, `archive-report.js` | Interactive preview and automated PDF archive use the same report DOM, avoiding layout drift |
+| Hidden WebView2 print-to-PDF | `WebViewPdfArchiveRenderer` | Reuses the main WebView2 environment and installed runtime; renders A4 PDFs without a user print dialog or a second browser engine |
 
 ### 5) Known Architectural Risks
 
@@ -74,7 +79,9 @@ WPF App.OnStartup
 - **Outbox written but never delivered:** `GetSyncStatus` always reports `IsHealthy = true` and the production UI labels sync as "Local only" (`Data/Services/SyncStatusService.cs`, `WebUI/js/sync.js:92-111`). Cloud sync is a planned Phase 2 capability, not an implemented integration.
 - **No JavaScript build, type checker, or automated UI test layer:** Large screens (`first-weigh.js` 1,487 lines, `history.js` 1,176 lines) rely on manual browser/desktop verification.
 - **One new SQLCipher connection per database-backed command:** Operations run synchronously inside `Task.Run` (`BridgeService.cs:101`, `Data/DatabaseContext.cs` (`OpenConnection`)). This is acceptable for one operator but provides no pooling or multi-workstation concurrency model.
-- **Single schema migration:** Schema evolution has one migration (`V001_InitialSchema.sql`) recorded in `schema_version`; there is no migration runner beyond the `version < 1` branch (`Data/SchemaMigrator.cs`). A second schema version requires new code `[TODO]`.
+- **Migration runner is still minimal:** `SchemaMigrator` now applies `V001_InitialSchema.sql` and `V002_ArchiveRuns.sql` transactionally, but there is no generic discovery, downgrade, or rollback path. A future migration requires another explicit version branch (`Data/SchemaMigrator.cs`).
+- **PDF archive depends on the desktop session:** `PdfArchiveService` runs inside the app, so a workstation that is off at 00:05 catches up only on the next launch. The hidden WebView2 renderer depends on the main window's `EnvironmentReady` task, and a failure leaves the run failed until an automatic or manual retry (`Services/PdfArchiveService.cs`, `Services/WebViewPdfArchiveRenderer.cs`).
+- **Archive PDFs are outside SQLCipher:** files under `archives\` are plain PDFs, not encrypted by the database key. The documented backup now copies them with the database and secrets, but they still contain the same business and personal data and must be access-controlled separately (`Services/ConfigService.cs`, `start-dev-sim.ps1`, `USER_MANUAL.md`).
 - **DevTools enabled in all builds:** `AreDevToolsEnabled = true` and a `Ctrl+Shift+D` shortcut allow a local operator to inspect or modify the page runtime and bridge API (`MainWindow.xaml.cs:82`, `:192-198`).
 
 ### 6) Evidence
@@ -96,3 +103,9 @@ WPF App.OnStartup
 - `AugmentScale/WebUI/js/main.js`
 - `AugmentScale.Protocol/StabilityDetector.cs`
 - `AugmentScale/Data/Schema/V001_InitialSchema.sql`
+- `AugmentScale/Data/Schema/V002_ArchiveRuns.sql`
+- `AugmentScale/Services/PdfArchiveService.cs`
+- `AugmentScale/Services/WebViewPdfArchiveRenderer.cs`
+- `AugmentScale/Data/Repositories/ArchiveRunRepository.cs`
+- `AugmentScale/WebUI/archive-report.html`
+- `AugmentScale/WebUI/js/history-report-document.js`

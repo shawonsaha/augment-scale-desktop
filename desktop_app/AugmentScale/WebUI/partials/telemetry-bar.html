@@ -88,6 +88,18 @@
             <span class="sync-metric-val" id="popover-pending-count">0 items</span>
           </div>
           <div class="sync-metric-row">
+            <span>Daily archive:</span>
+            <span class="sync-metric-val" id="popover-archive-status">Waiting for first run</span>
+          </div>
+          <div class="sync-metric-row">
+            <span>Last archive:</span>
+            <span class="sync-metric-val" id="popover-archive-last">—</span>
+          </div>
+          <div class="sync-metric-row" id="popover-archive-error-row" hidden>
+            <span>Archive error:</span>
+            <span class="sync-metric-val sync-metric-val--error" id="popover-archive-error"></span>
+          </div>
+          <div class="sync-metric-row">
             <span>Data Destination:</span>
             <span class="sync-metric-val">This workstation (SQLite)</span>
           </div>
@@ -96,7 +108,9 @@
             <span class="sync-metric-val">Encrypted local database</span>
           </div>
         </div>
+        <div class="sync-archive-recent" id="popover-archive-recent" aria-label="Recent archive runs"></div>
         <div class="sync-popover-actions">
+          <button class="sync-action-btn" id="btn-archive-retry" hidden>Archive now</button>
           <button class="sync-action-btn primary" id="btn-sync-now">↻ Check Outbox</button>
         </div>
       </div>

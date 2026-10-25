@@ -15,7 +15,7 @@
 
 | Dependency | Version | Role in system | Evidence |
 |------------|---------|----------------|----------|
-| `Microsoft.Web.WebView2` | 1.0.4258.31 | Embedded Chromium web host for the local HTML/CSS/JS interface; provides the postMessage RPC channel | `AugmentScale/AugmentScale.csproj:24`, `AugmentScale/MainWindow.xaml.cs:75-98` |
+| `Microsoft.Web.WebView2` | 1.0.4258.31 | Embedded Chromium web host for the local HTML/CSS/JS interface; provides the postMessage RPC channel and offscreen A4 PDF rendering for the automatic archive | `AugmentScale/AugmentScale.csproj:24`, `AugmentScale/MainWindow.xaml.cs:75-98`, `AugmentScale/Services/WebViewPdfArchiveRenderer.cs` |
 | `Microsoft.Data.Sqlite.Core` | 10.0.2 | SQLite ADO.NET database provider | `AugmentScale/AugmentScale.csproj:25`, `AugmentScale/Data/DatabaseContext.cs` (`OpenConnection`) |
 | `SQLitePCLRaw.bundle_e_sqlcipher` | 2.1.11 | SQLCipher 4 native provider for AES-256 database encryption at rest | `AugmentScale/AugmentScale.csproj:26`, `AugmentScale/Data/DatabaseContext.cs` (`SqliteInitialized`, `OpenConnection`) |
 | `System.IO.Ports` | 10.0.13 | Serial communications for the Yaohua XK3190-D10 RS-232 indicator; also used indirectly by the simulator's TCP transport | `AugmentScale/AugmentScale.csproj:27`, `AugmentScale/Services/ScaleReaderService.cs:100-123` |
@@ -48,7 +48,7 @@ dotnet restore AugmentScale.slnx
 # Compile Debug build
 dotnet build AugmentScale.slnx -c Debug
 
-# Execute automated tests (77 tests)
+# Execute automated tests (82 tests)
 dotnet test AugmentScale.slnx -c Debug
 
 # Execute the same suite through the test project
@@ -79,7 +79,7 @@ Self-contained publish:
 dotnet publish AugmentScale\AugmentScale.csproj -c Release -r win-x64 --self-contained true -o ".\publish\win-x64-selfcontained"
 ```
 
-There is no lint command. A full run on 2026-10-24 after the persistence refactor produced `Passed: 77, Failed: 0, Total: 77` in roughly 26–34 seconds across post-refactor runs (29 seconds before the refactor). Evidence: `USER_MANUAL.md:90-119` and the test command above.
+There is no lint command. A full run on 2026-10-25 after the PDF archive work produced `Passed: 82, Failed: 0, Total: 82` in about 33 seconds; an earlier cold/loaded run took about 1 minute 9 seconds. The prior persistence-refactor baseline was `Passed: 77, Failed: 0, Total: 77` in roughly 26–34 seconds. Evidence: the test command above.
 
 ### 5) Environment and Config
 
@@ -88,10 +88,11 @@ There is no lint command. A full run on 2026-10-24 after the persistence refacto
   - `%LOCALAPPDATA%\AugmentScale\setup.json` holds organization, site, weighbridge, scale connection, and bootstrap operator settings.
   - `%LOCALAPPDATA%\AugmentScale\secrets.dat` is a DPAPI-protected JSON file containing `databaseKey` and PBKDF2 PIN hashes (`ConfigService.cs:185-266`, `Models/SetupConfig.cs`).
   - `augment-scale.db` is the SQLCipher database (`ConfigService.cs:57`).
+  - `archives/` holds baseline and daily archive PDFs and the `.staging/` work folder (`ConfigService.ArchiveDirectory`).
   - `logs/app-YYYYMMDD.log` is the rolling application log (`AppLog.cs:22-35`).
   - `WebView2/` is the browser user-data directory (`ConfigService.cs:58`).
 - Default data directory: `%LOCALAPPDATA%\AugmentScale` (`ConfigService.cs:51-53`).
-- Required env vars: none required for normal execution. Optional override: `AUGMENTSCALE_DATA_DIR` sets an isolated custom data directory for the database, secrets, logs, and WebView2 profile (`ConfigService.cs:35-38`). No other application environment variables are read.
+- Required env vars: none required for normal execution. Optional override: `AUGMENTSCALE_DATA_DIR` sets an isolated custom data directory for the database, secrets, logs, WebView2 profile, and `archives/` (`ConfigService.cs:35-38`). No other application environment variables are read.
 - CLI arguments: `--reset-pin <operator-id>` opens a WPF PIN-reset dialog and then exits (`App.xaml.cs:42-55`, `:108-195`).
 - `setup.json` keys: `organization`, `site`, `weighbridge`, `scaleConnection` (port name, baud/parity/stop bits, protocol format, stability window/tolerance), and `operators` bootstrap records (`Models/SetupConfig.cs`, `Resources/setup.json`).
 - Deployment/runtime constraints:
@@ -113,6 +114,9 @@ There is no lint command. A full run on 2026-10-24 after the persistence refacto
 - `AugmentScale/Services/ConfigService.cs`
 - `AugmentScale/Data/DatabaseContext.cs`
 - `AugmentScale/Services/AppLog.cs`
+- `AugmentScale/Services/PdfArchiveService.cs`
+- `AugmentScale/Services/WebViewPdfArchiveRenderer.cs`
+- `AugmentScale/Data/Schema/V002_ArchiveRuns.sql`
 - `USER_MANUAL.md`
 - `start-dev-sim.ps1`
 - `tools/Get-DbKey.ps1`

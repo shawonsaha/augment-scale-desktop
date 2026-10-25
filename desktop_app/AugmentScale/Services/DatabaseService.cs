@@ -19,6 +19,7 @@ public sealed class DatabaseService
     private readonly VehicleRepository _vehicles;
     private readonly TicketRepository _tickets;
     private readonly HistoryReportService _reports;
+    private readonly ArchiveRunRepository _archives;
     private readonly SyncStatusService _sync;
     private readonly ScaleHealthService _health;
     private readonly BootStateService _boot;
@@ -30,7 +31,8 @@ public sealed class DatabaseService
         _vehicles = new VehicleRepository(_context);
         _tickets = new TicketRepository(_context, _vehicles);
         _reports = new HistoryReportService(_context, _operators, _tickets);
-        _sync = new SyncStatusService(_context);
+        _archives = new ArchiveRunRepository(_context);
+        _sync = new SyncStatusService(_context, _archives);
         _health = new ScaleHealthService(_context);
         _boot = new BootStateService(_context, _operators, _vehicles, _tickets, _sync);
 
@@ -50,6 +52,7 @@ public sealed class DatabaseService
     public ISyncStatusService Sync { get; }
     public IScaleHealthService Health { get; }
     public IBootStateService Boot { get; }
+    internal ArchiveRunRepository ArchiveRuns => _archives;
 
     public string OrganizationId { get { EnsureInitialized(); return _context.OrganizationId; } }
     public string SiteId { get { EnsureInitialized(); return _context.SiteId; } }

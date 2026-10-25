@@ -39,6 +39,21 @@ internal static class SchemaMigrator
             record.CommandText = "INSERT INTO schema_version (version, name) VALUES (1, 'InitialSchema');";
             record.ExecuteNonQuery();
         }
+
+        if (version < 2)
+        {
+            var sql = ReadEmbeddedSql("V002_ArchiveRuns.sql");
+            using var txn = connection.BeginTransaction();
+            using var apply = connection.CreateCommand();
+            apply.Transaction = txn;
+            apply.CommandText = sql;
+            apply.ExecuteNonQuery();
+            using var record = connection.CreateCommand();
+            record.Transaction = txn;
+            record.CommandText = "INSERT INTO schema_version (version, name) VALUES (2, 'ArchiveRuns');";
+            record.ExecuteNonQuery();
+            txn.Commit();
+        }
     }
 
     private static string ReadEmbeddedSql(string suffix)

@@ -17,6 +17,8 @@ public partial class MainWindow : Window
     private readonly DatabaseService _database;
     private readonly ScaleReaderService _scale;
     private readonly BridgeService _bridge;
+    private readonly TaskCompletionSource<CoreWebView2Environment> _environmentReady =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _fullscreen;
     private WindowState _previousState;
     private WindowStyle _previousStyle;
@@ -50,6 +52,8 @@ public partial class MainWindow : Window
         Closing += OnClosing;
     }
 
+    public Task<CoreWebView2Environment> EnvironmentReady => _environmentReady.Task;
+
     private void OnUiReady()
     {
         // Raised on the UI thread by BridgeService when the interface reports
@@ -76,6 +80,7 @@ public partial class MainWindow : Window
                 browserExecutableFolder: null,
                 userDataFolder: _config.WebViewDataDirectory);
             await WebView.EnsureCoreWebView2Async(environment);
+            _environmentReady.TrySetResult(environment);
 
             var core = WebView.CoreWebView2;
             core.Settings.AreDefaultContextMenusEnabled = false;
@@ -99,6 +104,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or InvalidOperationException)
         {
+            _environmentReady.TrySetException(ex);
             AppLog.Error("WebView2 initialization failed", ex);
             ShowFatal(
                 "Microsoft Edge WebView2 Runtime is required.\n\n" +
@@ -107,6 +113,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _environmentReady.TrySetException(ex);
             AppLog.Error("Window initialization failed", ex);
             ShowFatal($"Augment Scale could not load its interface.\n\n{ex.Message}");
         }
@@ -222,6 +229,7 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        _environmentReady.TrySetCanceled();
         try { _scale.Stop(); } catch { /* app exit */ }
         try { WebView.Dispose(); } catch { /* app exit */ }
     }

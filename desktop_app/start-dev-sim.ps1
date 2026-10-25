@@ -88,6 +88,10 @@ if ($BackupDatabase) {
             Copy-Item -LiteralPath $source -Destination (Join-Path $backupDir ('augment-scale.db' + $suffix))
         }
     }
+    $archiveSource = Join-Path $DataDir 'archives'
+    if (Test-Path -LiteralPath $archiveSource) {
+        Copy-Item -LiteralPath $archiveSource -Destination (Join-Path $backupDir 'archives') -Recurse
+    }
 
     if (-not (Test-Path -LiteralPath (Join-Path $backupDir 'augment-scale.db'))) {
         Write-Warning "No augment-scale.db was found in '$DataDir'; the application will create a new database."

@@ -835,6 +835,7 @@ export const state = {
     lastSyncTimestamp: new Date(),
     pendingQueue: 0,
     syncInProgress: false,
+    archive: null,
   },
 
   // Filtered tickets cache for keyboard navigation

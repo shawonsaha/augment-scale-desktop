@@ -124,7 +124,7 @@ erDiagram
 ```
 
 > [!NOTE]
-> `ticket_history` is a derived view over `weigh_tickets` and `print_jobs`, so it is not shown in the ERD.
+> `ticket_history` is a derived view over `weigh_tickets` and `print_jobs`, so it is not shown in the ERD. `archive_runs` is local-only and is also omitted from the cloud-oriented ERD.
 
 ---
 
@@ -780,6 +780,51 @@ FROM weigh_tickets t;
 
 ---
 
+### 24. `archive_runs` (Local only)
+
+The durable log for automatic daily PDF archives. One row per baseline or daily report
+period. The row is the source of truth for pending, processing, succeeded, skipped, and
+failed archive work; the PDF file itself lives under the configured data directory in
+`archives\`.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT (uuid) | PK | |
+| `organization_id` | TEXT (uuid) | FK → organizations, NN | |
+| `kind` | TEXT | NN, CHECK IN (`baseline`, `daily`) | One baseline per organization; daily per calendar day |
+| `period_start` | TEXT (date) | NN | First business date in the report |
+| `period_end` | TEXT (date) | NN | Last business date in the report |
+| `status` | TEXT | NN, DEFAULT `pending`, CHECK IN (`pending`, `processing`, `succeeded`, `skipped`, `failed`) | Run state |
+| `file_path` | TEXT | | Relative path under `archives\`; NULL for pending/skipped/failed |
+| `report_id` | TEXT | | Report identifier from the generated history report |
+| `integrity_hash` | TEXT | | SHA-256 of the report snapshot |
+| `error_message` | TEXT | | Last failure detail |
+| `attempt_count` | INTEGER | NN, DEFAULT 0 | Automatic and manual attempts |
+| `next_attempt_at` | TEXT (timestamptz) | | Backoff gate for pending/failed runs |
+| `created_at` | TEXT (timestamptz) | NN | |
+| `started_at` | TEXT (timestamptz) | | When processing was claimed |
+| `completed_at` | TEXT (timestamptz) | | Terminal success/skip time |
+| `updated_at` | TEXT (timestamptz) | NN | |
+
+> [!NOTE]
+> **Local-only table.** `archive_runs` is not part of the Phase 1 cloud schema. PDFs are
+> workstation artifacts, not synced business rows. A future cloud archive can store report
+> metadata and PDF objects separately without changing the local run log.
+>
+> **Period identity.** `UNIQUE (organization_id, kind, period_start, period_end)` prevents
+> duplicate reports; a partial unique index on `organization_id WHERE kind = 'baseline'`
+> enforces one baseline per organization.
+>
+> **Ticket-to-day assignment.** Reports use `ticket_history.business_at`
+> (`COALESCE(completed_at, voided_at, deleted_at, created_at)`), matching the History
+> screen. Empty periods become `skipped` and do not create a PDF.
+>
+> **Retry behavior.** Pending/failed runs retry after 1 minute, 5 minutes, 15 minutes,
+> 1 hour, and 6 hours, up to five attempts. A manual retry resets `attempt_count` and
+> `next_attempt_at` and leaves the previous error visible until the retry starts.
+
+---
+
 ## Indexes
 
 ### SQLite indexes (local performance on old hardware)
@@ -829,6 +874,15 @@ CREATE INDEX idx_audit_time ON audit_events(created_at);
 
 -- Weight captures per ticket
 CREATE INDEX idx_captures_ticket ON weight_captures(ticket_id);
+
+-- Automatic PDF archive runs (local only)
+CREATE UNIQUE INDEX idx_archive_runs_period
+  ON archive_runs(organization_id, kind, period_start, period_end);
+CREATE UNIQUE INDEX idx_archive_runs_baseline
+  ON archive_runs(organization_id) WHERE kind = 'baseline';
+CREATE INDEX idx_archive_runs_due ON archive_runs(status, next_attempt_at);
+CREATE INDEX idx_archive_runs_recent
+  ON archive_runs(organization_id, period_end DESC, created_at DESC);
 ```
 
 > [!NOTE]
@@ -869,6 +923,7 @@ CREATE INDEX idx_tickets_date_range ON weigh_tickets(organization_id, created_at
 | `sync_cursors` | ✅ Exists | ❌ Does not exist | Local-only position tracker |
 | `offline_leases` | ✅ Exists | ❌ Does not exist | Local-only cached permissions |
 | `device_events` | ❌ Does not exist | ✅ Exists | Cloud-only dedup log |
+| `archive_runs` | ✅ Exists | ❌ Does not exist | Local PDF archive log; PDFs are workstation artifacts |
 | Archive / restore (vehicles) | `UPDATE vehicles SET deleted_at...` | Same | Soft delete; the UI derives `active` / `archived` |
 | History ledger | `ticket_history` view | Same view | Derived; no stored status/stage/count columns |
 | Truck list stats | Cached `trip_count` / `last_weighed_at` / `last_tare_kg` | Same columns | Rebuilt from `weigh_tickets`; avoids aggregates on old hardware |
@@ -894,6 +949,7 @@ CREATE INDEX idx_tickets_date_range ON weigh_tickets(organization_id, created_at
 - Reprint: the first print is copy 1; reprints are copy 2+ with `reprint_reason`; the unique copy index rejects duplicates.
 - History view: `status_display`, `stage`, `business_at`, `last_status_at`, and `print_count` match the prototype's four ticket collections.
 - Reporting: tonnage excludes pending, deleted, and voided tickets.
+- Archive runs: baseline/daily rows are unique per period, empty days become `skipped`, failed runs retry with backoff, manual retry resets the attempt state, and succeeded rows store the relative PDF path and integrity hash.
 
 ### Manual Verification
 - Compare a sample of 10 legacy tickets with their migrated equivalents; verify all field values match.

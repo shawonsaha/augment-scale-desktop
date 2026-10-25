@@ -36,6 +36,8 @@ public sealed class BridgeService
     /// <summary>Raised when the web UI signals that its first screen is interactive.</summary>
     public event Action? UiReady;
 
+    public PdfArchiveService? Archive { get; set; }
+
     public BridgeService(DatabaseService database, ScaleReaderService scale)
     {
         _database = database;
@@ -198,6 +200,13 @@ public sealed class BridgeService
 
             case "getSyncStatus":
                 return _database.GetSyncStatus();
+
+            case "retryArchive":
+            {
+                var archive = Archive
+                    ?? throw new InvalidOperationException("The archive service is not ready.");
+                return new { retried = archive.RetryFailedNow() };
+            }
 
             case "getScaleStatus":
                 return new

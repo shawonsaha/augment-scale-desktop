@@ -1,0 +1,91 @@
+/* Offscreen archive renderer page: document only, no modal chrome. */
+
+html,
+body {
+  width: 100%;
+  height: auto;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+#app {
+  display: block;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  background: #ffffff;
+}
+
+#history-report-modal {
+  display: block;
+  position: static;
+  inset: auto;
+  padding: 0;
+  background: #ffffff;
+  opacity: 1;
+  visibility: visible;
+  backdrop-filter: none;
+}
+
+#history-report-modal .history-report-modal {
+  display: block;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: #ffffff;
+  transform: none;
+}
+
+#history-report-modal .history-report-stage--preview {
+  display: block;
+  padding: 0;
+  overflow: visible;
+}
+
+#history-report-modal .history-report-preview-scroll {
+  display: block;
+  padding: 0;
+  overflow: visible;
+  background: #ffffff;
+}
+
+#history-report-modal .history-report-document {
+  width: 820px;
+  min-height: 1160px;
+  margin: 0 auto;
+  border: none;
+  box-shadow: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    background: #ffffff;
+  }
+
+  #history-report-modal .history-report-document {
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+}
