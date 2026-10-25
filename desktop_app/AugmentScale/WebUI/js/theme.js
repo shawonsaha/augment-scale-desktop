@@ -23,6 +23,12 @@ export function initThemeToggle() {
       isDark ? 'Switch to Day Shift Mode' : 'Switch to Night Shift Mode'
     );
     localStorage.setItem('weighbridge-theme', theme);
+    try {
+      window.chrome?.webview?.postMessage({
+        type: 'theme-changed',
+        theme: theme,
+      });
+    } catch {}
   }
 
   // The theme is applied before first paint by the inline script in index.html;
@@ -30,7 +36,7 @@ export function initThemeToggle() {
   const savedTheme =
     document.documentElement.getAttribute('data-theme') ||
     localStorage.getItem('weighbridge-theme') ||
-    'light';
+    'dark';
   setTheme(savedTheme);
 
   toggleBtn.addEventListener('click', () => {

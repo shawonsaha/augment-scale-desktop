@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using AugmentScale.Services;
+using System.Runtime.InteropServices;
 
 namespace AugmentScale;
 
@@ -16,8 +17,25 @@ public partial class App : Application
     private BridgeService? _bridge;
     private PdfArchiveService? _archive;
 
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(
+        [MarshalAs(UnmanagedType.LPWStr)] string AppID);
+
+    [DllImport("shell32.dll")]
+    private static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        try
+        {
+            SetCurrentProcessExplicitAppUserModelID("AugmentScale.Workstation.1.0");
+            SHChangeNotify(0x08000000 /* SHCNE_ASSOCCHANGED */, 0, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch
+        {
+            // Best effort on non-standard Windows shells.
+        }
+
         base.OnStartup(e);
 
         _singleInstance = new Mutex(true, @"Local\AugmentScale.SingleInstance", out var isFirst);

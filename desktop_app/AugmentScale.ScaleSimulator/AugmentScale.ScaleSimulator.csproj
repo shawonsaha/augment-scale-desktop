@@ -5,6 +5,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>AugmentScale.ScaleSimulator</RootNamespace>
     <AssemblyName>AugmentScale.ScaleSimulator</AssemblyName>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Platforms>x64</Platforms>
@@ -15,5 +16,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AugmentScale.Protocol\AugmentScale.Protocol.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\app.ico" />
   </ItemGroup>
 </Project>

@@ -36,6 +36,9 @@ public sealed class BridgeService
     /// <summary>Raised when the web UI signals that its first screen is interactive.</summary>
     public event Action? UiReady;
 
+    /// <summary>Raised when the web UI requests a title bar theme change (e.g. "dark" or "light").</summary>
+    public event Action<string>? ThemeChanged;
+
     public PdfArchiveService? Archive { get; set; }
 
     public BridgeService(DatabaseService database, ScaleReaderService scale)
@@ -64,22 +67,45 @@ public sealed class BridgeService
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         var json = e.WebMessageAsJson;
-        if (IsUiReadyMessage(json))
+        if (TryHandleThemeOrUiReady(json))
         {
-            UiReady?.Invoke();
             return;
         }
         _ = HandleMessageAsync(json);
     }
 
-    private static bool IsUiReadyMessage(string json)
+    private bool TryHandleThemeOrUiReady(string json)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.ValueKind == JsonValueKind.Object &&
-                   doc.RootElement.TryGetProperty("type", out var type) &&
-                   string.Equals(type.GetString(), "ui-ready", StringComparison.OrdinalIgnoreCase);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+
+            if (!doc.RootElement.TryGetProperty("type", out var typeProp))
+                return false;
+
+            var type = typeProp.GetString();
+            if (string.Equals(type, "theme-changed", StringComparison.OrdinalIgnoreCase))
+            {
+                if (doc.RootElement.TryGetProperty("theme", out var themeProp) && themeProp.GetString() is { } theme)
+                {
+                    ThemeChanged?.Invoke(theme);
+                }
+                return true;
+            }
+
+            if (string.Equals(type, "ui-ready", StringComparison.OrdinalIgnoreCase))
+            {
+                if (doc.RootElement.TryGetProperty("theme", out var themeProp) && themeProp.GetString() is { } theme)
+                {
+                    ThemeChanged?.Invoke(theme);
+                }
+                UiReady?.Invoke();
+                return true;
+            }
+
+            return false;
         }
         catch (JsonException)
         {

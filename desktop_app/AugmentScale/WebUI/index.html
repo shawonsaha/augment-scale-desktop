@@ -12,10 +12,10 @@
     <script>
       (function () {
         try {
-          var theme = localStorage.getItem('weighbridge-theme') || 'light';
+          var theme = localStorage.getItem('weighbridge-theme') || 'dark';
           document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'light');
+          document.documentElement.setAttribute('data-theme', 'dark');
         }
       })();
     </script>

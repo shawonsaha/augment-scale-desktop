@@ -5,6 +5,9 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using AugmentScale.Services;
 using Microsoft.Web.WebView2.Core;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
+using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Wpf;
 
 namespace AugmentScale;
@@ -46,7 +49,20 @@ public partial class MainWindow : Window
         Title = _config.IsDefaultDataDirectory
             ? "Augment Scale"
             : "Augment Scale — TEST DATA";
+
+        try
+        {
+            var uri = new Uri("pack://application:,,,/AugmentScale;component/Resources/app.ico");
+            Icon = BitmapFrame.Create(uri);
+        }
+        catch
+        {
+            // Best effort; XAML declaration and Win32 fallback handle this.
+        }
+
         _bridge.UiReady += OnUiReady;
+        _bridge.ThemeChanged += OnThemeChanged;
+        SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Activated += OnActivated;
         Closing += OnClosing;
@@ -232,5 +248,141 @@ public partial class MainWindow : Window
         _environmentReady.TrySetCanceled();
         try { _scale.Stop(); } catch { /* app exit */ }
         try { WebView.Dispose(); } catch { /* app exit */ }
+    }
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        // Paint dark title bar immediately at window creation so the #0B1220 splash never flashes white
+        ApplyTitleBarTheme(isDark: true);
+        ApplyWindowIcons(hwnd);
+    }
+
+    private void OnThemeChanged(string theme)
+    {
+        var isDark = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase);
+        Dispatcher.BeginInvoke(DispatcherPriority.Normal, () => ApplyTitleBarTheme(isDark));
+    }
+
+    private void ApplyTitleBarTheme(bool isDark)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+
+        try
+        {
+            int useDarkMode = isDark ? 1 : 0;
+            var hrDark = DwmApi.DwmSetWindowAttribute(hwnd, DwmApi.DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
+            if (hrDark != 0)
+            {
+                hrDark = DwmApi.DwmSetWindowAttribute(hwnd, DwmApi.DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref useDarkMode, sizeof(int));
+            }
+            AppLog.Info($"Dwm dark mode (isDark={isDark}) HRESULT=0x{hrDark:X8}");
+
+            if (Environment.OSVersion.Version.Build >= 22000)
+            {
+                // #0B1220 in COLORREF format (0x00BBGGRR): R=0x0B, G=0x12, B=0x20 => 0x0020120B
+                int captionColor = isDark ? 0x0020120B : DwmApi.DWMWA_COLOR_DEFAULT;
+                int textColor = isDark ? 0x00FFFFFF : DwmApi.DWMWA_COLOR_DEFAULT;
+                var hrCap = DwmApi.DwmSetWindowAttribute(hwnd, DwmApi.DWMWA_CAPTION_COLOR, ref captionColor, sizeof(int));
+                var hrTxt = DwmApi.DwmSetWindowAttribute(hwnd, DwmApi.DWMWA_TEXT_COLOR, ref textColor, sizeof(int));
+                AppLog.Info($"Dwm caption color HRESULT=0x{hrCap:X8}, text color HRESULT=0x{hrTxt:X8}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Info($"Could not update window title bar theme: {ex.Message}");
+        }
+    }
+
+    private static class DwmApi
+    {
+        public const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+        public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        public const int DWMWA_CAPTION_COLOR = 35;
+        public const int DWMWA_TEXT_COLOR = 36;
+        public const int DWMWA_COLOR_DEFAULT = unchecked((int)0xFFFFFFFF);
+
+        [DllImport("dwmapi.dll", PreserveSig = true)]
+        public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+    }
+    private void ApplyWindowIcons(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        try
+        {
+            var iconCandidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "Resources", "app.ico"),
+                Path.Combine(AppContext.BaseDirectory, "app.ico")
+            };
+
+            var iconPath = iconCandidates.FirstOrDefault(File.Exists);
+            IntPtr hBig = IntPtr.Zero;
+            IntPtr hSmall = IntPtr.Zero;
+
+            if (iconPath is not null)
+            {
+                hBig = NativeMethods.LoadImage(IntPtr.Zero, iconPath, NativeMethods.IMAGE_ICON, 32, 32, NativeMethods.LR_LOADFROMFILE);
+                hSmall = NativeMethods.LoadImage(IntPtr.Zero, iconPath, NativeMethods.IMAGE_ICON, 16, 16, NativeMethods.LR_LOADFROMFILE);
+            }
+
+            if (hBig == IntPtr.Zero || hSmall == IntPtr.Zero)
+            {
+                var exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
+                if (!string.IsNullOrEmpty(exePath))
+                {
+                    NativeMethods.ExtractIconEx(exePath, 0, out var extBig, out var extSmall, 1);
+                    if (hBig == IntPtr.Zero) hBig = extBig;
+                    if (hSmall == IntPtr.Zero) hSmall = extSmall;
+                }
+            }
+
+            if (hBig != IntPtr.Zero)
+            {
+                NativeMethods.SendMessage(hwnd, NativeMethods.WM_SETICON, (IntPtr)NativeMethods.ICON_BIG, hBig);
+                NativeMethods.SetClassLongPtr(hwnd, NativeMethods.GCLP_HICON, hBig);
+                AppLog.Info($"Applied Win32 ICON_BIG (32x32) 0x{hBig:X8} to HWND 0x{hwnd:X8}");
+            }
+
+            if (hSmall != IntPtr.Zero)
+            {
+                NativeMethods.SendMessage(hwnd, NativeMethods.WM_SETICON, (IntPtr)NativeMethods.ICON_SMALL, hSmall);
+                NativeMethods.SetClassLongPtr(hwnd, NativeMethods.GCLP_HICONSM, hSmall);
+                AppLog.Info($"Applied Win32 ICON_SMALL (16x16) 0x{hSmall:X8} to HWND 0x{hwnd:X8}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Info($"Could not apply Win32 window icons: {ex.Message}");
+        }
+    }
+
+    private static class NativeMethods
+    {
+        public const uint WM_SETICON = 0x0080;
+        public const int ICON_SMALL = 0;
+        public const int ICON_BIG = 1;
+        public const uint IMAGE_ICON = 1;
+        public const uint LR_LOADFROMFILE = 0x00000010;
+        public const int GCLP_HICON = -14;
+        public const int GCLP_HICONSM = -34;
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern IntPtr LoadImage(IntPtr hinst, string lpszName, uint uType, int cxDesired, int cyDesired, uint fuLoad);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        public static extern uint ExtractIconEx(string szFileName, int nIconIndex, out IntPtr phiconLarge, out IntPtr phiconSmall, uint nIcons);
+
+        [DllImport("user32.dll", EntryPoint = "SetClassLongPtr")]
+        public static extern IntPtr SetClassLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+        [DllImport("user32.dll", EntryPoint = "SetClassLong")]
+        public static extern IntPtr SetClassLong32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+        public static IntPtr SetClassLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong) =>
+            IntPtr.Size == 8 ? SetClassLongPtr64(hWnd, nIndex, dwNewLong) : SetClassLong32(hWnd, nIndex, dwNewLong);
     }
 }

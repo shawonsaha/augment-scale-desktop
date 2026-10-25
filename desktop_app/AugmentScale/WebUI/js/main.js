@@ -63,7 +63,10 @@ function notifyUiReady() {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       try {
-        window.chrome.webview.postMessage({ type: 'ui-ready' });
+        window.chrome.webview.postMessage({
+          type: 'ui-ready',
+          theme: document.documentElement.getAttribute('data-theme') || 'dark',
+        });
       } catch {}
     });
   });
