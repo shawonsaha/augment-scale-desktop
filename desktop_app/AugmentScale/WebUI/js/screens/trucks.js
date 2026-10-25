@@ -469,7 +469,7 @@ export function initTrucksScreen() {
   document.addEventListener('screenchange', (event) => {
     if (event.detail?.screenId !== 'trucks-screen') return;
     if (IS_PRODUCTION) {
-      refreshVehiclesFromDatabase().catch(() => {});
+      refreshVehiclesFromDatabase(true).catch(() => {});
     }
     requestAnimationFrame(() => {
       pageSize = calculatePageSize();

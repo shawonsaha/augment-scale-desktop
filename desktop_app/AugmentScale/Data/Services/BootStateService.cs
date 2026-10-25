@@ -30,9 +30,10 @@ internal sealed class BootStateService : IBootStateService
         return new BootStateDto
         {
             Operators = _operators.GetOperators(connection),
-            Vehicles = _vehicles.GetVehicles(connection),
+            Vehicles = _vehicles.GetActiveVehicles(connection),
             Pending = _tickets.GetPendingTickets(connection),
-            History = _tickets.GetHistory(connection, BootHistoryLimit, null),
+            History = _tickets.GetHistorySince(connection, new DateTimeOffset(DateTime.Today),
+                BootHistoryLimit),
             NextTicketNumber = _tickets.PeekNextTicketNumber(connection, null),
             Sync = _sync.GetSyncStatus(connection),
         };

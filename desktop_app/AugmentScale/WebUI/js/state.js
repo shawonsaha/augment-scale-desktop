@@ -464,13 +464,13 @@ function notifyVehicleRefresh() {
   }
 }
 
-export async function refreshVehiclesFromDatabase() {
+export async function refreshVehiclesFromDatabase(includeArchived = false) {
   if (!IS_PRODUCTION) {
     notifyVehicleRefresh();
     return REGISTERED_TRUCKS;
   }
 
-  const vehicles = await sendCommand('getVehicles');
+  const vehicles = await sendCommand('getVehicles', { includeArchived });
   setRegisteredTrucks(vehicles || []);
   notifyVehicleRefresh();
   return REGISTERED_TRUCKS;
@@ -482,7 +482,7 @@ export function setNextTicketId(id) {
 }
 
 /** Loads all durable state from C# in one round-trip before any screen is initialised. */
-export async function loadProductionData() {
+export async function loadProductionData({ resetHistory = true } = {}) {
   if (!IS_PRODUCTION) return;
 
   const boot = await sendCommand('getBootState');
@@ -490,12 +490,14 @@ export async function loadProductionData() {
   setOperators(boot.operators || []);
   setRegisteredTrucks(boot.vehicles || []);
   setPendingTickets(boot.pending || []);
-
-  const all = boot.history || [];
-  setCompletedTickets(all.filter((ticket) => ticket.status === 'completed'));
-  setVoidedTickets(all.filter((ticket) => ticket.status === 'voided'));
-  setDeletedTickets(all.filter((ticket) => ticket.status === 'deleted'));
   setNextTicketId(boot.nextTicketNumber);
+
+  if (resetHistory) {
+    const all = boot.history || [];
+    setCompletedTickets(all.filter((ticket) => ticket.status === 'completed'));
+    setVoidedTickets(all.filter((ticket) => ticket.status === 'voided'));
+    setDeletedTickets(all.filter((ticket) => ticket.status === 'deleted'));
+  }
 
   state.sync.isHealthy = boot.sync?.isHealthy !== false;
   state.sync.pendingQueue = boot.sync?.pendingQueue || 0;
@@ -508,29 +510,13 @@ export async function loadProductionData() {
   document.dispatchEvent(new CustomEvent('operators:refresh'));
 }
 
-/** Merges older tickets (fetched on demand by the History date filters) into the
- *  in-memory ledgers without duplicating rows already loaded at boot. */
-export function mergeHistoryTickets(tickets) {
+/** Replaces the closed-ticket ledgers with the active History date range.
+ *  Pending tickets stay in pendingTickets, so memory is bounded by one range. */
+export function replaceHistoryTickets(tickets) {
   const rows = (tickets || []).filter(Boolean);
-  if (rows.length === 0) return;
-
-  const known = new Set([
-    ...pendingTickets.map((t) => t.id),
-    ...completedTickets.map((t) => t.id),
-    ...voidedTickets.map((t) => t.id),
-    ...deletedTickets.map((t) => t.id),
-  ]);
-  const fresh = rows.filter((t) => !known.has(t.id));
-  if (fresh.length === 0) return;
-
-  for (const ticket of fresh) {
-    switch (ticket.status) {
-      case 'completed': completedTickets.push(ticket); break;
-      case 'voided': voidedTickets.push(ticket); break;
-      case 'deleted': deletedTickets.push(ticket); break;
-      default: pendingTickets.push(ticket); break;
-    }
-  }
+  setCompletedTickets(rows.filter((ticket) => ticket.status === 'completed'));
+  setVoidedTickets(rows.filter((ticket) => ticket.status === 'voided'));
+  setDeletedTickets(rows.filter((ticket) => ticket.status === 'deleted'));
 }
 
 /** Verifies the PIN in C# (DPAPI-backed hash) when running in the desktop app. */

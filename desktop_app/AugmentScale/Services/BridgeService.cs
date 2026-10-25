@@ -159,7 +159,12 @@ public sealed class BridgeService
             }
 
             case "getVehicles":
-                return _database.GetVehicles();
+            {
+                var request = Deserialize<VehicleQueryRequest>(payload);
+                return request.IncludeArchived
+                    ? _database.GetVehicles()
+                    : _database.GetActiveVehicles();
+            }
 
             case "getPendingTickets":
                 return _database.GetPendingTickets();

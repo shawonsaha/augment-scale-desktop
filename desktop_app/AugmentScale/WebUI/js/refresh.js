@@ -1,4 +1,4 @@
-import { loadProductionData } from './state.js';
+import { loadProductionData, refreshVehiclesFromDatabase, state } from './state.js';
 import { renderPendingTicketsTable } from './screens/dashboard.js';
 import { updateSyncUI } from './sync.js';
 import { showToast } from './toast.js';
@@ -19,7 +19,10 @@ export async function refreshAllData() {
   setRefreshing(true);
   refreshPromise = (async () => {
     try {
-      await loadProductionData();
+      await loadProductionData({ resetHistory: false });
+      if (state.currentScreen === 'trucks-screen') {
+        await refreshVehiclesFromDatabase(true);
+      }
       renderPendingTicketsTable();
       document.dispatchEvent(new CustomEvent('data:refresh'));
       document.dispatchEvent(new CustomEvent('vehicle:refresh'));

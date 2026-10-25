@@ -87,6 +87,8 @@ public sealed class DatabaseService
 
     public IReadOnlyList<VehicleDto> GetVehicles() => _vehicles.GetVehicles();
 
+    public IReadOnlyList<VehicleDto> GetActiveVehicles() => _vehicles.GetActiveVehicles();
+
     public VehicleDto RegisterVehicle(VehicleRequest req) => _vehicles.RegisterVehicle(req);
 
     public (bool Ok, string? Error, VehicleDto? Vehicle) ArchiveVehicle(ArchiveVehicleRequest req) =>

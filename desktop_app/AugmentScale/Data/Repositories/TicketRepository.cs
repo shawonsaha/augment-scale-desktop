@@ -90,6 +90,27 @@ internal sealed class TicketRepository : ITicketRepository
         return ReadTickets(connection, null, cmd);
     }
 
+    internal IReadOnlyList<TicketDto> GetHistorySince(SqliteConnection connection,
+        DateTimeOffset since, int limit)
+    {
+        // The boot snapshot only needs the current business day's closed rows;
+        // pending tickets are returned separately and would otherwise duplicate.
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT * FROM ticket_history
+            WHERE organization_id = $org
+              AND status_display <> 'pending'
+              AND datetime(business_at) >= datetime($since)
+            ORDER BY business_at DESC
+            LIMIT $limit;
+            """;
+        cmd.Parameters.AddWithValue("$org", _db.OrganizationId);
+        cmd.Parameters.AddWithValue("$since",
+            since.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$limit", limit);
+        return ReadTickets(connection, null, cmd);
+    }
+
     public IReadOnlyList<TicketDto> GetHistoryRange(string fromDate, string toDate)
     {
         _db.EnsureInitialized();

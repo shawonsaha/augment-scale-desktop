@@ -10,7 +10,7 @@ import {
   getAllTickets,
   getTicketStatus,
   getTicketTimestamp,
-  mergeHistoryTickets,
+  replaceHistoryTickets,
   voidTicket,
 } from '../state.js';
 import { IS_PRODUCTION, sendCommand } from '../runtime.js';
@@ -276,13 +276,13 @@ function getFilteredTickets() {
     .sort(compareTickets);
 }
 
-// ─── Older-range loading (boot snapshot keeps only the newest N tickets) ────
+// ─── Range loading (boot holds today; other ranges load on demand) ──────────
 
 let rangeLoading = false;
-// Earliest moment (epoch ms) for which older ledger data has already been pulled.
-let coveredFromMs = Infinity;
+// Date range currently represented by the in-memory history ledgers.
+let loadedRangeKey = null;
 
-/** Method start/end for the active date filter, or null when unbounded. */
+/** Start/end for the active date filter, or null when unbounded. */
 function rangeBoundsMs() {
   const history = state.history;
   const today = startOfDay().getTime();
@@ -311,30 +311,37 @@ function rangeBoundsMs() {
   }
 }
 
-/** Fetches any ledger rows older than the loaded boot window so custom/long
- *  date ranges still see full data. Best effort: failures keep the in-memory view. */
+/** Inclusive local-date key for the active date filter. */
+function currentRangeKey() {
+  const bounds = rangeBoundsMs();
+  if (!bounds || bounds.from === null) return null;
+  const fromDate = toDateInputValue(new Date(bounds.from));
+  const toDate = bounds.to
+    ? toDateInputValue(new Date(bounds.to - 1))
+    : toDateInputValue(new Date());
+  return `${fromDate}|${toDate}`;
+}
+
+/** Fetches the selected date range and replaces the closed-ticket ledgers, so
+ *  memory is bounded by that range instead of every range browsed this session. */
 function ensureRangeLoaded() {
   if (!IS_PRODUCTION || rangeLoading) return;
   const bounds = rangeBoundsMs();
   if (!bounds || bounds.from === null) return;
-  if (coveredFromMs <= bounds.from) return;
 
-  const loaded = getAllTickets();
-  const oldestLoaded = loaded.reduce((min, ticket) => {
-    const ts = getTicketTimestamp(ticket);
-    return ts && ts < min ? ts : min;
-  }, Infinity);
-  if (oldestLoaded === Infinity || oldestLoaded <= bounds.from) return;
+  const key = currentRangeKey();
+  if (!key || key === loadedRangeKey) return;
 
   const fromDate = toDateInputValue(new Date(bounds.from));
-  const toBound = bounds.to ?? Date.now();
-  const toDate = toDateInputValue(new Date(Math.min(toBound, coveredFromMs - 1)));
+  const toDate = bounds.to
+    ? toDateInputValue(new Date(bounds.to - 1))
+    : toDateInputValue(new Date());
 
   rangeLoading = true;
   sendCommand('getHistoryRange', { fromDate, toDate })
-    .then((tickets) => mergeHistoryTickets(tickets))
-    .then(() => {
-      coveredFromMs = bounds.from;
+    .then((tickets) => {
+      replaceHistoryTickets(tickets);
+      loadedRangeKey = key;
       rangeLoading = false;
       if (state.currentScreen === 'history-screen') {
         render();
@@ -342,11 +349,14 @@ function ensureRangeLoaded() {
       }
     })
     .catch((err) => {
-      coveredFromMs = bounds.from;
+      loadedRangeKey = null;
       rangeLoading = false;
-      console.warn('Could not load older tickets', err);
+      console.warn('Could not load tickets for the selected range', err);
     });
 }
+
+// Boot already loaded today's closed tickets, so do not fetch them twice.
+loadedRangeKey = currentRangeKey();
 
 // ─── Sorting ────────────────────────────────────────────────────────────────
 

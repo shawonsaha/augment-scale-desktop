@@ -1,5 +1,10 @@
 namespace AugmentScale.Models.Commands;
 
+public sealed class VehicleQueryRequest
+{
+    public bool IncludeArchived { get; set; }
+}
+
 public sealed class VehicleRequest
 {
     public string Plate { get; set; } = string.Empty;

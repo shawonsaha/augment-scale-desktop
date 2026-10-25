@@ -758,8 +758,60 @@ public class DatabaseServiceTests
         Assert.Equal(5, boot.Vehicles.Count);
         Assert.Single(boot.Pending);
         Assert.Contains(boot.History, t => t.Id == completed.Id && t.Status == "completed");
+        Assert.DoesNotContain(boot.History, t => t.Status == "pending");
         Assert.NotNull(boot.Sync);
         Assert.Equal(11355, boot.NextTicketNumber);
+    }
+
+    [Fact]
+    public void GetBootState_ExcludesClosedHistoryBeforeToday()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        var ticket = db.CreateTicket(NewTicket("TEST-BOOT-OLD", 14000));
+        var completed = db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = ticket.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+
+        using (var connection = db.OpenConnection())
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE weigh_tickets SET completed_at = $at WHERE ticket_number = $number;";
+            cmd.Parameters.AddWithValue("$at", DateTimeOffset.Now.AddDays(-1).ToString("O"));
+            cmd.Parameters.AddWithValue("$number", completed.Id);
+            cmd.ExecuteNonQuery();
+        }
+
+        var boot = db.GetBootState();
+
+        Assert.DoesNotContain(boot.History, t => t.Id == completed.Id);
+        Assert.Contains(db.GetHistory(), t => t.Id == completed.Id);
+    }
+
+    [Fact]
+    public void GetBootState_ExcludesArchivedVehicles()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        var archived = db.ArchiveVehicle(new ArchiveVehicleRequest
+        {
+            Plate = "DM-T-11-2045",
+            Reason = "Retired",
+            OperatorId = "mr",
+        });
+        Assert.True(archived.Ok);
+
+        var boot = db.GetBootState();
+
+        Assert.Equal(4, boot.Vehicles.Count);
+        Assert.DoesNotContain(boot.Vehicles, v => v.Plate == "DM-T-11-2045");
+        Assert.Equal(5, db.GetVehicles().Count);
+        Assert.Equal(4, db.GetActiveVehicles().Count);
     }
 
     [Fact]

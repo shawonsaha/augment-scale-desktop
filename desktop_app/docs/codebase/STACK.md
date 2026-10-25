@@ -48,7 +48,7 @@ dotnet restore AugmentScale.slnx
 # Compile Debug build
 dotnet build AugmentScale.slnx -c Debug
 
-# Execute automated tests (82 tests)
+# Execute automated tests (84 tests)
 dotnet test AugmentScale.slnx -c Debug
 
 # Execute the same suite through the test project
@@ -79,7 +79,7 @@ Self-contained publish:
 dotnet publish AugmentScale\AugmentScale.csproj -c Release -r win-x64 --self-contained true -o ".\publish\win-x64-selfcontained"
 ```
 
-There is no lint command. A full run on 2026-10-25 after the PDF archive work produced `Passed: 82, Failed: 0, Total: 82` in about 33 seconds; an earlier cold/loaded run took about 1 minute 9 seconds. The prior persistence-refactor baseline was `Passed: 77, Failed: 0, Total: 77` in roughly 26–34 seconds. Evidence: the test command above.
+There is no lint command. A full run on 2026-10-25 after the boot-payload work produced `Passed: 84, Failed: 0, Total: 84` in about 34 seconds; an earlier cold/loaded run took about 1 minute 9 seconds. The prior persistence-refactor baseline was `Passed: 77, Failed: 0, Total: 77` in roughly 26–34 seconds. Evidence: the test command above.
 
 ### 5) Environment and Config
 

@@ -37,6 +37,29 @@ internal sealed class VehicleRepository : IVehicleRepository
         return results;
     }
 
+    public IReadOnlyList<VehicleDto> GetActiveVehicles()
+    {
+        _db.EnsureInitialized();
+        using var connection = _db.OpenConnection();
+        return GetActiveVehicles(connection);
+    }
+
+    internal IReadOnlyList<VehicleDto> GetActiveVehicles(SqliteConnection connection)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT * FROM vehicles
+            WHERE organization_id = $org AND deleted_at IS NULL
+            ORDER BY last_weighed_at DESC, created_at DESC;
+            """;
+        cmd.Parameters.AddWithValue("$org", _db.OrganizationId);
+
+        var results = new List<VehicleDto>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) results.Add(MapVehicle(reader));
+        return results;
+    }
+
     public VehicleDto RegisterVehicle(VehicleRequest req)
     {
         _db.EnsureInitialized();

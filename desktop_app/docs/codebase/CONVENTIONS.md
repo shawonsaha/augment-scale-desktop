@@ -47,7 +47,7 @@
 - HTML/CSS:
   - All partials are fetched and injected by `html-loader.js` in a fixed order; new partials must be added to `PARTIALS` (`html-loader.js:11-28`).
   - Screen-specific CSS is linked from `index.html`; shared tokens come first.
-  - Asset cache busting uses manual `?v=` query strings, currently `layout.css?v=prod6`, `main.js?v=prod15`, and `ASSET_VERSION='prod12'` for partial loading (`index.html`, `html-loader.js`). Bump the affected version when changing CSS, scripts, or partials.
+  - Asset cache busting uses manual `?v=` query strings, currently `layout.css?v=prod6`, `main.js?v=prod18`, and `ASSET_VERSION='prod12'` for partial loading (`index.html`, `html-loader.js`). Bump the affected version when changing CSS, scripts, or partials.
 
 ### 4) Error and Logging Conventions
 
@@ -72,7 +72,7 @@
 - Test file naming/location: all tests live in `AugmentScale.Tests/` and are named `*Tests.cs` (`DatabaseTests.cs`, `PdfArchiveTests.cs`, `ProtocolTests.cs`, `SimulatorEngineTests.cs`, `SimulatorProtocolTests.cs`).
 - Mocking strategy: no mocking framework. Tests use real SQLCipher files, real TCP loopback, deterministic protocol fixtures, and a reusable `TempDatabase` `IDisposable` helper. `TempDatabase` creates an isolated GUID directory in `%TEMP%\AugmentScaleTests` per test and deletes it on disposal (`DatabaseTests.cs:8-36`). Loopback sockets (`TcpListener`) simulate network/hardware; `TimeoutThenFrameStream` simulates serial read timeouts. `PdfArchiveTests` uses a fake `IPdfArchiveRenderer` and injected local clock.
 - Test structure: implicit Arrange/Act/Assert separated by blank lines; expected failures use `Assert.Throws<T>` or result-tuple assertions.
-- Coverage expectation: `[TODO]` — no automated coverage tool or threshold is configured. All 82 existing tests are expected to pass with zero failures.
+- Coverage expectation: `[TODO]` — no automated coverage tool or threshold is configured. All 84 existing tests are expected to pass with zero failures.
 
 ### 6) Evidence
 
