@@ -1,4 +1,17 @@
-import { renderHistoryReportDocument } from './history-report-document.js';
+import {
+  HISTORY_REPORT_PAGE_CSS,
+  renderHistoryReportDocument,
+} from './history-report-document.js?v=archive2';
+
+function installPageStyles() {
+  if (document.getElementById('history-report-page-style')) return;
+  const style = document.createElement('style');
+  style.id = 'history-report-page-style';
+  style.textContent = HISTORY_REPORT_PAGE_CSS;
+  document.head.appendChild(style);
+}
+
+installPageStyles();
 
 function notify(type, message) {
   try {

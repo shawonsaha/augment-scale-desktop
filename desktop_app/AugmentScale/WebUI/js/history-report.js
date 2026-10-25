@@ -8,9 +8,10 @@ import { IS_PRODUCTION, sendCommand } from './runtime.js';
 import { verifyPin } from './pin-auth.js';
 import { showToast } from './toast.js';
 import {
+  HISTORY_REPORT_PAGE_CSS,
   renderHistoryReportDocument,
   summarizeTickets,
-} from './history-report-document.js';
+} from './history-report-document.js?v=prod16';
 import { openVerifyReportModal } from './verify-report.js';
 
 const PAGE_STYLE_ID = 'history-report-page-style';
@@ -287,23 +288,7 @@ function printReport() {
 
   const style = document.createElement('style');
   style.id = PAGE_STYLE_ID;
-  style.textContent = `@media print {
-  @page {
-    size: A4 portrait;
-    margin: 10mm;
-    @top-left { content: ""; }
-    @top-center { content: ""; }
-    @top-right { content: ""; }
-    @bottom-left { content: ""; }
-    @bottom-center { content: ""; }
-    @bottom-right {
-      content: counter(page) " / " counter(pages);
-      font-family: 'Courier New', monospace;
-      font-size: 7pt;
-      color: #4b5563;
-    }
-  }
-}`;
+  style.textContent = HISTORY_REPORT_PAGE_CSS;
   document.head.appendChild(style);
   document.body.classList.add('printing-history-report');
 

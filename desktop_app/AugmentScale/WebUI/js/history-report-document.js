@@ -2,7 +2,29 @@
  * Shared A4 history-report document builder.
  * Used by the interactive report preview and the automatic PDF archive page.
  */
-import { escapeHtml, formatFullDateTime, formatShortDate } from './utils.js';
+import {
+  escapeHtml,
+  formatFullDateTime,
+  formatShortDateWithSeconds,
+} from './utils.js';
+
+export const HISTORY_REPORT_PAGE_CSS = `@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+    @top-left { content: ""; }
+    @top-center { content: ""; }
+    @top-right { content: ""; }
+    @bottom-left { content: ""; }
+    @bottom-center { content: ""; }
+    @bottom-right {
+      content: counter(page) " / " counter(pages);
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      color: #4b5563;
+    }
+  }
+}`;
 
 function formatKg(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
@@ -76,7 +98,7 @@ export function summarizeTickets(tickets) {
 }
 
 function reportTimestamp(input) {
-  return formatShortDate(input).replace(/\s+\d{4}\s+/, ' ');
+  return formatShortDateWithSeconds(input).replace(/\s+\d{4}\s+/, ' ');
 }
 
 function weighHtml(value, type, operator, timestamp) {
@@ -199,6 +221,7 @@ export function renderHistoryReportDocument(documentElement, report) {
           <td class="report-status-cell">
             <span class="report-status report-status--${escapeHtml(status)}">${escapeHtml(statusLabel(ticket))}</span>
             ${override ? `<span class="report-flags">OVR</span><span class="report-override-note">${escapeHtml(overrideReason)}</span>` : ''}
+            ${status === 'deleted' ? `<span class="report-delete-note">${escapeHtml(ticket.deletedReason || 'No reason recorded')}</span>` : ''}
           </td>
         </tr>
       `;

@@ -12,7 +12,7 @@ import { initHistoryScreen } from './screens/history.js';
 import { initTrucksScreen } from './screens/trucks.js';
 import { initProfilesScreen } from './screens/profiles.js';
 import { initPrintModal } from './print.js';
-import { initHistoryReport } from './history-report.js';
+import { initHistoryReport } from './history-report.js?v=prod16';
 import { initVerifyReport } from './verify-report.js';
 import { initKeyboardShortcuts } from './keyboard.js';
 import { initRefreshControls } from './refresh.js';

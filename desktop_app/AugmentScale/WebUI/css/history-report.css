@@ -681,7 +681,8 @@
   color: #111827;
 }
 
-.report-override-note {
+.report-override-note,
+.report-delete-note {
   display: block;
   margin-top: 2px;
   font-size: 6.5px;
