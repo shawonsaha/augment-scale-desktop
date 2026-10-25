@@ -11,7 +11,7 @@ namespace AugmentScale;
 
 public partial class MainWindow : Window
 {
-    private const string VirtualHost = "app.augmentscale.local";
+    private const string VirtualHost = "scale.augmentlab.net";
 
     private readonly ConfigService _config;
     private readonly DatabaseService _database;

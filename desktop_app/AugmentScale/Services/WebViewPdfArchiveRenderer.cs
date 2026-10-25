@@ -15,7 +15,7 @@ namespace AugmentScale.Services;
 /// </summary>
 public sealed class WebViewPdfArchiveRenderer : IPdfArchiveRenderer, IDisposable
 {
-    private const string VirtualHost = "app.augmentscale.local";
+    private const string VirtualHost = "scale.augmentlab.net";
     private static readonly TimeSpan PageReadyTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan RenderTimeout = TimeSpan.FromSeconds(60);
     private static readonly JsonSerializerOptions Json = new()

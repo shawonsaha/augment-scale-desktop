@@ -332,7 +332,7 @@ export function renderHistoryReportDocument(documentElement, report) {
 
     <footer class="report-footer">
       <span>${escapeHtml(source.reportId || '')} · ${escapeHtml(source.rangeLabel || '')}</span>
-      <span class="report-powered">Powered by augmentlab.net</span>
+      <span class="report-powered">Powered by scale.augmentlab.net</span>
     </footer>
   `;
 }
