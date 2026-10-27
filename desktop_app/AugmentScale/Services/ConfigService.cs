@@ -105,8 +105,8 @@ public sealed class ConfigService
     {
         if (string.IsNullOrWhiteSpace(profileId))
             throw new ArgumentException("Profile is required.", nameof(profileId));
-        if (pin.Length is < 4 or > 8 || !pin.All(char.IsAsciiDigit))
-            throw new InvalidOperationException("PIN must be 4 to 8 digits.");
+        if (pin.Length != 4 || !pin.All(char.IsAsciiDigit))
+            throw new InvalidOperationException("PIN must be exactly 4 digits.");
 
         lock (_gate)
         {

@@ -68,6 +68,20 @@ public class ConfigServiceTests
         Assert.False(temp.Config.AuthenticatePin("mr", "1234"));
     }
 
+    [Theory]
+    [InlineData("123")]
+    [InlineData("12345")]
+    [InlineData("12a4")]
+    [InlineData("12 4")]
+    public void SetPin_RejectsPinsThatAreNotExactlyFourDigits(string pin)
+    {
+        using var temp = new TempDatabase();
+
+        var error = Assert.Throws<InvalidOperationException>(() => temp.Config.SetPin("mr", pin));
+
+        Assert.Equal("PIN must be exactly 4 digits.", error.Message);
+    }
+
     [Fact]
     public void MissingSecrets_WithExistingDatabase_RefusesToCreateNewKey()
     {
