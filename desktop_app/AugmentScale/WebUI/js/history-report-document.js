@@ -300,7 +300,7 @@ export function renderHistoryReportDocument(documentElement, report) {
     </header>
 
     <div class="report-integrity-line">
-      <span>${source.isDemo ? 'Demo preview' : 'SHA-256 integrity hash'}</span>
+      <span>SHA-256 integrity hash</span>
       <code>${escapeHtml(source.integrityHash || '—')}</code>
     </div>
 

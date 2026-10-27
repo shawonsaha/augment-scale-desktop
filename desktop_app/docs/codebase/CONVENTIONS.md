@@ -27,7 +27,7 @@
   - C#: 4-space indentation, file-scoped namespaces, one type per file, XML doc comments on service classes and non-obvious methods (`Services/DatabaseService.cs`, `AuditService.cs:8-10`).
   - JavaScript: 2-space indentation, single quotes, semicolons, trailing commas in multiline literals, JSDoc-style block comments at the top of larger modules (`state.js:1-8`, `sync.js:1-6`).
   - CSS: 2-space indentation and section comments.
-- Comment convention: explain intent or constraints, not syntax. The codebase uses explicit `shortcut:` markers for temporary tradeoffs (`AugmentScale.csproj:31`, `ScaleReaderService.cs:136`, `pin-auth.js:5`).
+- Comment convention: explain intent or constraints, not syntax. The codebase uses explicit `shortcut:` markers for temporary tradeoffs (`AugmentScale.csproj:31`, `ScaleReaderService.cs:136`).
 
 ### 3) Import and Module Conventions
 

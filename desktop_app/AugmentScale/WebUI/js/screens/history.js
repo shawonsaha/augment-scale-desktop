@@ -7,12 +7,11 @@
 import {
   state,
   OPERATORS,
-  getAllTickets,
   getTicketStatus,
   getTicketTimestamp,
   voidTicket,
 } from '../state.js';
-import { IS_PRODUCTION, sendCommand } from '../runtime.js';
+import { sendCommand } from '../runtime.js';
 import { openReprintModal } from '../print.js';
 import { openReasonDialog } from '../reason-dialog.js';
 import { openHistoryReportModal } from '../history-report.js';
@@ -183,105 +182,7 @@ function statusIcon(ticket) {
   }
 }
 
-function statusRank(ticket) {
-  return { pending: 0, completed: 1, voided: 2, deleted: 3 }[getTicketStatus(ticket)] ?? 4;
-}
 
-// ─── Filtering ──────────────────────────────────────────────────────────────
-
-function matchesSearch(ticket, query) {
-  if (!query) return true;
-  const haystack = [
-    ticket.id,
-    ticket.truckNo,
-    ticket.driver,
-    ticket.material,
-    ticket.client,
-    ticket.firstOperator,
-    ticket.secondOperator,
-    ticket.challan,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  return haystack.includes(query);
-}
-
-function matchesFlags(ticket, flags) {
-  if (flags.length === 0) return true;
-  return flags.every((flag) => {
-    if (flag === 'overridden') return hasOverride(ticket);
-    if (flag === 'reprinted') return isReprinted(ticket);
-    return true;
-  });
-}
-
-function computeDemoPage(includeOptions) {
-  const dates = dateFilterDates();
-  validateRange(dates.fromDate, dates.toDate);
-  const fromMs = startOfDay(new Date(`${dates.fromDate}T00:00:00`)).getTime();
-  const toMs = startOfDay(new Date(`${dates.toDate}T00:00:00`)).getTime() + DAY_MS;
-  const history = state.history;
-  const query = history.searchQuery.trim().toLowerCase();
-  const selected = history.filters;
-
-  const all = getAllTickets()
-    .filter((ticket) => {
-      const ts = getTicketTimestamp(ticket);
-      if (!ts || ts < fromMs || ts >= toMs) return false;
-      if (!matchesSearch(ticket, query)) return false;
-
-      const status = getTicketStatus(ticket);
-      if (selected.statuses.length > 0 && !selected.statuses.includes(status)) return false;
-      if (selected.drivers.length > 0 && !selected.drivers.includes(ticket.driver || '')) {
-        return false;
-      }
-      if (selected.operators.length > 0) {
-        const names = [ticket.firstOperator, ticket.secondOperator];
-        if (!names.some((name) => selected.operators.includes(name))) return false;
-      }
-      if (selected.materials.length > 0 && !selected.materials.includes(ticket.material)) {
-        return false;
-      }
-      if (selected.clients.length > 0 && !selected.clients.includes(ticket.client)) return false;
-      if (
-        selected.directions.length > 0 &&
-        !selected.directions.includes(directionOf(ticket))
-      ) {
-        return false;
-      }
-      return matchesFlags(ticket, selected.flags);
-    })
-    .sort(compareTickets);
-
-  const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
-  const page = Math.max(0, Math.min(state.history.currentPage, pageCount - 1));
-  const start = page * pageSize;
-  const tickets = all.slice(start, start + pageSize);
-  const netKg = all.reduce(
-    (sum, ticket) =>
-      getTicketStatus(ticket) === 'completed' ? sum + (ticket.netWeight || 0) : sum,
-    0
-  );
-
-  return {
-    tickets,
-    total: all.length,
-    page,
-    pageSize,
-    netKg,
-    options: includeOptions
-      ? {
-          drivers: uniqueValues(all.map((ticket) => ticket.driver)),
-          operators: uniqueValues(
-            all.flatMap((ticket) => [ticket.firstOperator, ticket.secondOperator])
-          ),
-          materials: uniqueValues(all.map((ticket) => ticket.material)),
-          clients: uniqueValues(all.map((ticket) => ticket.client)),
-        }
-      : null,
-  };
-}
 
 // ─── Paged loading (SQL-backed in production; local fallback for browser demo) ─
 
@@ -351,15 +252,6 @@ function clearSelection() {
 async function loadHistoryPage({ includeOptions = false } = {}) {
   const seq = ++requestSeq;
 
-  if (!IS_PRODUCTION) {
-    try {
-      applyPage(computeDemoPage(includeOptions));
-    } catch (err) {
-      showToast(err.message, 'warning');
-    }
-    return;
-  }
-
   let dates;
   try {
     dates = dateFilterDates();
@@ -423,51 +315,6 @@ function applyPage(result) {
 }
 
 // ─── Sorting ────────────────────────────────────────────────────────────────
-
-function sortValue(ticket, key) {
-  switch (key) {
-    case 'id':
-      return ticket.id;
-    case 'when':
-      return getTicketTimestamp(ticket);
-    case 'truck':
-      return `${ticket.truckNo || ''} ${ticket.driver || ''}`.toLowerCase();
-    case 'first':
-      return weightParts(ticket).first;
-    case 'second':
-      return weightParts(ticket).second;
-    case 'net':
-      return ticket.netWeight;
-    case 'status':
-      return statusRank(ticket);
-    case 'prints':
-      return printCount(ticket);
-    default:
-      return getTicketTimestamp(ticket);
-  }
-}
-
-function compareTickets(a, b) {
-  const key = SORT_KEYS.has(state.history.sortKey) ? state.history.sortKey : 'when';
-  const direction = state.history.sortDir === 'asc' ? 1 : -1;
-  const av = sortValue(a, key);
-  const bv = sortValue(b, key);
-
-  const aMissing = av === null || av === undefined || av === '';
-  const bMissing = bv === null || bv === undefined || bv === '';
-  if (aMissing && bMissing) return (b.id || 0) - (a.id || 0);
-  if (aMissing) return 1;
-  if (bMissing) return -1;
-
-  let result;
-  if (typeof av === 'string' && typeof bv === 'string') {
-    result = av.localeCompare(bv);
-  } else {
-    result = Number(av) - Number(bv);
-  }
-  if (result === 0) return (b.id || 0) - (a.id || 0);
-  return result * direction;
-}
 
 function setSort(key) {
   if (!SORT_KEYS.has(key)) return;

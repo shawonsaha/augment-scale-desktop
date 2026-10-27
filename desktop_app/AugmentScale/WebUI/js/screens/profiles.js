@@ -17,7 +17,6 @@ import { showScreen, updateActiveOperatorPill, updateAppNav } from '../router.js
 import { showToast } from '../toast.js';
 import { openReasonDialog } from '../reason-dialog.js';
 import { escapeHtml } from '../utils.js';
-import { IS_PRODUCTION } from '../runtime.js';
 import {
   PIN_LENGTH,
   checkLockStatus,
@@ -136,10 +135,6 @@ function closeUnlockModal() {
 }
 
 export function openProfileManager() {
-  if (!IS_PRODUCTION) {
-    showToast('Profile management is available in the desktop app', 'warning');
-    return;
-  }
   if (hasValidSession()) {
     showScreen('profiles-screen');
     renderProfiles();

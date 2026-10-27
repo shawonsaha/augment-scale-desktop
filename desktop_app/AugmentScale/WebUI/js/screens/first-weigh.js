@@ -17,11 +17,9 @@ import {
   REGISTERED_TRUCKS,
   registerTruck,
   peekNextTicketId,
-  consumeTicketId,
   commitFirstWeigh,
   captureReading,
 } from '../state.js';
-import { IS_PRODUCTION } from '../runtime.js';
 import { showScreen } from '../router.js';
 import { escapeHtml, formatDateTime12H, formatElapsed } from '../utils.js';
 import hapticAudio from '../audio.js';
@@ -1561,97 +1559,48 @@ export function initFirstWeighScreen() {
               (phone && phone !== (registeredTruck.phone || '')) ||
               (client && client !== (registeredTruck.client || '')));
 
-          if (IS_PRODUCTION) {
-            try {
-              const saved = await commitFirstWeigh({
-                ticketId,
-                truckNo: truck,
-                direction: state.firstWeigh.direction,
-                driver,
-                phone,
-                material,
-                client,
-                challan,
-                remarks,
-                weightKg: state.firstWeigh.capturedWeight,
-                firstWeightType,
-                firstTime: currentTimestamp,
-              });
-
-              pendingTickets.unshift(saved);
-              renderPendingTicketsTable();
-
-              // Keep the printed slip aligned with the server-allocated number.
-              const prefix = state.firstWeigh.direction === 'OUT' ? 'O' : 'I';
-              const printedId = `${prefix}-${saved.id}`;
-              const modalTicketId = document.getElementById('modal-ticket-id');
-              if (modalTicketId) modalTicketId.textContent = `#${printedId}`;
-              const docTicketNo = document.getElementById('doc-ticket-no');
-              if (docTicketNo) docTicketNo.textContent = printedId;
-
-              resetFirstWeighForm();
-              showScreen('dashboard-screen');
-              if (isNewTruck) {
-                showToast(`Truck ${truck} added to the Vehicles register`, 'success');
-              } else if (truckDetailsChanged) {
-                showToast(`Truck ${truck} details saved to the Vehicles register`, 'info');
-              }
-              return true;
-            } catch (err) {
-              closePrintModal();
-              showToast(err?.message || 'Ticket save failed — please try again', 'error');
-              if (hapticAudio) hapticAudio.playError();
-              evaluateTruckState();
-              return false;
-            }
-          }
-
-          // Transactional commit to pendingTickets
-          const newTicket = {
-            id: ticketId,
-            truckNo: truck,
-            driver,
-            material,
-            client,
-            phone,
-            challan,
-            remarks,
-            weightType,
-            firstWeight: state.firstWeigh.capturedWeight ?? 0,
-            firstWeightType,
-            firstWeightTime: currentTimestamp,
-            createdAt: new Date().toISOString(),
-            firstOperator: operatorName,
-          };
-
-          // Reserve the displayed ID only now, at the moment of commit
-          consumeTicketId(ticketId);
-          pendingTickets.unshift(newTicket);
-          renderPendingTicketsTable();
-
           try {
-            await registerTruck({ plate: truck, driver, phone, client, material }, operatorName);
-          } catch {}
+            const saved = await commitFirstWeigh({
+              ticketId,
+              truckNo: truck,
+              direction: state.firstWeigh.direction,
+              driver,
+              phone,
+              material,
+              client,
+              challan,
+              remarks,
+              weightKg: state.firstWeigh.capturedWeight,
+              firstWeightType,
+              firstTime: currentTimestamp,
+            });
 
-          // Trigger sync or update offline outbox
-          if (state.sync.isHealthy) {
-            triggerSync(false);
-          } else {
-            state.sync.pendingQueue++;
-            updateSyncUI();
+            pendingTickets.unshift(saved);
+            renderPendingTicketsTable();
+
+            // Keep the printed slip aligned with the server-allocated number.
+            const prefix = state.firstWeigh.direction === 'OUT' ? 'O' : 'I';
+            const printedId = `${prefix}-${saved.id}`;
+            const modalTicketId = document.getElementById('modal-ticket-id');
+            if (modalTicketId) modalTicketId.textContent = `#${printedId}`;
+            const docTicketNo = document.getElementById('doc-ticket-no');
+            if (docTicketNo) docTicketNo.textContent = printedId;
+
+            resetFirstWeighForm();
+            showScreen('dashboard-screen');
+            if (isNewTruck) {
+              showToast(`Truck ${truck} added to the Vehicles register`, 'success');
+            } else if (truckDetailsChanged) {
+              showToast(`Truck ${truck} details saved to the Vehicles register`, 'info');
+            }
+            return true;
+          } catch (err) {
+            closePrintModal();
+            showToast(err?.message || 'Ticket save failed — please try again', 'error');
+            if (hapticAudio) hapticAudio.playError();
+            evaluateTruckState();
+            return false;
           }
-
-          // Reset form and state
-          resetFirstWeighForm();
-
-          // Return to dashboard
-          showScreen('dashboard-screen');
-          if (isNewTruck) {
-            showToast(`Truck ${truck} added to the Vehicles register`, 'success');
-          } else if (truckDetailsChanged) {
-            showToast(`Truck ${truck} details saved to the Vehicles register`, 'info');
-          }
-          return true;
         },
         onDeferredCancel: () => {
           // Keep operator on First Weigh screen with form and locked weight fully intact

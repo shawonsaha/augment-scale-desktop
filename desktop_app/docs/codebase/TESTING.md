@@ -54,7 +54,7 @@ A full run on 2026-10-25 after the boot-payload work returned `Passed: 84, Faile
 |-------|----------|----------------|-------|
 | Unit | Yes | `AugmentScale.Protocol` (decoders, splitters, encoders, stability variance), simulator engine, PIN hashing | Fast, pure CPU tests with deterministic fixtures; no mocks |
 | Integration | Yes | `DatabaseService`, `ConfigService`, `ScaleReaderService` TCP stream | Executes real migrations, transactions, PBKDF2 hashing, and loopback TCP sockets |
-| E2E | No | WebView2 full user interface, print, real scale | `[TODO]` WebUI interactions are currently tested manually in a browser and the desktop shell |
+| E2E | No | WebView2 full user interface, print, real scale | `[TODO]` WebUI interactions are currently tested manually in the desktop shell |
 
 | Area | Unit | Integration | E2E/UI | Notes |
 |------|------|-------------|--------|-------|

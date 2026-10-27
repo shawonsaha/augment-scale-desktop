@@ -12,17 +12,37 @@ import { initHistoryScreen } from './screens/history.js';
 import { initTrucksScreen } from './screens/trucks.js';
 import { initProfilesScreen } from './screens/profiles.js';
 import { initPrintModal } from './print.js';
-import { initHistoryReport } from './history-report.js?v=prod17';
+import { initHistoryReport } from './history-report.js?v=prod18';
 import { initVerifyReport } from './verify-report.js';
 import { initKeyboardShortcuts } from './keyboard.js';
 import { initRefreshControls } from './refresh.js';
 import { initThemeToggle } from './theme.js';
 import { updateClock, initAppNav } from './router.js';
-import { IS_PRODUCTION } from './runtime.js';
+import { hasDesktopBridge } from './runtime.js';
 import { loadProductionData } from './state.js';
 import './bridge.js';
 
 async function bootstrap() {
+  if (!hasDesktopBridge) {
+    const app = document.getElementById('app') || document.body;
+    app.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:system-ui,-apple-system,sans-serif;background:#0b1120;color:#f8fafc;padding:2rem;text-align:center;">
+        <div style="max-width:480px;background:#1e293b;padding:2rem;border-radius:12px;border:1px solid #334155;box-shadow:0 10px 25px -5px rgba(0,0,0,0.5);">
+          <div style="font-size:2.5rem;margin-bottom:1rem;">⚖️</div>
+          <h1 style="font-size:1.4rem;font-weight:600;margin:0 0 0.75rem 0;color:#f1f5f9;">Desktop Host Required</h1>
+          <p style="font-size:0.95rem;line-height:1.6;color:#94a3b8;margin:0 0 1.25rem 0;">
+            Augment Scale runs exclusively inside the Windows desktop host (WebView2). Standalone browser demo mode has been retired.
+          </p>
+          <div style="font-size:0.85rem;color:#64748b;background:#0f172a;padding:0.75rem 1rem;border-radius:8px;">
+            Please launch the workstation using <strong>AugmentScale.exe</strong>.
+          </div>
+        </div>
+      </div>
+    `;
+    console.warn('Augment Scale requires the desktop workstation host (WebView2). Standalone browser demo mode has been retired.');
+    return;
+  }
+
   // Pull workstation data from C# while the HTML partials are still being
   // fetched; both run concurrently so the login screen is ready sooner.
   const dataTask = loadProductionData().catch((err) => {
@@ -58,7 +78,7 @@ async function bootstrap() {
 
 /** Signals the WPF host that the interface can be shown (best effort). */
 function notifyUiReady() {
-  if (!IS_PRODUCTION) return;
+  if (!hasDesktopBridge) return;
   // Double rAF: first frame flushes layout, second confirms the screen is visible.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {

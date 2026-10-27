@@ -12,15 +12,11 @@ import {
   pendingTickets,
   setPendingTickets,
   completedTickets,
-  REGISTERED_TRUCKS,
   recordReprint,
-  logAction,
   commitSecondWeigh,
 } from './state.js';
-import { IS_PRODUCTION } from './runtime.js';
 import { openReasonDialog } from './reason-dialog.js';
 import { renderPendingTicketsTable } from './screens/dashboard.js';
-import { triggerSync, updateSyncUI } from './sync.js';
 
 let activeModalData = null;
 let confirmInProgress = false;
@@ -434,122 +430,31 @@ async function handleConfirmAndPrint() {
       throw new Error('This ticket is no longer pending or was already processed');
     }
 
-    if (IS_PRODUCTION) {
-      const modalData = activeModalData;
-      const override = modalData.override
-        ? {
-            reason: modalData.override.reason || '',
-            operator: modalData.override.operator || state.activeOperator?.name || '',
-            timestamp: modalData.override.timestamp || new Date().toISOString(),
-            anomalyDetails: modalData.override.anomalyDetails || null,
-          }
-        : null;
-
-      const completed = await commitSecondWeigh({
-        ticketId: t.id,
-        weightKg: state.secondWeigh.capturedWeight,
-        secondTime: modalData.secondTime || state.secondWeigh.capturedTimestamp || '',
-        override,
-      });
-
-      setPendingTickets(pendingTickets.filter((item) => item.id !== t.id));
-      completedTickets.unshift(completed);
-      renderPendingTicketsTable();
-
-      document.dispatchEvent(
-        new CustomEvent('history:refresh', { detail: { ticketId: completed.id } })
-      );
-
-      if (modal) modal.classList.remove('open');
-      activeModalData = null;
-      if (typeof window !== 'undefined') {
-        window._printConfirmReady = false;
-      }
-
-      state.secondWeigh.selectedTicket = null;
-      state.secondWeigh.capturedWeight = null;
-      state.secondWeigh.isOverridden = false;
-      state.secondWeigh.overrideReason = null;
-      state.secondWeigh.overrideTimestamp = null;
-      state.secondWeigh.overrideOperator = null;
-      state.secondWeigh.overrideAnomalyDetails = null;
-
-      showScreen('dashboard-screen');
-      showToast('Document archived • Print command sent', 'success');
-      if (hapticAudio) hapticAudio.playSuccess();
-
-      setTimeout(() => {
-        try {
-          window.print();
-        } catch {
-          showToast('Certificate saved. Print failed — click to retry', 'warning');
+    const modalData = activeModalData;
+    const override = modalData.override
+      ? {
+          reason: modalData.override.reason || '',
+          operator: modalData.override.operator || state.activeOperator?.name || '',
+          timestamp: modalData.override.timestamp || new Date().toISOString(),
+          anomalyDetails: modalData.override.anomalyDetails || null,
         }
-      }, 100);
-      return;
-    }
+      : null;
 
-    // Preserve both operators for the audit trail before the ticket leaves pending
-    t.secondOperator =
-      activeModalData.secondOperator || activeModalData.operator || t.firstOperator || '';
-    t.secondCompletedAt = activeModalData.secondTime || new Date().toISOString();
+    const completed = await commitSecondWeigh({
+      ticketId: t.id,
+      weightKg: state.secondWeigh.capturedWeight,
+      secondTime: modalData.secondTime || state.secondWeigh.capturedTimestamp || '',
+      override,
+    });
 
-    // Atomic transaction: remove from pending, trigger sync
     setPendingTickets(pendingTickets.filter((item) => item.id !== t.id));
+    completedTickets.unshift(completed);
     renderPendingTicketsTable();
 
-    // Archive to the completed ledger for History (stored values, never recalculated)
-    const completedAt = new Date().toISOString();
-    const completedTicket = {
-      ...t,
-      status: 'completed',
-      secondWeight: state.secondWeigh.capturedWeight,
-      secondWeightType: t.firstWeightType === 'Gross' ? 'Tare' : 'Gross',
-      secondWeightTime: activeModalData.secondTime || formatDateTime12H(new Date()),
-      grossWeight: activeModalData.grossWeight,
-      tareWeight: activeModalData.tareWeight,
-      netWeight: activeModalData.netWeight,
-      completedAt,
-      printCount: 1,
-      printLog: [
-        {
-          by: state.activeOperator?.name || t.firstOperator || 'Unknown',
-          at: completedAt,
-          type: 'weighbridge_certificate',
-          reason: null,
-        },
-      ],
-    };
-    completedTickets.unshift(completedTicket);
-
-    const truckIdx = REGISTERED_TRUCKS.findIndex(
-      (truck) => (truck.plate || '').toUpperCase() === (completedTicket.truckNo || '').toUpperCase()
-    );
-    if (truckIdx >= 0) {
-      REGISTERED_TRUCKS[truckIdx].lastWeighed = completedAt;
-      REGISTERED_TRUCKS[truckIdx].tripCount = (REGISTERED_TRUCKS[truckIdx].tripCount || 0) + 1;
-      REGISTERED_TRUCKS[truckIdx].lastTare = completedTicket.tareWeight;
-    }
-    document.dispatchEvent(new CustomEvent('vehicle:refresh'));
-    logAction('complete_weigh', 'ticket', completedTicket.id, {
-      netWeight: completedTicket.netWeight,
-    });
     document.dispatchEvent(
-      new CustomEvent('history:refresh', { detail: { ticketId: completedTicket.id } })
+      new CustomEvent('history:refresh', { detail: { ticketId: completed.id } })
     );
 
-    if (activeModalData.override) {
-      t.overridden = true;
-      t.override = activeModalData.override;
-    }
-
-    if (state.sync.isHealthy) {
-      triggerSync(false);
-    } else {
-      state.sync.pendingQueue++;
-      updateSyncUI();
-    }
-
-    // Close modal and reset second-weigh state
     if (modal) modal.classList.remove('open');
     activeModalData = null;
     if (typeof window !== 'undefined') {
@@ -568,7 +473,6 @@ async function handleConfirmAndPrint() {
     showToast('Document archived • Print command sent', 'success');
     if (hapticAudio) hapticAudio.playSuccess();
 
-    // Trigger print after UI transition
     setTimeout(() => {
       try {
         window.print();

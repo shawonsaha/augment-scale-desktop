@@ -1,9 +1,8 @@
 /**
  * PIN Authentication & Operator Lockout Logic
- * Pure helper module for segmented PIN verification, lockout timers, and attempt tracking.
- *
- * shortcut: PINs live in client code and lockout is localStorage-only (clearable),
- * so anyone can unlock a profile. Move verification to the C# host before a live station.
+ * Client helper module for lockout timers, attempt tracking, and name formatting.
+ * Authoritative PIN authentication is performed by the C# workstation host via
+ * ConfigService.AuthenticatePin against DPAPI-protected PBKDF2 hashes.
  */
 
 export const PIN_LENGTH = 4;
@@ -28,17 +27,6 @@ function capitalize(str) {
   if (!str) return '';
   const clean = str.replace(/[^a-zA-Z]/g, '');
   return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
-}
-
-/**
- * Verifies entered PIN against operator's assigned or default PIN.
- */
-export function verifyPin(operator, enteredPin) {
-  if (!operator || !enteredPin) return false;
-  const cleanPin = String(enteredPin).trim();
-  if (cleanPin.length !== PIN_LENGTH) return false;
-  const expectedPin = operator.pin;
-  return Boolean(expectedPin) && cleanPin === expectedPin;
 }
 
 /**

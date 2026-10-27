@@ -4,7 +4,7 @@
  */
 import { state } from './state.js';
 import { showToast } from './toast.js';
-import { IS_PRODUCTION, sendCommand } from './runtime.js';
+import { sendCommand } from './runtime.js';
 import { escapeHtml } from './utils.js';
 
 export function initSyncEngine() {
@@ -43,7 +43,7 @@ export function initSyncEngine() {
   if (btnArchiveRetry) {
     btnArchiveRetry.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!IS_PRODUCTION || btnArchiveRetry.disabled) return;
+      if (btnArchiveRetry.disabled) return;
       btnArchiveRetry.disabled = true;
       try {
         const result = await sendCommand('retryArchive');
@@ -69,7 +69,7 @@ export function initSyncEngine() {
   // Poll faster while the archive is working; otherwise use the normal heartbeat.
   scheduleHeartbeat();
   updateSyncUI();
-  if (IS_PRODUCTION) triggerSync(false);
+  triggerSync(false);
 }
 
 let heartbeatTimer = null;
@@ -129,60 +129,25 @@ export function updateSyncUI() {
     return;
   }
 
-  if (IS_PRODUCTION) {
-    syncPill.className = 'telemetry-item sync-pill';
-    if (syncDot) syncDot.className = 'telemetry-dot';
-    if (syncIcon) syncIcon.textContent = '●';
-    if (syncText) syncText.textContent = 'Local only';
-    if (syncDetail) {
-      const queueText = state.sync.pendingQueue > 0
-        ? `${state.sync.pendingQueue} pending`
-        : 'saved locally';
-      const archiveText = archiveDetailText();
-      syncDetail.textContent = archiveText ? `${queueText} • ${archiveText}` : queueText;
-    }
-
-    if (popoverBadge) {
-      popoverBadge.className = 'sync-popover-badge';
-      popoverBadge.textContent = 'Local only';
-    }
-    if (popoverLastSync) popoverLastSync.textContent = 'Not configured';
-    if (popoverPending) {
-      popoverPending.textContent = `${state.sync.pendingQueue} events in local outbox`;
-    }
-    return;
+  syncPill.className = 'telemetry-item sync-pill';
+  if (syncDot) syncDot.className = 'telemetry-dot';
+  if (syncIcon) syncIcon.textContent = '●';
+  if (syncText) syncText.textContent = 'Local only';
+  if (syncDetail) {
+    const queueText = state.sync.pendingQueue > 0
+      ? `${state.sync.pendingQueue} pending`
+      : 'saved locally';
+    const archiveText = archiveDetailText();
+    syncDetail.textContent = archiveText ? `${queueText} • ${archiveText}` : queueText;
   }
 
-  if (state.sync.isHealthy) {
-    syncPill.className = 'telemetry-item sync-pill synced';
-    if (syncDot) syncDot.className = 'telemetry-dot';
-    if (syncIcon) syncIcon.textContent = '↑↓';
-    if (syncText) syncText.textContent = 'Synced';
-    if (syncDetail) syncDetail.textContent = relativeStr;
-
-    if (popoverBadge) {
-      popoverBadge.className = 'sync-popover-badge synced';
-      popoverBadge.textContent = '● Synced';
-    }
-    if (popoverLastSync) popoverLastSync.textContent = `${timeStr} (${relativeStr})`;
-    if (popoverPending) popoverPending.textContent = `${state.sync.pendingQueue} items`;
-  } else {
-    syncPill.className = 'telemetry-item sync-pill failed';
-    if (syncDot) syncDot.className = 'telemetry-dot red pulse';
-    if (syncIcon) syncIcon.textContent = '⚠️';
-    if (syncText) syncText.textContent = 'Sync Failed';
-    if (syncDetail) {
-      const qText = state.sync.pendingQueue > 0 ? `${state.sync.pendingQueue} pending` : 'Offline';
-      syncDetail.textContent = `${qText} • ${relativeStr}`;
-    }
-
-    if (popoverBadge) {
-      popoverBadge.className = 'sync-popover-badge failed';
-      popoverBadge.textContent = '✕ Sync Failed';
-    }
-    if (popoverLastSync) popoverLastSync.textContent = `Failed • Last: ${timeStr} (${relativeStr})`;
-    if (popoverPending)
-      popoverPending.textContent = `${state.sync.pendingQueue} items in local outbox`;
+  if (popoverBadge) {
+    popoverBadge.className = 'sync-popover-badge';
+    popoverBadge.textContent = 'Local only';
+  }
+  if (popoverLastSync) popoverLastSync.textContent = 'Not configured';
+  if (popoverPending) {
+    popoverPending.textContent = `${state.sync.pendingQueue} events in local outbox`;
   }
 }
 
@@ -250,7 +215,7 @@ function updateArchiveUI() {
   if (errorElement) errorElement.textContent = error;
 
   if (retryButton) {
-    retryButton.hidden = !(IS_PRODUCTION && (archive.failedCount || 0) > 0);
+    retryButton.hidden = (archive.failedCount || 0) <= 0;
   }
 
   if (!recentElement) return;
@@ -276,62 +241,35 @@ function updateArchiveUI() {
 export function triggerSync(isManual = false) {
   if (state.sync.syncInProgress) return;
 
-  if (IS_PRODUCTION) {
-    state.sync.syncInProgress = true;
-    updateSyncUI();
-    sendCommand('getSyncStatus')
-      .then((status) => {
-        state.sync.isHealthy = status?.isHealthy !== false;
-        state.sync.pendingQueue = status?.pendingQueue || 0;
-        state.sync.lastSyncTimestamp = status?.lastSyncTimestamp
-          ? new Date(status.lastSyncTimestamp)
-          : new Date();
-        state.sync.archive = status?.archive || null;
-        if (isManual) {
-          showToast(
-            state.sync.pendingQueue > 0
-              ? `${state.sync.pendingQueue} events queued in the encrypted outbox`
-              : 'Outbox is clear — no pending events',
-            state.sync.pendingQueue > 0 ? 'warning' : 'success'
-          );
-        }
-      })
-      .catch((err) => {
-        state.sync.isHealthy = false;
-        if (isManual) {
-          showToast(err?.message || 'Could not read outbox status', 'error');
-        }
-      })
-      .finally(() => {
-        state.sync.syncInProgress = false;
-        updateSyncUI();
-        scheduleHeartbeat();
-      });
-    return;
-  }
-
   state.sync.syncInProgress = true;
   updateSyncUI();
-
-  setTimeout(() => {
-    state.sync.syncInProgress = false;
-
-    if (state.sync.isHealthy) {
-      state.sync.lastSyncTimestamp = new Date();
-      state.sync.pendingQueue = 0;
-      updateSyncUI();
-      if (isManual) {
-        showToast('Cloud database synchronized successfully', 'success');
-      }
-    } else {
-      updateSyncUI();
+  sendCommand('getSyncStatus')
+    .then((status) => {
+      state.sync.isHealthy = status?.isHealthy !== false;
+      state.sync.pendingQueue = status?.pendingQueue || 0;
+      state.sync.lastSyncTimestamp = status?.lastSyncTimestamp
+        ? new Date(status.lastSyncTimestamp)
+        : new Date();
+      state.sync.archive = status?.archive || null;
       if (isManual) {
         showToast(
-          'Sync failed: Supabase Cloud unreachable. Events preserved in encrypted SQLite outbox.',
-          'error'
+          state.sync.pendingQueue > 0
+            ? `${state.sync.pendingQueue} events queued in the encrypted outbox`
+            : 'Outbox is clear — no pending events',
+          state.sync.pendingQueue > 0 ? 'warning' : 'success'
         );
       }
-    }
-  }, 750);
+    })
+    .catch((err) => {
+      state.sync.isHealthy = false;
+      if (isManual) {
+        showToast(err?.message || 'Could not read outbox status', 'error');
+      }
+    })
+    .finally(() => {
+      state.sync.syncInProgress = false;
+      updateSyncUI();
+      scheduleHeartbeat();
+    });
 }
 

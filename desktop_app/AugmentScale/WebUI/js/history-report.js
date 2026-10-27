@@ -3,9 +3,8 @@
  * Range selection → current-operator PIN re-authentication → A4 portrait preview.
  * Production snapshots and PIN verification are owned by the C# workstation.
  */
-import { state, getAllTickets, getTicketTimestamp } from './state.js';
-import { IS_PRODUCTION, sendCommand } from './runtime.js';
-import { verifyPin } from './pin-auth.js';
+import { state } from './state.js';
+import { sendCommand } from './runtime.js';
 import { showToast } from './toast.js';
 import {
   HISTORY_REPORT_PAGE_CSS,
@@ -60,11 +59,6 @@ function rangeLabel(fromDate, toDate) {
     ? `${pad(fromDate.getDate())} ${fromDate.toLocaleString('en-US', { month: 'short' })}`
     : formatRangeDate(fromDate);
   return `${from} – ${formatRangeDate(toDate)}`;
-}
-
-function businessDate(ticket) {
-  const ms = ticket.businessAt ? new Date(ticket.businessAt).getTime() : getTicketTimestamp(ticket);
-  return Number.isFinite(ms) && ms > 0 ? new Date(ms) : null;
 }
 
 function selectedRange() {
@@ -166,37 +160,6 @@ function goToPin() {
   requestAnimationFrame(() => input?.focus());
 }
 
-function buildDemoReport(range, operator) {
-  const tickets = getAllTickets()
-    .filter((ticket) => {
-      const at = businessDate(ticket);
-      if (!at) return false;
-      const ms = at.getTime();
-      return ms >= range.fromMs && ms < range.toMs;
-    })
-    .sort((a, b) => (businessDate(a)?.getTime() || 0) - (businessDate(b)?.getTime() || 0))
-    .map((ticket) => ({
-      ...ticket,
-      businessAt: businessDate(ticket)?.toISOString() || null,
-    }));
-
-  const now = new Date();
-  return {
-    reportId: `DEMO-${now.getTime().toString(36).toUpperCase()}`,
-    generatedAt: now.toISOString(),
-    workstationName: 'Browser preview',
-    rangeLabel: range.label,
-    fromDate: range.fromDate,
-    toDate: range.toDate,
-    operatorId: operator.id,
-    operatorName: operator.name,
-    integrityHash: 'DEMO-PREVIEW-NOT-ARCHIVED',
-    isDemo: true,
-    tickets,
-    summary: summarizeTickets(tickets),
-  };
-}
-
 function setBusy(button, busy, busyLabel) {
   if (!button) return;
   if (busy) {
@@ -235,23 +198,12 @@ async function generateReport() {
   setBusy(button, true, 'Generating…');
 
   try {
-    let report;
-    if (IS_PRODUCTION) {
-      report = await sendCommand('generateHistoryReport', {
-        fromDate: pendingRange.fromDate,
-        toDate: pendingRange.toDate,
-        operatorId: operator.id,
-        pin,
-      });
-    } else {
-      if (!verifyPin(operator, pin)) {
-        pinError('Wrong PIN. Try again.');
-        input.value = '';
-        input.focus();
-        return;
-      }
-      report = buildDemoReport(pendingRange, operator);
-    }
+    const report = await sendCommand('generateHistoryReport', {
+      fromDate: pendingRange.fromDate,
+      toDate: pendingRange.toDate,
+      operatorId: operator.id,
+      pin,
+    });
 
     if (!report || !Array.isArray(report.tickets)) {
       throw new Error('The workstation returned an invalid report.');
@@ -267,7 +219,7 @@ async function generateReport() {
     const verifyButton = document.getElementById('history-report-verify');
     if (title) title.textContent = `${report.summary?.total || 0} ticket${report.summary?.total === 1 ? '' : 's'}`;
     if (meta) meta.textContent = `${report.rangeLabel} · ${report.reportId}`;
-    if (verifyButton) verifyButton.disabled = Boolean(report.isDemo);
+    if (verifyButton) verifyButton.disabled = false;
     input.value = '';
     showStage('preview');
     requestAnimationFrame(() => document.getElementById('history-report-print')?.focus());
@@ -393,7 +345,7 @@ export function initHistoryReport() {
   });
   document.getElementById('history-report-print')?.addEventListener('click', printReport);
   document.getElementById('history-report-verify')?.addEventListener('click', () => {
-    if (!reportData || reportData.isDemo) return;
+    if (!reportData) return;
     openVerifyReportModal({
       reportId: reportData.reportId,
       integrityHash: reportData.integrityHash,

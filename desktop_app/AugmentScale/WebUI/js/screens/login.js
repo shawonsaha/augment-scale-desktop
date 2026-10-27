@@ -12,13 +12,11 @@ import {
   PIN_LENGTH,
   LOCK_DURATION_SECONDS,
   getOperatorFirstName,
-  verifyPin,
   checkLockStatus,
   recordFailedAttempt,
   clearOperatorLock,
   formatCountdown,
 } from '../pin-auth.js';
-import { IS_PRODUCTION } from '../runtime.js';
 import { authenticateOperator } from '../state.js';
 import { openProfileManager } from './profiles.js';
 
@@ -341,22 +339,18 @@ export function initLoginScreen() {
     const op = state.selectedOperator;
     let verified = null;
 
-    if (IS_PRODUCTION) {
-      try {
-        verified = await authenticateOperator(op.id, pin);
-      } catch (err) {
-        pinBoxes.classList.remove('verifying');
-        setStatus('');
-        setError(err?.message || 'Verification failed. Try again.');
-        pinInput.value = '';
-        pinInput.readOnly = false;
-        isVerifying = false;
-        updateBoxes();
-        updateSignInBtn();
-        return;
-      }
-    } else {
-      verified = verifyPin(op, pin) ? op : null;
+    try {
+      verified = await authenticateOperator(op.id, pin);
+    } catch (err) {
+      pinBoxes.classList.remove('verifying');
+      setStatus('');
+      setError(err?.message || 'Verification failed. Try again.');
+      pinInput.value = '';
+      pinInput.readOnly = false;
+      isVerifying = false;
+      updateBoxes();
+      updateSignInBtn();
+      return;
     }
 
     if (verified) {

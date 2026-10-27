@@ -1,19 +1,22 @@
 /**
- * WebView2 production runtime.
+ * WebView2 desktop host runtime.
  *
- * The prototype runs unchanged in a normal browser. Inside the desktop shell
- * `window.chrome.webview` exists, so state mutations are routed to C# and the
- * browser demo data is never used.
+ * Augment Scale runs inside the Windows desktop host with Microsoft Edge WebView2.
+ * All mutations and queries are routed across the bridge to C# and the encrypted
+ * SQLCipher database.
  */
 
-export const IS_PRODUCTION = Boolean(
+export const hasDesktopBridge = Boolean(
   typeof window !== 'undefined' && window.chrome && window.chrome.webview
 );
+
+// Backward-compatibility export
+export const IS_PRODUCTION = hasDesktopBridge;
 
 const pending = new Map();
 let sequence = 0;
 
-if (IS_PRODUCTION) {
+if (hasDesktopBridge) {
   window.chrome.webview.addEventListener('message', (event) => {
     let message = event.data;
     if (typeof message === 'string') {
@@ -45,9 +48,9 @@ if (IS_PRODUCTION) {
  * @returns {Promise<any>}
  */
 export function sendCommand(command, payload = {}) {
-  if (!IS_PRODUCTION) {
+  if (!hasDesktopBridge) {
     return Promise.reject(
-      new Error('The desktop bridge is unavailable. This action needs the Augment Scale desktop app.')
+      new Error('The desktop bridge is unavailable. Augment Scale requires the desktop host.')
     );
   }
 

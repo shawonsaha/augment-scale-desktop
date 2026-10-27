@@ -13,7 +13,6 @@ import {
   deleteVehicle,
   refreshVehiclesFromDatabase,
 } from '../state.js';
-import { IS_PRODUCTION } from '../runtime.js';
 import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
 import { openReasonDialog } from '../reason-dialog.js';
@@ -468,9 +467,7 @@ export function initTrucksScreen() {
 
   document.addEventListener('screenchange', (event) => {
     if (event.detail?.screenId !== 'trucks-screen') return;
-    if (IS_PRODUCTION) {
-      refreshVehiclesFromDatabase(true).catch(() => {});
-    }
+    refreshVehiclesFromDatabase(true).catch(() => {});
     requestAnimationFrame(() => {
       pageSize = calculatePageSize();
       state.trucks.pageSize = pageSize;

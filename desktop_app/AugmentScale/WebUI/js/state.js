@@ -1,444 +1,33 @@
 /**
  * Central application state and data constants.
  * Single source of truth across all module screens.
+ * State is initialized clean and loaded authoritatively from the C# host via the desktop bridge.
  */
 
 import { formatDateTime12H } from './utils.js';
-import { buildSeedHistory } from './seed-data.js';
-import { IS_PRODUCTION, sendCommand } from './runtime.js';
+import { sendCommand } from './runtime.js';
 
-export const OPERATORS = [
-  {
-    id: 'mr',
-    code: 'MR',
-    name: 'MD. RAJU',
-    firstName: 'Raju',
-    role: 'Supervisor',
-    shift: 'Shift A',
-    avatar: 'avatars/frame-9.svg',
-    color: '#4C7875',
-  },
-  {
-    id: 'ak',
-    code: 'AK',
-    name: 'AKHTER K.',
-    firstName: 'Akhter',
-    role: 'Senior Operator',
-    shift: 'Shift A',
-    avatar: 'avatars/frame-4.svg',
-    color: '#FB9550',
-  },
-  {
-    id: 'sh',
-    code: 'SH',
-    name: 'SHAFIQ H.',
-    firstName: 'Shafiq',
-    role: 'Operator',
-    shift: 'Shift B',
-    avatar: 'avatars/frame-3.svg',
-    color: '#475569',
-  },
-  {
-    id: 'rh',
-    code: 'RH',
-    name: 'RAHIM A.',
-    firstName: 'Rahim',
-    role: 'Operator',
-    shift: 'Shift C',
-    avatar: 'avatars/frame-1.svg',
-    color: '#F2C2B6',
-  },
-  {
-    id: 'kh',
-    code: 'KH',
-    name: 'KAMAL H.',
-    firstName: 'Kamal',
-    role: 'Relief Operator',
-    shift: 'Shift B',
-    avatar: 'avatars/frame-5.svg',
-    color: '#526E7E',
-  },
-];
-
-export let REGISTERED_TRUCKS = IS_PRODUCTION ? [] : [
-  {
-    plate: 'DM-T-11-2045',
-    driver: 'Kalam Hossain',
-    phone: '+880 1711 002233',
-    material: 'Scrap Iron',
-    client: 'BSRM Steels Ltd',
-  },
-  {
-    plate: 'CTG-4512',
-    driver: 'Anwar Ali',
-    phone: '+880 1819 445566',
-    material: 'MS Plate',
-    client: 'Abul Khair Steel',
-  },
-  {
-    plate: 'DM-K-33-1078',
-    driver: 'Sumon Mia',
-    phone: '+880 1912 778899',
-    material: 'Pipe',
-    client: 'Apex Cement Mills',
-  },
-  {
-    plate: 'DHAKA-METRO-TA-14-9921',
-    driver: 'Rafiqul Islam',
-    phone: '+880 1670 112233',
-    material: 'Machinery',
-    client: 'GPH Ispat',
-  },
-  {
-    plate: 'CTG-TA-12-8844',
-    driver: 'Jasmin Uddin',
-    phone: '+880 1552 998877',
-    material: 'Copper / Cable',
-    client: 'Crown Cement',
-  },
-];
-
-// Operational fields used by the Vehicles screen. Kept on every record so the
-// first-weigh register and the master-data form share one shape.
-REGISTERED_TRUCKS.forEach((truck) => {
-  truck.status = truck.status || 'active';
-  truck.tripCount = truck.tripCount || 0;
-  truck.lastTare = truck.lastTare ?? null;
-  truck.lastWeighed = truck.lastWeighed ?? null;
-  truck.archivedAt = truck.archivedAt ?? null;
-  truck.archivedBy = truck.archivedBy ?? null;
-  truck.archivedReason = truck.archivedReason ?? null;
-});
-
-// ─── History: completed / voided / deleted (30 days of demo data) ──────────
-const seedHistory = IS_PRODUCTION
-  ? { completed: [], voided: [], deleted: [] }
-  : buildSeedHistory({
-      trucks: REGISTERED_TRUCKS,
-      operators: OPERATORS,
-    });
-
-export let completedTickets = seedHistory.completed;
-export let voidedTickets = seedHistory.voided;
+export const OPERATORS = [];
+export let REGISTERED_TRUCKS = [];
+export let completedTickets = [];
+export let voidedTickets = [];
+export let deletedTickets = [];
+export let pendingTickets = [];
 
 export function setCompletedTickets(tickets) {
-  completedTickets = tickets;
+  completedTickets = tickets || [];
 }
 
 export function setVoidedTickets(tickets) {
-  voidedTickets = tickets;
+  voidedTickets = tickets || [];
 }
-
-// Roll the seeded history up into each truck's master record.
-for (const truck of REGISTERED_TRUCKS) {
-  const plate = (truck.plate || '').toUpperCase();
-  const rows = completedTickets.filter((t) => (t.truckNo || '').toUpperCase() === plate);
-  truck.tripCount += rows.length;
-  if (rows.length > 0) {
-    const latest = rows.reduce((a, b) =>
-      new Date(a.completedAt).getTime() >= new Date(b.completedAt).getTime() ? a : b
-    );
-    truck.lastWeighed = latest.completedAt;
-    truck.lastTare = latest.tareWeight;
-  }
-}
-
-export const actionLog = [];
-
-/**
- * Appends an audit entry. Write-only in the prototype; maps to audit_events.
- */
-export function logAction(action, entityType, entityId, details = {}) {
-  actionLog.push({
-    action,
-    entityType,
-    entityId,
-    operatorId: state.activeOperator?.id || 'unknown',
-    operatorName: state.activeOperator?.name || 'Unknown',
-    timestamp: new Date().toISOString(),
-    details,
-  });
-}
-
-/**
- * Registers or updates a truck record in memory.
- */
-export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
-  const plate = (truckData.plate || '').trim().toUpperCase();
-  if (!plate) return null;
-  const existingIndex = REGISTERED_TRUCKS.findIndex(
-    (t) => (t.plate || '').trim().toUpperCase() === plate
-  );
-
-  const incoming = {
-    driver: (truckData.driver || '').trim(),
-    phone: (truckData.phone || '').trim(),
-    client: (truckData.client || '').trim(),
-    material: (truckData.material || '').trim(),
-  };
-
-  if (IS_PRODUCTION) {
-    const record = await sendCommand('registerVehicle', {
-      plate,
-      ...incoming,
-      operatorId: state.activeOperator?.id || '',
-      operatorName: operatorName || state.activeOperator?.name || 'Unknown',
-    });
-    const index = REGISTERED_TRUCKS.findIndex(
-      (t) => (t.plate || '').trim().toUpperCase() === plate
-    );
-    if (index >= 0) REGISTERED_TRUCKS[index] = record;
-    else REGISTERED_TRUCKS.unshift(record);
-    notifyVehicleRefresh();
-    return record;
-  }
-
-  if (existingIndex >= 0) {
-    const old = REGISTERED_TRUCKS[existingIndex];
-    const record = {
-      ...old,
-      plate,
-      driver: incoming.driver || old.driver,
-      phone: incoming.phone || old.phone,
-      client: incoming.client || old.client,
-      material: incoming.material || old.material || 'Other',
-      registeredBy: operatorName,
-      registeredAt: new Date().toISOString(),
-    };
-    REGISTERED_TRUCKS[existingIndex] = record;
-    logAction('edit_vehicle', 'vehicle', plate, { before: { ...old }, after: { ...record } });
-    notifyVehicleRefresh();
-    return record;
-  }
-
-  const record = {
-    plate,
-    ...incoming,
-    material: incoming.material || 'Other',
-    status: 'active',
-    tripCount: 0,
-    lastTare: null,
-    lastWeighed: null,
-    archivedAt: null,
-    archivedBy: null,
-    archivedReason: null,
-    registeredBy: operatorName,
-    registeredAt: new Date().toISOString(),
-  };
-  REGISTERED_TRUCKS.unshift(record);
-  logAction('add_vehicle', 'vehicle', plate, { plate });
-  notifyVehicleRefresh();
-  return record;
-}
-
-/** Active (non-archived) vehicles used by the list, autocomplete and dialogs. */
-export function getActiveTrucks() {
-  return REGISTERED_TRUCKS.filter((t) => t.status !== 'archived');
-}
-
-/**
- * Archives a vehicle unless it still has an open pending ticket.
- * @returns {{ok: boolean, truck?: Object, reason?: string}}
- */
-export async function archiveTruck(plate, reason, operatorName) {
-  const target = (plate || '').trim().toUpperCase();
-  const truck = REGISTERED_TRUCKS.find((t) => (t.plate || '').toUpperCase() === target);
-  if (!truck) return { ok: false, reason: 'Vehicle not found' };
-
-  if (IS_PRODUCTION) {
-    try {
-      const record = await sendCommand('archiveVehicle', {
-        plate: target,
-        reason,
-        operatorId: state.activeOperator?.id || '',
-        operatorName: operatorName || state.activeOperator?.name || 'Unknown',
-      });
-      const index = REGISTERED_TRUCKS.findIndex(
-        (t) => (t.plate || '').toUpperCase() === target
-      );
-      if (index >= 0) REGISTERED_TRUCKS[index] = record;
-      notifyVehicleRefresh();
-      return { ok: true, truck: record };
-    } catch (error) {
-      return { ok: false, reason: error.message };
-    }
-  }
-
-  const openTicket = pendingTickets.find((t) => (t.truckNo || '').toUpperCase() === target);
-  if (openTicket) {
-    return {
-      ok: false,
-      reason: `Vehicle has open ticket #${openTicket.id}. Complete or delete it first.`,
-    };
-  }
-
-  truck.status = 'archived';
-  truck.archivedAt = new Date().toISOString();
-  truck.archivedBy = operatorName || 'Unknown';
-  truck.archivedReason = reason || '';
-  logAction('archive_vehicle', 'vehicle', target, { reason });
-  notifyVehicleRefresh();
-  return { ok: true, truck };
-}
-
-export async function restoreTruck(plate, operatorName) {
-  const target = (plate || '').trim().toUpperCase();
-  const truck = REGISTERED_TRUCKS.find((t) => (t.plate || '').toUpperCase() === target);
-  if (!truck) return null;
-
-  if (IS_PRODUCTION) {
-    const record = await sendCommand('restoreVehicle', {
-      plate: target,
-      reason: '',
-      operatorId: state.activeOperator?.id || '',
-      operatorName: operatorName || state.activeOperator?.name || 'Unknown',
-    });
-    const index = REGISTERED_TRUCKS.findIndex((t) => (t.plate || '').toUpperCase() === target);
-    if (index >= 0) REGISTERED_TRUCKS[index] = record;
-    notifyVehicleRefresh();
-    return record;
-  }
-
-  truck.status = 'active';
-  truck.archivedAt = null;
-  truck.archivedBy = null;
-  truck.archivedReason = null;
-  logAction('restore_vehicle', 'vehicle', target, {});
-  notifyVehicleRefresh();
-  return truck;
-}
-
-/**
- * Permanently removes an archived vehicle. Historical tickets keep their
- * denormalized plate and lose the vehicle link.
- * @returns {{ok: boolean, reason?: string}}
- */
-export async function deleteVehicle(plate, reason, operatorName) {
-  const target = (plate || '').trim().toUpperCase();
-  const truck = REGISTERED_TRUCKS.find((t) => (t.plate || '').toUpperCase() === target);
-  if (!truck) return { ok: false, reason: 'Vehicle not found' };
-  if (truck.status !== 'archived') {
-    return { ok: false, reason: 'Only archived vehicles can be permanently deleted.' };
-  }
-  if (!reason?.trim()) return { ok: false, reason: 'A deletion reason is required.' };
-
-  if (IS_PRODUCTION) {
-    try {
-      await sendCommand('deleteVehicle', {
-        plate: target,
-        reason,
-        operatorId: state.activeOperator?.id || '',
-        operatorName: operatorName || state.activeOperator?.name || 'Unknown',
-      });
-      const index = REGISTERED_TRUCKS.findIndex(
-        (t) => (t.plate || '').toUpperCase() === target
-      );
-      if (index >= 0) REGISTERED_TRUCKS.splice(index, 1);
-      notifyVehicleRefresh();
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, reason: error.message };
-    }
-  }
-
-  const openTicket = pendingTickets.find((t) => (t.truckNo || '').toUpperCase() === target);
-  if (openTicket) {
-    return {
-      ok: false,
-      reason: `Vehicle has open ticket #${openTicket.id}. Complete or delete it first.`,
-    };
-  }
-
-  const index = REGISTERED_TRUCKS.findIndex((t) => (t.plate || '').toUpperCase() === target);
-  if (index >= 0) REGISTERED_TRUCKS.splice(index, 1);
-  logAction('delete_vehicle', 'vehicle', target, { reason });
-  notifyVehicleRefresh();
-  return { ok: true };
-}
-
-export let pendingTickets = IS_PRODUCTION ? [] : [
-  {
-    id: 11352,
-    truckNo: 'DM-T-11-2045',
-    driver: 'Kalam Hossain',
-    phone: '+880 1711 002233',
-    material: 'Scrap Iron',
-    client: 'BSRM Steels Ltd',
-    weightType: 'OUT WEIGHT',
-    firstWeight: 12800,
-    firstWeightType: 'Tare',
-    firstWeightTime: '13-10-26 09:14:00 AM',
-    firstOperator: 'MD. RAJU',
-    timeElapsed: '24 mins',
-    lastTare: 12780,
-    lastGross: 18150,
-    lastPayload: 5370,
-    lastWeighAt: '12 Oct',
-  },
-  {
-    id: 11351,
-    truckNo: 'CTG-4512',
-    driver: 'Anwar Ali',
-    phone: '+880 1819 445566',
-    material: 'Steel Coil',
-    client: 'Abul Khair Steel',
-    weightType: 'IN WEIGHT',
-    firstWeight: 38450,
-    firstWeightType: 'Gross',
-    firstWeightTime: '13-10-26 08:30:00 AM',
-    firstOperator: 'MD. RAJU',
-    timeElapsed: '1.2 hrs',
-    lastTare: 14700,
-    lastGross: 38400,
-    lastPayload: 23700,
-    lastWeighAt: '12 Oct',
-  },
-  {
-    id: 11350,
-    truckNo: 'DM-K-33-1078',
-    driver: 'Sumon Mia',
-    phone: '+880 1912 778899',
-    material: 'Raw Coal',
-    client: 'Apex Cement Mills',
-    weightType: 'OUT WEIGHT',
-    firstWeight: 15100,
-    firstWeightType: 'Tare',
-    firstWeightTime: '13-10-26 07:15:00 AM',
-    firstOperator: 'AKHTER K.',
-    timeElapsed: '2.5 hrs',
-    lastTare: 15240,
-    lastGross: 20980,
-    lastPayload: 5740,
-    lastWeighAt: '11 Oct',
-  },
-];
-
-// Keep the three demo pending tickets anchored to "now" so the dashboard
-// waiting times and the History "Today" filter stay coherent.
-const PENDING_AGE_MINUTES = [24, 72, 150];
-pendingTickets.forEach((ticket, index) => {
-  const createdAt = new Date(Date.now() - (PENDING_AGE_MINUTES[index] ?? 60) * 60 * 1000);
-  ticket.createdAt = createdAt.toISOString();
-  ticket.firstWeightTime = formatDateTime12H(createdAt);
-  ticket.printCount = 1;
-  ticket.printLog = [
-    {
-      by: ticket.firstOperator || 'Unknown',
-      at: createdAt.toISOString(),
-      type: 'first_weigh_slip',
-      reason: null,
-    },
-  ];
-});
-
-export function setPendingTickets(tickets) {
-  pendingTickets = tickets;
-}
-
-export let deletedTickets = seedHistory.deleted;
 
 export function setDeletedTickets(tickets) {
-  deletedTickets = tickets;
+  deletedTickets = tickets || [];
+}
+
+export function setPendingTickets(tickets) {
+  pendingTickets = tickets || [];
 }
 
 export function setOperators(operators) {
@@ -464,17 +53,128 @@ function notifyVehicleRefresh() {
   }
 }
 
-export async function refreshVehiclesFromDatabase(includeArchived = false) {
-  if (!IS_PRODUCTION) {
-    notifyVehicleRefresh();
-    return REGISTERED_TRUCKS;
-  }
+/**
+ * Registers or updates a truck record in the database.
+ */
+export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
+  const plate = (truckData.plate || '').trim().toUpperCase();
+  if (!plate) return null;
 
+  const incoming = {
+    driver: (truckData.driver || '').trim(),
+    phone: (truckData.phone || '').trim(),
+    client: (truckData.client || '').trim(),
+    material: (truckData.material || '').trim(),
+  };
+
+  const record = await sendCommand('registerVehicle', {
+    plate,
+    ...incoming,
+    operatorId: state.activeOperator?.id || '',
+    operatorName: operatorName || state.activeOperator?.name || 'Unknown',
+  });
+
+  const index = REGISTERED_TRUCKS.findIndex(
+    (t) => (t.plate || '').trim().toUpperCase() === plate
+  );
+  if (index >= 0) REGISTERED_TRUCKS[index] = record;
+  else REGISTERED_TRUCKS.unshift(record);
+
+  notifyVehicleRefresh();
+  return record;
+}
+
+/** Active (non-archived) vehicles used by the list, autocomplete and dialogs. */
+export function getActiveTrucks() {
+  return REGISTERED_TRUCKS.filter((t) => t.status !== 'archived');
+}
+
+/**
+ * Archives a vehicle via the C# bridge.
+ * @returns {Promise<{ok: boolean, truck?: Object, reason?: string}>}
+ */
+export async function archiveTruck(plate, reason, operatorName) {
+  const target = (plate || '').trim().toUpperCase();
+  const truck = REGISTERED_TRUCKS.find((t) => (t.plate || '').toUpperCase() === target);
+  if (!truck) return { ok: false, reason: 'Vehicle not found' };
+
+  try {
+    const record = await sendCommand('archiveVehicle', {
+      plate: target,
+      reason,
+      operatorId: state.activeOperator?.id || '',
+      operatorName: operatorName || state.activeOperator?.name || 'Unknown',
+    });
+    const index = REGISTERED_TRUCKS.findIndex(
+      (t) => (t.plate || '').toUpperCase() === target
+    );
+    if (index >= 0) REGISTERED_TRUCKS[index] = record;
+    notifyVehicleRefresh();
+    return { ok: true, truck: record };
+  } catch (error) {
+    return { ok: false, reason: error.message };
+  }
+}
+
+/**
+ * Restores an archived vehicle via the C# bridge.
+ */
+export async function restoreTruck(plate, operatorName) {
+  const target = (plate || '').trim().toUpperCase();
+  const truck = REGISTERED_TRUCKS.find((t) => (t.plate || '').toUpperCase() === target);
+  if (!truck) return null;
+
+  const record = await sendCommand('restoreVehicle', {
+    plate: target,
+    reason: '',
+    operatorId: state.activeOperator?.id || '',
+    operatorName: operatorName || state.activeOperator?.name || 'Unknown',
+  });
+  const index = REGISTERED_TRUCKS.findIndex((t) => (t.plate || '').toUpperCase() === target);
+  if (index >= 0) REGISTERED_TRUCKS[index] = record;
+  notifyVehicleRefresh();
+  return record;
+}
+
+/**
+ * Permanently removes an archived vehicle via the C# bridge.
+ * @returns {Promise<{ok: boolean, reason?: string}>}
+ */
+export async function deleteVehicle(plate, reason, operatorName) {
+  const target = (plate || '').trim().toUpperCase();
+  const truck = REGISTERED_TRUCKS.find((t) => (t.plate || '').toUpperCase() === target);
+  if (!truck) return { ok: false, reason: 'Vehicle not found' };
+  if (truck.status !== 'archived') {
+    return { ok: false, reason: 'Only archived vehicles can be permanently deleted.' };
+  }
+  if (!reason?.trim()) return { ok: false, reason: 'A deletion reason is required.' };
+
+  try {
+    await sendCommand('deleteVehicle', {
+      plate: target,
+      reason,
+      operatorId: state.activeOperator?.id || '',
+      operatorName: operatorName || state.activeOperator?.name || 'Unknown',
+    });
+    const index = REGISTERED_TRUCKS.findIndex(
+      (t) => (t.plate || '').toUpperCase() === target
+    );
+    if (index >= 0) REGISTERED_TRUCKS.splice(index, 1);
+    notifyVehicleRefresh();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, reason: error.message };
+  }
+}
+
+export async function refreshVehiclesFromDatabase(includeArchived = false) {
   const vehicles = await sendCommand('getVehicles', { includeArchived });
   setRegisteredTrucks(vehicles || []);
   notifyVehicleRefresh();
   return REGISTERED_TRUCKS;
 }
+
+let nextTicketId = 11353;
 
 export function setNextTicketId(id) {
   const value = Number(id);
@@ -483,8 +183,6 @@ export function setNextTicketId(id) {
 
 /** Loads all durable state from C# in one round-trip before any screen is initialised. */
 export async function loadProductionData({ resetHistory = true } = {}) {
-  if (!IS_PRODUCTION) return;
-
   const boot = await sendCommand('getBootState');
 
   setOperators(boot.operators || []);
@@ -517,8 +215,6 @@ export async function authenticateOperator(operatorId, pin) {
 
 /** Reloads the operator list and keeps the signed-in profile in sync. */
 export async function refreshOperators() {
-  if (!IS_PRODUCTION) return OPERATORS;
-
   const operators = await sendCommand('getOperators');
   setOperators(operators || []);
   if (state.activeOperator) {
@@ -550,7 +246,6 @@ export function deactivateProfile(payload) {
 }
 
 export async function captureReading() {
-  if (!IS_PRODUCTION) return;
   try {
     await sendCommand('captureReading');
   } catch {}
@@ -589,27 +284,15 @@ export async function deleteTicket(ticketId, reason, operatorName) {
   const idx = pendingTickets.findIndex((t) => t.id === ticketId);
   if (idx === -1) return null;
 
-  if (IS_PRODUCTION) {
-    const updated = await sendCommand('deleteTicket', {
-      ticketId,
-      reason,
-      operatorId: state.activeOperator?.id || '',
-      operatorName: operatorName || state.activeOperator?.name || 'Unknown',
-    });
-    pendingTickets.splice(idx, 1);
-    deletedTickets.unshift(updated);
-    return updated;
-  }
-
-  const ticket = pendingTickets[idx];
-  ticket.deleted = true;
-  ticket.deletedAt = new Date().toISOString();
-  ticket.deletedBy = operatorName || 'Unknown Operator';
-  ticket.deletedReason = reason;
-  deletedTickets.push(ticket);
+  const updated = await sendCommand('deleteTicket', {
+    ticketId,
+    reason,
+    operatorId: state.activeOperator?.id || '',
+    operatorName: operatorName || state.activeOperator?.name || 'Unknown',
+  });
   pendingTickets.splice(idx, 1);
-  logAction('delete_pending', 'ticket', ticketId, { reason });
-  return ticket;
+  deletedTickets.unshift(updated);
+  return updated;
 }
 
 /**
@@ -685,70 +368,37 @@ export function getAllTickets() {
 
 /** Moves a completed ticket to the voided ledger with its audit metadata. */
 export async function voidTicket(ticketId, reason, operatorName) {
-  if (IS_PRODUCTION) {
-    const updated = await sendCommand('voidTicket', {
-      ticketId,
-      reason,
-      operatorId: state.activeOperator?.id || '',
-      operatorName: operatorName || state.activeOperator?.name || 'Unknown',
-    });
-    const idx = completedTickets.findIndex((t) => t.id === ticketId);
-    if (idx !== -1) completedTickets.splice(idx, 1);
-    if (!voidedTickets.some((t) => t.id === updated.id)) voidedTickets.unshift(updated);
-    try {
-      await refreshVehiclesFromDatabase();
-    } catch {}
-    return updated;
-  }
-
+  const updated = await sendCommand('voidTicket', {
+    ticketId,
+    reason,
+    operatorId: state.activeOperator?.id || '',
+    operatorName: operatorName || state.activeOperator?.name || 'Unknown',
+  });
   const idx = completedTickets.findIndex((t) => t.id === ticketId);
-  if (idx === -1) return null;
-  const ticket = completedTickets[idx];
-  ticket.status = 'voided';
-  ticket.voidedAt = new Date().toISOString();
-  ticket.voidedBy = operatorName || 'Unknown';
-  ticket.voidedReason = reason || '';
-  voidedTickets.unshift(ticket);
-  completedTickets.splice(idx, 1);
-  logAction('void', 'ticket', ticketId, { reason });
-  notifyVehicleRefresh();
-  return ticket;
+  if (idx !== -1) completedTickets.splice(idx, 1);
+  if (!voidedTickets.some((t) => t.id === updated.id)) voidedTickets.unshift(updated);
+  try {
+    await refreshVehiclesFromDatabase();
+  } catch {}
+  return updated;
 }
 
 /**
  * Records a reprint on a ticket (completed, voided or pending first-weigh slip).
- * @returns {number} the new copy number
+ * @returns {Promise<number>} the new copy number
  */
 export async function recordReprint(ticket, reason, operatorName) {
   if (!ticket) return 0;
 
-  if (IS_PRODUCTION) {
-    const result = await sendCommand('recordReprint', {
-      ticketId: ticket.id,
-      reason,
-      operatorId: state.activeOperator?.id || '',
-      operatorName: operatorName || state.activeOperator?.name || 'Unknown',
-    });
-    Object.assign(ticket, result.ticket);
-    return result.copyNumber;
-  }
-
-  if (!Array.isArray(ticket.printLog)) ticket.printLog = [];
-  const previous = ticket.printCount || 1;
-  const copyNumber = previous + 1;
-  ticket.printLog.push({
-    by: operatorName || 'Unknown',
-    at: new Date().toISOString(),
-    type: 'reprint',
-    reason: reason || '',
-    copyNumber,
+  const result = await sendCommand('recordReprint', {
+    ticketId: ticket.id,
+    reason,
+    operatorId: state.activeOperator?.id || '',
+    operatorName: operatorName || state.activeOperator?.name || 'Unknown',
   });
-  ticket.printCount = copyNumber;
-  logAction('reprint', 'ticket', ticket.id, { reason, copyNumber });
-  return copyNumber;
+  Object.assign(ticket, result.ticket);
+  return result.copyNumber;
 }
-
-let nextTicketId = 11353;
 
 function computeNextTicketId() {
   const maxExisting = pendingTickets.reduce((max, t) => Math.max(max, t.id || 0), 11352);
@@ -764,9 +414,7 @@ export function peekNextTicketId() {
 }
 
 /**
- * Consumes a reserved ticket ID once its ticket is actually committed, advancing
- * the counter so the next peek returns a fresh, unique ID. Call exactly once per
- * committed ticket, using the same ID that was peeked for display/preview.
+ * Consumes a reserved ticket ID once its ticket is actually committed.
  */
 export function consumeTicketId(id) {
   const resolved = Number.isFinite(id) ? id : computeNextTicketId();
