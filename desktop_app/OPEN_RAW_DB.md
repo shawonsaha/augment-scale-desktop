@@ -529,7 +529,19 @@ For analysis, it is often safer to decrypt a **copy** and leave the live databas
 untouched. Close Augment Scale first, then produce the copy. The result is an ordinary
 unencrypted SQLite database that any SQLite tool can open.
 
-### With the SQLCipher CLI
+### Option 10.1: Helper script (recommended)
+
+Run the helper script to extract the DPAPI key automatically and export an unencrypted copy:
+
+```powershell
+# Exports to %USERPROFILE%\Desktop\augment-scale-plain-v2.db by default:
+.\tools\Export-PlainDb.ps1
+
+# Or specify custom source and destination paths:
+.\tools\Export-PlainDb.ps1 -SourcePath "$env:LOCALAPPDATA\AugmentScale\augment-scale.db" -TargetPath "$env:USERPROFILE\Desktop\augment-scale-plain-v2.db"
+```
+
+### Option 10.2: With the SQLCipher CLI
 
 ```powershell
 sqlcipher "$env:LOCALAPPDATA\AugmentScale\augment-scale.db"
