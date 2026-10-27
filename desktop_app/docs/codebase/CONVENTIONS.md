@@ -20,7 +20,7 @@
 ### 2) Formatting and Linting
 
 - Formatter: none configured. No `.editorconfig`, CSharpier, or Prettier configuration exists. Observed style follows conventional .NET formatting and Prettier-compatible JavaScript (not machine-enforced).
-- Linter: no standalone linter or analyzer package. No ESLint, Stylelint, HTMLHint, TypeScript, or `tsconfig.json` exists. The build uses built-in Roslyn analyzers via MSBuild.
+- Linter: no standalone linter or analyzer package. No ESLint, Stylelint, HTMLHint, or external compiler pipeline exists. `AugmentScale/WebUI/jsconfig.json` (`checkJs: true`) paired with `AugmentScale/WebUI/js/types.d.ts` and `// @ts-check` enables IDE-level TypeScript type checking and autocomplete across the bridge boundary without a JS build step. The C# build uses built-in Roslyn analyzers via MSBuild.
 - Most relevant enforced rules: `<Nullable>enable</Nullable>` and `<ImplicitUsings>enable</ImplicitUsings>` in the C# projects. `TreatWarningsAsErrors` is not explicitly enforced. All projects target Windows x64.
 - Run commands: there is no formatter or linter command. `dotnet build AugmentScale.slnx -c Debug` is the only static gate.
 - Observed formatting:
@@ -44,6 +44,7 @@
   - Named exports; no default exports, no barrels, and no path aliases.
   - Side-effect modules are imported once in `main.js` (`./bridge.js`, `./telemetry.js`).
   - Screen modules expose an `init` function and listen for the `screenchange` event; navigation is centralized in `router.js`.
+  - Bridge boundary modules (`runtime.js`, `bridge.js`, `state.js`) use `// @ts-check` with JSDoc annotations referencing `./types.d.ts` to enforce compile-time type safety on C# DTOs and `sendCommand` requests/responses.
 - HTML/CSS:
   - All partials are fetched and injected by `html-loader.js` in a fixed order; new partials must be added to `PARTIALS` (`html-loader.js:11-28`).
   - Screen-specific CSS is linked from `index.html`; shared tokens come first.
@@ -72,7 +73,7 @@
 - Test file naming/location: all tests live in `AugmentScale.Tests/` and are named `*Tests.cs` (`DatabaseTests.cs`, `PdfArchiveTests.cs`, `ProtocolTests.cs`, `SimulatorEngineTests.cs`, `SimulatorProtocolTests.cs`).
 - Mocking strategy: no mocking framework. Tests use real SQLCipher files, real TCP loopback, deterministic protocol fixtures, and a reusable `TempDatabase` `IDisposable` helper. `TempDatabase` creates an isolated GUID directory in `%TEMP%\AugmentScaleTests` per test and deletes it on disposal (`DatabaseTests.cs:8-36`). Loopback sockets (`TcpListener`) simulate network/hardware; `TimeoutThenFrameStream` simulates serial read timeouts. `PdfArchiveTests` uses a fake `IPdfArchiveRenderer` and injected local clock.
 - Test structure: implicit Arrange/Act/Assert separated by blank lines; expected failures use `Assert.Throws<T>` or result-tuple assertions.
-- Coverage expectation: `[TODO]` — no automated coverage tool or threshold is configured. All 84 existing tests are expected to pass with zero failures.
+- Coverage expectation: `[TODO]` — no automated coverage tool or threshold is configured. All 91 existing tests are expected to pass with zero failures.
 
 ### 6) Evidence
 

@@ -11,7 +11,7 @@
 | `AugmentScale/Models/` | C# record models, DTOs (including `BootStateDto`), setup/secrets models, and command request/response contracts | `AugmentScale/Models/` |
 | `AugmentScale/Data/` | Persistence infrastructure: `DatabaseContext`, `SchemaMigrator`, `Provisioner`, SQLite helpers, domain repositories, and domain services; `Data/Schema/` holds embedded SQL migrations (`V001_InitialSchema.sql`, `V002_ArchiveRuns.sql`) | `AugmentScale/Data/` |
 | `AugmentScale/Resources/` | Default bootstrap configuration template (`setup.json`) | `AugmentScale/Resources/setup.json` |
-| `AugmentScale/WebUI/` | HTML, CSS, JavaScript (native ES modules), SVGs, partials, and font assets loaded in WebView2; includes the interactive app and the offscreen `archive-report.html` renderer | `AugmentScale/WebUI/index.html`, `AugmentScale/WebUI/archive-report.html` |
+| `AugmentScale/WebUI/` | HTML, CSS, JavaScript (native ES modules), SVGs, partials, and font assets loaded in WebView2; includes the interactive app, the offscreen `archive-report.html` renderer, `jsconfig.json`, and `js/types.d.ts` (bridge boundary type declarations) | `AugmentScale/WebUI/index.html`, `AugmentScale/WebUI/archive-report.html`, `AugmentScale/WebUI/jsconfig.json`, `AugmentScale/WebUI/js/types.d.ts` |
 | `AugmentScale.Protocol/` | Standalone class library for XK3190-D10 continuous framing, XOR checksum, encoding/decoding, and stability detection | `AugmentScale.Protocol/AugmentScale.Protocol.csproj`, `Xk3190FrameSplitter.cs`, `StabilityDetector.cs` |
 | `AugmentScale.ScaleSimulator/` | Development-only WPF scale simulator with a loopback TCP frame server and simulation engine | `AugmentScale.ScaleSimulator/AugmentScale.ScaleSimulator.csproj`, `Networking/TcpFrameServer.cs`, `Simulation/SimulatorEngine.cs` |
 | `AugmentScale.Tests/` | Automated xUnit test suite (protocol, simulator, TCP transport, encrypted database, and PDF archive scheduling) | `AugmentScale.Tests/AugmentScale.Tests.csproj`, `DatabaseTests.cs`, `PdfArchiveTests.cs`, `ProtocolTests.cs` |
@@ -67,7 +67,7 @@
   - `main.js` imports side-effect modules such as `./bridge.js` and `./telemetry.js` once (`main.js:23`).
   - HTML partials are not included by a server; `js/html-loader.js` fetches all 11 partials in parallel and injects them into `#app` in a fixed order (`html-loader.js`). New partials must be added to `PARTIALS`.
   - `archive-report.html` is a standalone hidden renderer page, not a partial; it imports the shared report builder and CSS directly.
-- Hidden/config directories: none found. `.github/`, `.vscode/`, and `.husky/` are absent; there is no `.editorconfig`, CI config, or pre-commit configuration.
+- Hidden/config directories and files: `AugmentScale/WebUI/jsconfig.json` configures IDE JavaScript type checking. `.github/`, `.vscode/`, and `.husky/` are absent; there is no `.editorconfig`, CI config, or pre-commit configuration.
 
 ### 5) Evidence
 

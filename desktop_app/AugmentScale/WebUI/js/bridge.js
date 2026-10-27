@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * WebView2 Bridge — Public API for C# interop.
  * C# calls: webView.CoreWebView2.ExecuteScriptAsync("window.ScaleApp.methodName(args)")
@@ -17,12 +18,18 @@ export const ScaleApp = {
   getPendingTickets: () => JSON.parse(JSON.stringify(pendingTickets)),
 
   // Screen navigation
+  /** @param {string} screenId */
   showScreen: (screenId) => showScreen(screenId),
 
   // Toast notifications from C#
+  /**
+   * @param {string} message
+   * @param {string} [type]
+   */
   showToast: (message, type) => showToast(message, type),
 
   // Receive live weight data from the C# scale reader
+  /** @param {import('./types.js').LiveWeightData} data */
   onWeightData: (data) => {
     if (data && typeof data.weight === 'number') {
       applyExternalWeight(data);
@@ -30,6 +37,7 @@ export const ScaleApp = {
   },
 
   // Connection changes from the serial reader (cable pulled, port busy, etc.)
+  /** @param {import('./types.js').ScaleStatusData} data */
   onScaleStatus: (data) => {
     if (!data) return;
     applyExternalWeight({
@@ -45,7 +53,7 @@ export const ScaleApp = {
 };
 
 if (typeof window !== 'undefined') {
-  window.ScaleApp = ScaleApp;
+  /** @type {any} */ (window).ScaleApp = ScaleApp;
 }
 
 export default ScaleApp;

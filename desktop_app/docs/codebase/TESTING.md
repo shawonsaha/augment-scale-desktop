@@ -32,7 +32,7 @@ dotnet test AugmentScale.slnx -c Debug --logger "console;verbosity=detailed"
 dotnet build AugmentScale.slnx -c Debug
 ```
 
-A full run on 2026-10-25 after the boot-payload work returned `Passed: 84, Failed: 0, Skipped: 0, Total: 84` in about 34 seconds; an earlier cold/loaded run took about 1 minute 9 seconds. The prior persistence-refactor baseline was `Passed: 77, Failed: 0, Total: 77` in roughly 26–34 seconds. There is no separate unit/integration/e2e command split and no coverage command or threshold configured; use `dotnet test --filter` ad hoc if needed. Evidence: `AugmentScale.Tests/AugmentScale.Tests.csproj`.
+A full run produced `Passed: 91, Failed: 0, Skipped: 0, Total: 91` in about 50 seconds to 1 minute. There is no separate unit/integration/e2e command split and no coverage command or threshold configured; use `dotnet test --filter` ad hoc if needed. Evidence: `AugmentScale.Tests/AugmentScale.Tests.csproj`.
 
 ### 2) Test Layout
 
@@ -92,7 +92,7 @@ A full run on 2026-10-25 after the boot-payload work returned `Passed: 84, Faile
 ### 5) Coverage and Quality Signals
 
 - Coverage tool + threshold: `[TODO]` — no Coverlet/`coverlet.collector`, no automated code coverage tool, and no threshold configured in build scripts or project files. No published coverage report exists.
-- Current reported signal: 84/84 tests pass; 0 failed, 0 skipped; about 34 seconds on the latest 2026-10-25 run, with an earlier cold/loaded run taking about 1 minute 9 seconds.
+- Current reported signal: 91/91 tests pass; 0 failed, 0 skipped; about 50 seconds to 1 minute duration.
 - Strengths: high-value ticket lifecycle, vehicle/ticket interaction, encrypted database provisioning, report snapshot integrity, archive scheduling/retry, and protocol edge cases are covered.
 - Known gaps/flaky areas:
   - No tests for `BridgeService` command routing, authorization expiry, JSON mapping, or the 30-second timeout.

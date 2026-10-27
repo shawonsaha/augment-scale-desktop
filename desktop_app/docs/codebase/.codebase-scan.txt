@@ -87,6 +87,7 @@ AugmentScale\WebUI\css\tokens.css
 AugmentScale\WebUI\css\trucks.css
 AugmentScale\WebUI\css\weigh.css
 AugmentScale\WebUI\index.html
+AugmentScale\WebUI\jsconfig.json
 AugmentScale\WebUI\js
 AugmentScale\WebUI\js\archive-report.js
 AugmentScale\WebUI\js\audio.js
@@ -105,12 +106,12 @@ AugmentScale\WebUI\js\refresh.js
 AugmentScale\WebUI\js\router.js
 AugmentScale\WebUI\js\runtime.js
 AugmentScale\WebUI\js\screens
-AugmentScale\WebUI\js\seed-data.js
 AugmentScale\WebUI\js\state.js
 AugmentScale\WebUI\js\sync.js
 AugmentScale\WebUI\js\telemetry.js
 AugmentScale\WebUI\js\theme.js
 AugmentScale\WebUI\js\toast.js
+AugmentScale\WebUI\js\types.d.ts
 AugmentScale\WebUI\js\utils.js
 AugmentScale\WebUI\js\verify-report.js
 AugmentScale\WebUI\partials

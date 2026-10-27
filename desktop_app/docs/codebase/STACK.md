@@ -9,7 +9,7 @@
 | Primary language | C# 13 for the WPF host, services, protocol, and tests; JavaScript (ES2020+, native ES modules), HTML, CSS, XAML, and SQL for the operator UI | `AugmentScale/AugmentScale.csproj`, `AugmentScale/WebUI/js/main.js`, `AugmentScale.Tests/DatabaseTests.cs` |
 | Runtime + version | .NET 10.0. App, test, and simulator projects target `net10.0-windows`; the protocol library targets `net10.0`. Microsoft Edge WebView2 Evergreen runtime | `AugmentScale/AugmentScale.csproj:4`, `AugmentScale.Tests/AugmentScale.Tests.csproj:3`, `AugmentScale.Protocol/AugmentScale.Protocol.csproj`, `USER_MANUAL.md:7` |
 | Package manager | NuGet through the `dotnet` CLI. Versions are pinned in each `.csproj`; no `packages.lock.json` or NuGet lock mode is configured | `AugmentScale/AugmentScale.csproj:23-28`, `AugmentScale.Tests/AugmentScale.Tests.csproj:11-15` |
-| Module/build system | Microsoft.NET.Sdk / MSBuild driven by the .NET 10 XML solution `AugmentScale.slnx`. The WebUI has no bundler, transpiler, or package manager; `index.html` loads `js/main.js` as a native module | `AugmentScale.slnx`, `AugmentScale/AugmentScale.csproj:1`, `AugmentScale/WebUI/index.html:55`, `USER_MANUAL.md:50` |
+| Module/build system | Microsoft.NET.Sdk / MSBuild driven by the .NET 10 XML solution `AugmentScale.slnx`. The WebUI runtime has no bundler, transpiler, or package manager; `index.html` loads `js/main.js` as a native module. Compile-time type checking and intellisense are provided in the editor via `WebUI/jsconfig.json` (`checkJs: true`), `WebUI/js/types.d.ts`, and JSDoc (`@ts-check`) across bridge boundaries | `AugmentScale.slnx`, `AugmentScale/AugmentScale.csproj:1`, `AugmentScale/WebUI/index.html:55`, `AugmentScale/WebUI/jsconfig.json`, `USER_MANUAL.md:50` |
 
 ### 2) Production Frameworks and Dependencies
 
@@ -34,7 +34,7 @@
 | `AugmentScale.ScaleSimulator` | Internal WPF GUI simulating a continuous XK3190-D10 stream over TCP | `AugmentScale.ScaleSimulator/AugmentScale.ScaleSimulator.csproj` |
 | PowerShell 5.1+ | Development launcher (`start-dev-sim.ps1`) and DPAPI key extraction (`tools/Get-DbKey.ps1`) | `start-dev-sim.ps1`, `tools/Get-DbKey.ps1` |
 | Microsoft Edge WebView2 Evergreen Runtime | Required runtime dependency on each workstation; not vendored by the app | `USER_MANUAL.md:148`, `AugmentScale/MainWindow.xaml.cs:64-107` |
-| EditorConfig / formatter / linter | None configured: no `.editorconfig`, CSharpier, Prettier, ESLint, Stylelint, HTMLHint, TypeScript, or `tsconfig.json` | Repository scan `[TODO]` |
+| EditorConfig / formatter / linter | VS Code / Visual Studio TypeScript language service configured via `AugmentScale/WebUI/jsconfig.json` (`checkJs: true`) using `types.d.ts` and JSDoc (`@ts-check`) on bridge boundary modules; no `.editorconfig`, CSharpier, Prettier, ESLint, or Stylelint | `AugmentScale/WebUI/jsconfig.json`, `AugmentScale/WebUI/js/types.d.ts` |
 | CI/CD, containers | None configured: no `.github/`, GitLab/Jenkins config, Dockerfile, or compose file | Repository scan `[TODO]` |
 
 ### 4) Key Commands
@@ -48,7 +48,7 @@ dotnet restore AugmentScale.slnx
 # Compile Debug build
 dotnet build AugmentScale.slnx -c Debug
 
-# Execute automated tests (84 tests)
+# Execute automated tests (91 tests)
 dotnet test AugmentScale.slnx -c Debug
 
 # Execute the same suite through the test project
@@ -79,7 +79,7 @@ Self-contained publish:
 dotnet publish AugmentScale\AugmentScale.csproj -c Release -r win-x64 --self-contained true -o ".\publish\win-x64-selfcontained"
 ```
 
-There is no lint command. A full run on 2026-10-25 after the boot-payload work produced `Passed: 84, Failed: 0, Total: 84` in about 34 seconds; an earlier cold/loaded run took about 1 minute 9 seconds. The prior persistence-refactor baseline was `Passed: 77, Failed: 0, Total: 77` in roughly 26–34 seconds. Evidence: the test command above.
+There is no standalone lint command. A full run produced `Passed: 91, Failed: 0, Total: 91` in about 50 seconds to 1 minute. Evidence: the test command above.
 
 ### 5) Environment and Config
 

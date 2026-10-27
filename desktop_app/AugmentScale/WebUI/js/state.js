@@ -1,39 +1,67 @@
+// @ts-check
 /**
  * Central application state and data constants.
  * Single source of truth across all module screens.
  * State is initialized clean and loaded authoritatively from the C# host via the desktop bridge.
+ *
+ * @typedef {import('./types.js').ProfileDto} ProfileDto
+ * @typedef {import('./types.js').VehicleDto} VehicleDto
+ * @typedef {import('./types.js').TicketDto} TicketDto
+ * @typedef {import('./types.js').BootStateDto} BootStateDto
+ * @typedef {import('./types.js').CreateTicketRequest} CreateTicketRequest
+ * @typedef {import('./types.js').CompleteTicketRequest} CompleteTicketRequest
+ * @typedef {import('./types.js').ProfileWriteRequest} ProfileWriteRequest
+ * @typedef {import('./types.js').SetProfilePinRequest} SetProfilePinRequest
+ * @typedef {import('./types.js').DeactivateProfileRequest} DeactivateProfileRequest
  */
 
 import { formatDateTime12H } from './utils.js';
 import { sendCommand } from './runtime.js';
 
+/** @type {ProfileDto[]} */
 export const OPERATORS = [];
+
+/** @type {VehicleDto[]} */
 export let REGISTERED_TRUCKS = [];
+
+/** @type {TicketDto[]} */
 export let completedTickets = [];
+
+/** @type {TicketDto[]} */
 export let voidedTickets = [];
+
+/** @type {TicketDto[]} */
 export let deletedTickets = [];
+
+/** @type {TicketDto[]} */
 export let pendingTickets = [];
 
+/** @param {TicketDto[]} tickets */
 export function setCompletedTickets(tickets) {
   completedTickets = tickets || [];
 }
 
+/** @param {TicketDto[]} tickets */
 export function setVoidedTickets(tickets) {
   voidedTickets = tickets || [];
 }
 
+/** @param {TicketDto[]} tickets */
 export function setDeletedTickets(tickets) {
   deletedTickets = tickets || [];
 }
 
+/** @param {TicketDto[]} tickets */
 export function setPendingTickets(tickets) {
   pendingTickets = tickets || [];
 }
 
+/** @param {ProfileDto[]} operators */
 export function setOperators(operators) {
   OPERATORS.splice(0, OPERATORS.length, ...(operators || []));
 }
 
+/** @param {VehicleDto[]} trucks */
 export function setRegisteredTrucks(trucks) {
   REGISTERED_TRUCKS = (trucks || []).map((truck) => ({
     ...truck,
@@ -55,6 +83,9 @@ function notifyVehicleRefresh() {
 
 /**
  * Registers or updates a truck record in the database.
+ * @param {Partial<VehicleDto>} truckData
+ * @param {string} [operatorName]
+ * @returns {Promise<VehicleDto | null>}
  */
 export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
   const plate = (truckData.plate || '').trim().toUpperCase();
@@ -84,14 +115,20 @@ export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
   return record;
 }
 
-/** Active (non-archived) vehicles used by the list, autocomplete and dialogs. */
+/**
+ * Active (non-archived) vehicles used by the list, autocomplete and dialogs.
+ * @returns {VehicleDto[]}
+ */
 export function getActiveTrucks() {
   return REGISTERED_TRUCKS.filter((t) => t.status !== 'archived');
 }
 
 /**
  * Archives a vehicle via the C# bridge.
- * @returns {Promise<{ok: boolean, truck?: Object, reason?: string}>}
+ * @param {string} plate
+ * @param {string} reason
+ * @param {string} [operatorName]
+ * @returns {Promise<{ok: boolean, truck?: VehicleDto, reason?: string}>}
  */
 export async function archiveTruck(plate, reason, operatorName) {
   const target = (plate || '').trim().toUpperCase();
@@ -112,12 +149,15 @@ export async function archiveTruck(plate, reason, operatorName) {
     notifyVehicleRefresh();
     return { ok: true, truck: record };
   } catch (error) {
-    return { ok: false, reason: error.message };
+    return { ok: false, reason: /** @type {Error} */ (error).message };
   }
 }
 
 /**
  * Restores an archived vehicle via the C# bridge.
+ * @param {string} plate
+ * @param {string} [operatorName]
+ * @returns {Promise<VehicleDto | null>}
  */
 export async function restoreTruck(plate, operatorName) {
   const target = (plate || '').trim().toUpperCase();
@@ -138,6 +178,9 @@ export async function restoreTruck(plate, operatorName) {
 
 /**
  * Permanently removes an archived vehicle via the C# bridge.
+ * @param {string} plate
+ * @param {string} reason
+ * @param {string} [operatorName]
  * @returns {Promise<{ok: boolean, reason?: string}>}
  */
 export async function deleteVehicle(plate, reason, operatorName) {
@@ -163,10 +206,15 @@ export async function deleteVehicle(plate, reason, operatorName) {
     notifyVehicleRefresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, reason: error.message };
+    return { ok: false, reason: /** @type {Error} */ (error).message };
   }
 }
 
+/**
+ * Refreshes the vehicle cache from the database.
+ * @param {boolean} [includeArchived]
+ * @returns {Promise<VehicleDto[]>}
+ */
 export async function refreshVehiclesFromDatabase(includeArchived = false) {
   const vehicles = await sendCommand('getVehicles', { includeArchived });
   setRegisteredTrucks(vehicles || []);
@@ -176,12 +224,20 @@ export async function refreshVehiclesFromDatabase(includeArchived = false) {
 
 let nextTicketId = 11353;
 
+/**
+ * Sets the next ticket ID watermark.
+ * @param {number|string} id
+ */
 export function setNextTicketId(id) {
   const value = Number(id);
   nextTicketId = Number.isFinite(value) ? Math.max(11353, value) : 11353;
 }
 
-/** Loads all durable state from C# in one round-trip before any screen is initialised. */
+/**
+ * Loads all durable state from C# in one round-trip before any screen is initialised.
+ * @param {{ resetHistory?: boolean }} [options]
+ * @returns {Promise<void>}
+ */
 export async function loadProductionData({ resetHistory = true } = {}) {
   const boot = await sendCommand('getBootState');
 
@@ -208,39 +264,68 @@ export async function loadProductionData({ resetHistory = true } = {}) {
   document.dispatchEvent(new CustomEvent('operators:refresh'));
 }
 
-/** Verifies the PIN in C# (DPAPI-backed hash) when running in the desktop app. */
+/**
+ * Verifies the PIN in C# (DPAPI-backed hash) when running in the desktop app.
+ * @param {string} operatorId
+ * @param {string} pin
+ * @returns {Promise<ProfileDto | null>}
+ */
 export async function authenticateOperator(operatorId, pin) {
   return sendCommand('authenticatePin', { operatorId, pin });
 }
 
-/** Reloads the operator list and keeps the signed-in profile in sync. */
+/**
+ * Reloads the operator list and keeps the signed-in profile in sync.
+ * @returns {Promise<ProfileDto[]>}
+ */
 export async function refreshOperators() {
   const operators = await sendCommand('getOperators');
   setOperators(operators || []);
   if (state.activeOperator) {
-    const current = OPERATORS.find((op) => op.id === state.activeOperator.id);
+    const current = OPERATORS.find((op) => op.id === state.activeOperator?.id);
     if (current) state.activeOperator = current;
   }
   document.dispatchEvent(new CustomEvent('operators:refresh'));
   return OPERATORS;
 }
 
+/**
+ * @param {string} operatorId
+ * @param {string} pin
+ * @returns {Promise<{ token: string, expiresAt: string, actor: ProfileDto }>}
+ */
 export function unlockProfileAdmin(operatorId, pin) {
   return sendCommand('unlockProfileAdmin', { operatorId, pin });
 }
 
+/**
+ * @param {ProfileWriteRequest} payload
+ * @returns {Promise<ProfileDto>}
+ */
 export function createProfile(payload) {
   return sendCommand('createProfile', payload);
 }
 
+/**
+ * @param {ProfileWriteRequest} payload
+ * @returns {Promise<ProfileDto>}
+ */
 export function updateProfile(payload) {
   return sendCommand('updateProfile', payload);
 }
 
+/**
+ * @param {SetProfilePinRequest} payload
+ * @returns {Promise<boolean>}
+ */
 export function setProfilePin(payload) {
   return sendCommand('setProfilePin', payload);
 }
 
+/**
+ * @param {DeactivateProfileRequest} payload
+ * @returns {Promise<boolean>}
+ */
 export function deactivateProfile(payload) {
   return sendCommand('deactivateProfile', payload);
 }
@@ -251,7 +336,11 @@ export async function captureReading() {
   } catch {}
 }
 
-/** Persists a first weigh and returns the durable ticket. */
+/**
+ * Persists a first weigh and returns the durable ticket.
+ * @param {Partial<CreateTicketRequest> & { truckNo: string, weightKg: number }} ticketData
+ * @returns {Promise<TicketDto>}
+ */
 export async function commitFirstWeigh(ticketData) {
   const saved = await sendCommand('createTicket', {
     ...ticketData,
@@ -266,7 +355,11 @@ export async function commitFirstWeigh(ticketData) {
   return saved;
 }
 
-/** Persists the second weigh and returns the completed certificate record. */
+/**
+ * Persists the second weigh and returns the completed certificate record.
+ * @param {Partial<CompleteTicketRequest> & { ticketId: number, weightKg: number }} ticketData
+ * @returns {Promise<TicketDto>}
+ */
 export async function commitSecondWeigh(ticketData) {
   const completed = await sendCommand('completeTicket', {
     ...ticketData,
@@ -280,6 +373,12 @@ export async function commitSecondWeigh(ticketData) {
   return completed;
 }
 
+/**
+ * @param {number} ticketId
+ * @param {string} reason
+ * @param {string} [operatorName]
+ * @returns {Promise<TicketDto | null>}
+ */
 export async function deleteTicket(ticketId, reason, operatorName) {
   const idx = pendingTickets.findIndex((t) => t.id === ticketId);
   if (idx === -1) return null;
@@ -299,6 +398,8 @@ export async function deleteTicket(ticketId, reason, operatorName) {
  * Weigh stage is derived from the data, not stored: "first" means the ticket
  * only ever had one weight (pending or deleted while waiting), "complete" means
  * a second weight exists (completed or voided).
+ * @param {TicketDto | null | undefined} ticket
+ * @returns {'first' | 'complete'}
  */
 export function getTicketStage(ticket) {
   if (!ticket) return 'first';
@@ -307,7 +408,11 @@ export function getTicketStage(ticket) {
   return 'first';
 }
 
-/** Normalises status across the four ticket collections. */
+/**
+ * Normalises status across the four ticket collections.
+ * @param {TicketDto | null | undefined} ticket
+ * @returns {'pending' | 'voided' | 'deleted' | 'completed'}
+ */
 export function getTicketStatus(ticket) {
   if (!ticket) return 'pending';
   if (ticket.status === 'voided') return 'voided';
@@ -319,7 +424,11 @@ export function getTicketStatus(ticket) {
 const SCALE_TIMESTAMP_RE =
   /^(\d{1,2})-(\d{1,2})-(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)$/i;
 
-/** Millisecond timestamp for sorting/filtering, tolerant of both stored formats. */
+/**
+ * Millisecond timestamp for sorting/filtering, tolerant of both stored formats.
+ * @param {TicketDto | null | undefined} ticket
+ * @returns {number}
+ */
 export function getTicketTimestamp(ticket) {
   if (!ticket) return 0;
   const iso = ticket.completedAt || ticket.voidedAt || ticket.deletedAt || ticket.createdAt;
@@ -350,9 +459,15 @@ export function getTicketTimestamp(ticket) {
  * The full ledger used by History: pending, completed, voided and deleted
  * tickets sorted newest first. Returns live references so reprint/void mutate
  * the underlying record.
+ * @returns {TicketDto[]}
  */
 export function getAllTickets() {
+  /** @type {TicketDto[]} */
   const all = [];
+  /**
+   * @param {TicketDto[]} tickets
+   * @param {string} source
+   */
   const push = (tickets, source) => {
     for (const ticket of tickets) {
       ticket._source = source;
@@ -366,7 +481,13 @@ export function getAllTickets() {
   return all.sort((a, b) => getTicketTimestamp(b) - getTicketTimestamp(a));
 }
 
-/** Moves a completed ticket to the voided ledger with its audit metadata. */
+/**
+ * Moves a completed ticket to the voided ledger with its audit metadata.
+ * @param {number} ticketId
+ * @param {string} reason
+ * @param {string} [operatorName]
+ * @returns {Promise<TicketDto>}
+ */
 export async function voidTicket(ticketId, reason, operatorName) {
   const updated = await sendCommand('voidTicket', {
     ticketId,
@@ -385,6 +506,9 @@ export async function voidTicket(ticketId, reason, operatorName) {
 
 /**
  * Records a reprint on a ticket (completed, voided or pending first-weigh slip).
+ * @param {TicketDto} ticket
+ * @param {string} reason
+ * @param {string} [operatorName]
  * @returns {Promise<number>} the new copy number
  */
 export async function recordReprint(ticket, reason, operatorName) {
@@ -408,6 +532,7 @@ function computeNextTicketId() {
 /**
  * Returns the ID the next committed ticket would receive, WITHOUT consuming it.
  * Safe to call for display purposes any number of times.
+ * @returns {number}
  */
 export function peekNextTicketId() {
   return computeNextTicketId();
@@ -415,42 +540,61 @@ export function peekNextTicketId() {
 
 /**
  * Consumes a reserved ticket ID once its ticket is actually committed.
+ * @param {number} [id]
+ * @returns {number}
  */
 export function consumeTicketId(id) {
-  const resolved = Number.isFinite(id) ? id : computeNextTicketId();
+  const resolved = Number.isFinite(id) ? /** @type {number} */ (id) : computeNextTicketId();
   nextTicketId = Math.max(computeNextTicketId(), resolved + 1);
   return resolved;
 }
 
 export const state = {
   currentScreen: 'login-screen',
+  /** @type {ProfileDto | null} */
   selectedOperator: null,
+  /** @type {ProfileDto | null} */
   activeOperator: null,
+  /** @type {number | null} */
   currentLiveWeight: null,
   isScaleStable: false,
   isScaleConnected: false,
 
   // First Weigh State
   firstWeigh: {
+    /** @type {number | null} */
     capturedWeight: null,
+    /** @type {string | null} */
     capturedTime: null,
+    /** @type {number | null} */
     capturedTimestamp: null,
+    /** @type {string | null} */
     direction: null,
     _blockedByOpenTicket: false,
+    /** @type {number | null} */
     _blockedTicketId: null,
   },
 
   // Second Weigh State
   secondWeigh: {
+    /** @type {TicketDto | null} */
     selectedTicket: null,
+    /** @type {number | null} */
     capturedWeight: null,
+    /** @type {string | null} */
     capturedTime: null,
+    /** @type {number | null} */
     capturedTimestamp: null,
+    /** @type {number | null} */
     calculatedNet: null,
     isOverridden: false,
+    /** @type {string | null} */
     overrideReason: null,
+    /** @type {string | null} */
     overrideTimestamp: null,
+    /** @type {string | null} */
     overrideOperator: null,
+    /** @type {any} */
     overrideAnomalyDetails: null,
   },
 
@@ -460,10 +604,12 @@ export const state = {
     lastSyncTimestamp: new Date(),
     pendingQueue: 0,
     syncInProgress: false,
+    /** @type {any} */
     archive: null,
   },
 
   // Filtered tickets cache for keyboard navigation
+  /** @type {TicketDto[]} */
   currentFilteredTickets: [],
   focusedTicketIndex: -1,
   pendingTicketsSort: { key: 'waiting', dir: 'desc' },
@@ -475,9 +621,12 @@ export const state = {
     currentPage: 0,
     pageSize: 20,
     dateFilter: 'today', // 'today' | 'yesterday' | '7days' | '30days' | 'custom'
+    /** @type {string | null} */
     customDateFrom: null,
+    /** @type {string | null} */
     customDateTo: null,
     searchQuery: '',
+    /** @type {Record<string, string[]>} */
     filters: {
       statuses: [],
       drivers: [],
@@ -489,6 +638,7 @@ export const state = {
     },
     sortKey: 'when',
     sortDir: 'desc',
+    /** @type {number | null} */
     selectedTicketId: null,
     focusedRowIndex: 0,
   },
@@ -500,6 +650,7 @@ export const state = {
     searchQuery: '',
     showArchived: false,
     focusedRowIndex: 0,
+    /** @type {VehicleDto | null} */
     editingTruck: null,
     sortKey: 'lastWeighed',
     sortDir: 'desc',

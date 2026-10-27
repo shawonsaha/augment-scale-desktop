@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * WebView2 desktop host runtime.
  *
@@ -13,6 +14,7 @@ export const hasDesktopBridge = Boolean(
 // Backward-compatibility export
 export const IS_PRODUCTION = hasDesktopBridge;
 
+/** @type {Map<string, { resolve: (val: any) => void, reject: (err: any) => void, timer: any }>} */
 const pending = new Map();
 let sequence = 0;
 
@@ -43,11 +45,12 @@ if (hasDesktopBridge) {
 
 /**
  * Send a command to the C# bridge and await its response.
- * @param {string} command
- * @param {Object} [payload]
- * @returns {Promise<any>}
+ * @template {keyof import('./types.js').BridgeCommands} T
+ * @param {T} command
+ * @param {import('./types.js').BridgeCommands[T]['request']} [payload]
+ * @returns {Promise<import('./types.js').BridgeCommands[T]['response']>}
  */
-export function sendCommand(command, payload = {}) {
+export function sendCommand(command, payload = /** @type {any} */ ({})) {
   if (!hasDesktopBridge) {
     return Promise.reject(
       new Error('The desktop bridge is unavailable. Augment Scale requires the desktop host.')
