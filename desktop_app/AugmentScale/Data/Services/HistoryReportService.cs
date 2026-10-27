@@ -32,6 +32,7 @@ internal sealed class HistoryReportService : IReportService
             throw new InvalidOperationException("Choose a valid report end date.");
         if (fromDate > toDate)
             throw new InvalidOperationException("The report start date must be before the end date.");
+        HistoryRangeLimits.EnsureValidRange(fromDate, toDate, "report");
         if (!_db.Config.AuthenticatePin(req.OperatorId, req.Pin))
             throw new InvalidOperationException("Incorrect PIN. The report was not generated.");
 

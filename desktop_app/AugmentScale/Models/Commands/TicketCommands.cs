@@ -66,10 +66,23 @@ public sealed class HistoryQueryRequest
     public string? Status { get; set; }
 }
 
-public sealed class HistoryRangeRequest
+public sealed class HistoryPageRequest
 {
     public string FromDate { get; set; } = string.Empty;
     public string ToDate { get; set; } = string.Empty;
+    public string? Search { get; set; }
+    public List<string> Statuses { get; set; } = [];
+    public List<string> Drivers { get; set; } = [];
+    public List<string> Operators { get; set; } = [];
+    public List<string> Materials { get; set; } = [];
+    public List<string> Clients { get; set; } = [];
+    public List<string> Directions { get; set; } = [];
+    public List<string> Flags { get; set; } = [];
+    public string SortKey { get; set; } = "when";
+    public string SortDir { get; set; } = "desc";
+    public int Page { get; set; }
+    public int PageSize { get; set; } = 20;
+    public bool IncludeOptions { get; set; }
 }
 
 public sealed class HistoryReportRequest

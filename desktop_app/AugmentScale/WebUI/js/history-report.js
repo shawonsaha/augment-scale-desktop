@@ -16,6 +16,8 @@ import { openVerifyReportModal } from './verify-report.js';
 
 const PAGE_STYLE_ID = 'history-report-page-style';
 const RANGE_VALUES = new Set(['today', 'yesterday', '7days', '30days', 'custom']);
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_RANGE_DAYS = 366;
 
 let bound = false;
 let pendingRange = null;
@@ -86,6 +88,10 @@ function selectedRange() {
     to = parseDateValue(toInput?.value);
     if (!from || !to) throw new Error('Choose both dates for the custom report period.');
     if (from.getTime() > to.getTime()) throw new Error('The start date must be before the end date.');
+    const spanDays = Math.round((to.getTime() - from.getTime()) / DAY_MS) + 1;
+    if (spanDays > MAX_RANGE_DAYS) {
+      throw new Error('Choose a report range of one year or less.');
+    }
   }
 
   const fromDate = toDateValue(from);

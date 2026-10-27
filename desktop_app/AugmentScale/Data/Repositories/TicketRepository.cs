@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using AugmentScale.Models;
 using AugmentScale.Models.Commands;
 using Microsoft.Data.Sqlite;
@@ -10,6 +11,8 @@ internal sealed class TicketRepository : ITicketRepository
     private const long FirstTicketNumber = 11353;
     private const long LastHistoricalTicketNumber = 11352;
     private const int DefaultHistoryLimit = 1000;
+    private const int DefaultHistoryPageSize = 20;
+    private const int MaxHistoryPageSize = 200;
 
     private readonly DatabaseContext _db;
     private readonly VehicleRepository _vehicles;
@@ -111,37 +114,264 @@ internal sealed class TicketRepository : ITicketRepository
         return ReadTickets(connection, null, cmd);
     }
 
-    public IReadOnlyList<TicketDto> GetHistoryRange(string fromDate, string toDate)
+    public HistoryPageDto HistoryPage(HistoryPageRequest req)
     {
         _db.EnsureInitialized();
-        if (!DateOnly.TryParseExact(fromDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out var fromDay))
-            throw new InvalidOperationException("Choose a valid history start date.");
-        if (!DateOnly.TryParseExact(toDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out var toDay))
-            throw new InvalidOperationException("Choose a valid history end date.");
-        if (fromDay > toDay)
-            throw new InvalidOperationException("The history start date must be before the end date.");
+        var fromDay = HistoryRangeLimits.ParseDate(req.FromDate, "history");
+        var toDay = HistoryRangeLimits.ParseDate(req.ToDate, "history");
+        HistoryRangeLimits.EnsureValidRange(fromDay, toDay, "history");
 
         var fromUtc = fromDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local)
             .ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         var toUtc = toDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).AddDays(1)
             .ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
+        var pageSize = Math.Clamp(req.PageSize <= 0 ? DefaultHistoryPageSize : req.PageSize,
+            1, MaxHistoryPageSize);
+        var (where, parameters) = BuildHistoryWhere(req, fromUtc, toUtc);
+
         using var connection = _db.OpenConnection();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT * FROM ticket_history
-            WHERE organization_id = $org
-              AND datetime(business_at) >= datetime($from)
-              AND datetime(business_at) < datetime($to)
-            ORDER BY business_at DESC
-            LIMIT 5000;
+
+        int total;
+        double netKg;
+        using (var aggregate = connection.CreateCommand())
+        {
+            aggregate.CommandText = $"""
+                SELECT COUNT(*),
+                       COALESCE(SUM(CASE WHEN th.status_display = 'completed'
+                           THEN th.net_weight_kg ELSE 0 END), 0)
+                FROM ticket_history th
+                {where};
+                """;
+            AddParameters(aggregate, parameters);
+            using var reader = aggregate.ExecuteReader();
+            reader.Read();
+            total = Convert.ToInt32(reader.GetInt64(0), CultureInfo.InvariantCulture);
+            netKg = Convert.ToDouble(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        var pageCount = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Clamp(req.Page, 0, pageCount - 1);
+
+        using var pageCommand = connection.CreateCommand();
+        pageCommand.CommandText = $"""
+            SELECT th.* FROM ticket_history th
+            {where}
+            ORDER BY {HistoryOrderBy(req.SortKey, req.SortDir)}
+            LIMIT $limit OFFSET $offset;
             """;
-        cmd.Parameters.AddWithValue("$org", _db.OrganizationId);
-        cmd.Parameters.AddWithValue("$from", fromUtc);
-        cmd.Parameters.AddWithValue("$to", toUtc);
-        return ReadTickets(connection, null, cmd);
+        AddParameters(pageCommand, parameters);
+        pageCommand.Parameters.AddWithValue("$limit", pageSize);
+        pageCommand.Parameters.AddWithValue("$offset", (long)page * pageSize);
+        var tickets = ReadTickets(connection, null, pageCommand);
+
+        return new HistoryPageDto
+        {
+            Tickets = tickets.ToList(),
+            Total = total,
+            Page = page,
+            PageSize = pageSize,
+            NetKg = netKg,
+            Options = req.IncludeOptions ? ReadHistoryOptions(connection, where, parameters) : null,
+        };
+    }
+
+    private (string Where, List<(string Name, object Value)> Parameters) BuildHistoryWhere(
+        HistoryPageRequest req, string fromUtc, string toUtc)
+    {
+        var sql = new StringBuilder("""
+            WHERE th.organization_id = $org
+              AND datetime(th.business_at) >= datetime($from)
+              AND datetime(th.business_at) < datetime($to)
+            """);
+        var parameters = new List<(string Name, object Value)>
+        {
+            ("$org", _db.OrganizationId),
+            ("$from", fromUtc),
+            ("$to", toUtc),
+        };
+
+        AddInFilter(sql, parameters, "th.status_display", req.Statuses);
+        AddInFilter(sql, parameters, "th.driver_name", req.Drivers);
+        AddInFilter(sql, parameters, "th.product_name", req.Materials);
+        AddInFilter(sql, parameters, "th.customer_name", req.Clients);
+        AddInFilter(sql, parameters, "th.direction", req.Directions);
+
+        var operators = CleanValues(req.Operators);
+        if (operators.Count > 0)
+        {
+            var names = AddValueParameters(parameters, operators);
+            var list = string.Join(", ", names);
+            sql.Append($"""
+
+                 AND (th.first_operator_name IN ({list})
+                      OR th.second_operator_name IN ({list}))
+                """);
+        }
+
+        foreach (var flag in CleanValues(req.Flags))
+        {
+            switch (flag.ToLowerInvariant())
+            {
+                case "overridden":
+                    sql.Append(" AND th.is_overridden = 1");
+                    break;
+                case "reprinted":
+                    sql.Append("""
+
+                         AND (th.print_count > 1 OR EXISTS (
+                             SELECT 1 FROM print_jobs pj
+                             WHERE pj.ticket_id = th.id
+                               AND (pj.is_reprint = 1 OR pj.copy_number > 1)))
+                        """);
+                    break;
+            }
+        }
+
+        var search = (req.Search ?? string.Empty).Trim().ToLowerInvariant();
+        if (search.Length > 0)
+        {
+            parameters.Add(("$search", $"%{EscapeLike(search)}%"));
+            sql.Append("""
+
+                 AND (
+                     lower(CAST(th.ticket_number AS TEXT)) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.ticket_display_id, '')) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.plate_number, '')) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.driver_name, '')) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.product_name, '')) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.customer_name, '')) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.first_operator_name, '')) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.second_operator_name, '')) LIKE $search ESCAPE '\'
+                     OR lower(COALESCE(th.challan, '')) LIKE $search ESCAPE '\'
+                 )
+                """);
+        }
+
+        return (sql.ToString(), parameters);
+    }
+
+    private HistoryFilterOptionsDto ReadHistoryOptions(SqliteConnection connection, string where,
+        List<(string Name, object Value)> parameters) => new()
+    {
+        Drivers = ReadDistinctHistoryValues(connection, "th.driver_name", where, parameters),
+        Operators = ReadHistoryOperatorValues(connection, where, parameters),
+        Materials = ReadDistinctHistoryValues(connection, "th.product_name", where, parameters),
+        Clients = ReadDistinctHistoryValues(connection, "th.customer_name", where, parameters),
+    };
+
+    private static List<string> ReadDistinctHistoryValues(SqliteConnection connection, string column,
+        string where, List<(string Name, object Value)> parameters)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT DISTINCT {column} AS value
+            FROM ticket_history th
+            {where}
+            ORDER BY value COLLATE NOCASE;
+            """;
+        AddParameters(cmd, parameters);
+        return ReadStringValues(cmd);
+    }
+
+    private static List<string> ReadHistoryOperatorValues(SqliteConnection connection, string where,
+        List<(string Name, object Value)> parameters)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT value FROM (
+                SELECT th.first_operator_name AS value FROM ticket_history th {where}
+                UNION
+                SELECT th.second_operator_name AS value FROM ticket_history th {where}
+            )
+            WHERE value IS NOT NULL AND trim(value) <> ''
+            ORDER BY value COLLATE NOCASE;
+            """;
+        AddParameters(cmd, parameters);
+        return ReadStringValues(cmd);
+    }
+
+    private static List<string> ReadStringValues(SqliteCommand cmd)
+    {
+        var values = new List<string>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            if (reader.IsDBNull(0)) continue;
+            var value = reader.GetString(0).Trim();
+            if (value.Length > 0) values.Add(value);
+        }
+        return values;
+    }
+
+    private static void AddInFilter(StringBuilder sql,
+        List<(string Name, object Value)> parameters, string column, IEnumerable<string>? values)
+    {
+        var cleaned = CleanValues(values);
+        if (cleaned.Count == 0) return;
+        var names = AddValueParameters(parameters, cleaned);
+        sql.Append($" AND {column} IN ({string.Join(", ", names)})");
+    }
+
+    private static List<string> AddValueParameters(List<(string Name, object Value)> parameters,
+        IReadOnlyList<string> values)
+    {
+        var names = new List<string>(values.Count);
+        foreach (var value in values)
+        {
+            var name = $"$p{parameters.Count}";
+            parameters.Add((name, value));
+            names.Add(name);
+        }
+        return names;
+    }
+
+    private static List<string> CleanValues(IEnumerable<string>? values) =>
+        (values ?? [])
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static string EscapeLike(string value) =>
+        value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    private static string HistoryOrderBy(string? sortKey, string? sortDir)
+    {
+        var direction = string.Equals(sortDir, "asc", StringComparison.OrdinalIgnoreCase)
+            ? "ASC"
+            : "DESC";
+        return (sortKey ?? "when").ToLowerInvariant() switch
+        {
+            "id" => $"th.ticket_number {direction}",
+            "when" => $"th.business_at {direction}, th.ticket_number DESC",
+            "truck" =>
+                $"lower(COALESCE(th.plate_number, '') || ' ' || COALESCE(th.driver_name, '')) {direction}, th.ticket_number DESC",
+            "first" => NullsLast("th.first_weight_kg", direction),
+            "second" => NullsLast("th.second_weight_kg", direction),
+            "net" => NullsLast("th.net_weight_kg", direction),
+            "status" => $"""
+                CASE th.status_display
+                    WHEN 'pending' THEN 0
+                    WHEN 'completed' THEN 1
+                    WHEN 'voided' THEN 2
+                    WHEN 'deleted' THEN 3
+                    ELSE 4
+                END {direction}, th.ticket_number DESC
+                """,
+            "prints" => $"th.print_count {direction}, th.ticket_number DESC",
+            _ => $"th.business_at {direction}, th.ticket_number DESC",
+        };
+    }
+
+    private static string NullsLast(string expression, string direction) =>
+        $"CASE WHEN {expression} IS NULL THEN 1 ELSE 0 END ASC, {expression} {direction}, th.ticket_number DESC";
+
+    private static void AddParameters(SqliteCommand cmd,
+        IEnumerable<(string Name, object Value)> parameters)
+    {
+        foreach (var (name, value) in parameters)
+            cmd.Parameters.AddWithValue(name, value);
     }
 
     public TicketDto? GetTicket(long ticketNumber)

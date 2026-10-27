@@ -841,6 +841,40 @@ body.dark-mode .hist-print-badge.is-high,
   white-space: nowrap;
 }
 
+.hist-page-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.hist-page-jump[hidden] {
+  display: none;
+}
+
+.hist-page-input {
+  width: 48px;
+  height: 26px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+.hist-page-input:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
+.hist-page-total {
+  white-space: nowrap;
+}
+
 .hist-summary,
 .trucks-summary {
   font-size: var(--text-2xs);

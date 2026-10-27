@@ -443,7 +443,7 @@ Only pending tickets can be deleted. This is intended for entry mistakes made be
 
 ### 8.7 History
 
-History supports date ranges, status filters, stage filters, operator/material/client filters, search, and paging. Open a row to see:
+History supports date ranges, status filters, stage filters, operator/material/client filters, search, sorting, and paging. Custom date ranges are limited to one year (366 days). When a result has more than one page, the page-number box next to the range label jumps directly to a page. Open a row to see:
 
 - first and second weigh details;
 - gross, tare, and net;
@@ -451,6 +451,8 @@ History supports date ranges, status filters, stage filters, operator/material/c
 - override details;
 - print and reprint log;
 - void or delete reason.
+
+Use **Report** to preview and print a history report for the selected period. Interactive report ranges are also limited to one year.
 
 ### 8.8 Vehicles
 

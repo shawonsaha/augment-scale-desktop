@@ -10,7 +10,6 @@ import {
   getAllTickets,
   getTicketStatus,
   getTicketTimestamp,
-  replaceHistoryTickets,
   voidTicket,
 } from '../state.js';
 import { IS_PRODUCTION, sendCommand } from '../runtime.js';
@@ -25,6 +24,9 @@ import { escapeHtml, formatFullDateTime } from '../utils.js';
 const FALLBACK_ROW_HEIGHT = 68;
 const MIN_PAGE_SIZE = 5;
 const POPOVER_MARGIN = 12;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_RANGE_DAYS = 366;
+const SEARCH_DEBOUNCE_MS = 250;
 
 const FILTER_KEYS = [
   'statuses',
@@ -69,9 +71,15 @@ const SORT_KEYS = new Set([
   'prints',
 ]);
 
-let filtered = [];
+let pageRows = [];
+let pageTotal = 0;
+let pageNetKg = 0;
+let filterOptions = { drivers: [], operators: [], materials: [], clients: [] };
 let pageSize = 20;
 let focusedIndex = 0;
+let selectedTicket = null;
+let requestSeq = 0;
+let searchTimer = null;
 
 // ─── Small formatting helpers ───────────────────────────────────────────────
 
@@ -181,40 +189,6 @@ function statusRank(ticket) {
 
 // ─── Filtering ──────────────────────────────────────────────────────────────
 
-function withinDateRange(ticket) {
-  const ts = getTicketTimestamp(ticket);
-  if (!ts) return false;
-
-  const history = state.history;
-  const today = startOfDay();
-  const todayTs = today.getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
-
-  switch (history.dateFilter) {
-    case 'today':
-      return ts >= todayTs;
-    case 'yesterday':
-      return ts >= todayTs - dayMs && ts < todayTs;
-    case '7days':
-      return ts >= todayTs - 6 * dayMs;
-    case '30days':
-      return ts >= todayTs - 29 * dayMs;
-    case 'custom': {
-      if (history.customDateFrom) {
-        const from = startOfDay(new Date(`${history.customDateFrom}T00:00:00`)).getTime();
-        if (ts < from) return false;
-      }
-      if (history.customDateTo) {
-        const to = startOfDay(new Date(`${history.customDateTo}T00:00:00`)).getTime() + dayMs;
-        if (ts >= to) return false;
-      }
-      return true;
-    }
-    default:
-      return true;
-  }
-}
-
 function matchesSearch(ticket, query) {
   if (!query) return true;
   const haystack = [
@@ -242,14 +216,19 @@ function matchesFlags(ticket, flags) {
   });
 }
 
-function getFilteredTickets() {
+function computeDemoPage(includeOptions) {
+  const dates = dateFilterDates();
+  validateRange(dates.fromDate, dates.toDate);
+  const fromMs = startOfDay(new Date(`${dates.fromDate}T00:00:00`)).getTime();
+  const toMs = startOfDay(new Date(`${dates.toDate}T00:00:00`)).getTime() + DAY_MS;
   const history = state.history;
   const query = history.searchQuery.trim().toLowerCase();
   const selected = history.filters;
 
-  return getAllTickets()
+  const all = getAllTickets()
     .filter((ticket) => {
-      if (!withinDateRange(ticket)) return false;
+      const ts = getTicketTimestamp(ticket);
+      if (!ts || ts < fromMs || ts >= toMs) return false;
       if (!matchesSearch(ticket, query)) return false;
 
       const status = getTicketStatus(ticket);
@@ -274,89 +253,174 @@ function getFilteredTickets() {
       return matchesFlags(ticket, selected.flags);
     })
     .sort(compareTickets);
+
+  const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
+  const page = Math.max(0, Math.min(state.history.currentPage, pageCount - 1));
+  const start = page * pageSize;
+  const tickets = all.slice(start, start + pageSize);
+  const netKg = all.reduce(
+    (sum, ticket) =>
+      getTicketStatus(ticket) === 'completed' ? sum + (ticket.netWeight || 0) : sum,
+    0
+  );
+
+  return {
+    tickets,
+    total: all.length,
+    page,
+    pageSize,
+    netKg,
+    options: includeOptions
+      ? {
+          drivers: uniqueValues(all.map((ticket) => ticket.driver)),
+          operators: uniqueValues(
+            all.flatMap((ticket) => [ticket.firstOperator, ticket.secondOperator])
+          ),
+          materials: uniqueValues(all.map((ticket) => ticket.material)),
+          clients: uniqueValues(all.map((ticket) => ticket.client)),
+        }
+      : null,
+  };
 }
 
-// ─── Range loading (boot holds today; other ranges load on demand) ──────────
+// ─── Paged loading (SQL-backed in production; local fallback for browser demo) ─
 
-let rangeLoading = false;
-// Date range currently represented by the in-memory history ledgers.
-let loadedRangeKey = null;
-
-/** Start/end for the active date filter, or null when unbounded. */
-function rangeBoundsMs() {
+/** Inclusive local-date bounds for the active date filter. */
+function dateFilterDates() {
   const history = state.history;
-  const today = startOfDay().getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
+  const today = startOfDay();
+  const todayValue = toDateInputValue(today);
 
   switch (history.dateFilter) {
-    case 'today':
-      return { from: today, to: null };
-    case 'yesterday':
-      return { from: today - dayMs, to: today };
-    case '7days':
-      return { from: today - 6 * dayMs, to: null };
-    case '30days':
-      return { from: today - 29 * dayMs, to: null };
-    case 'custom': {
-      const from = history.customDateFrom
-        ? startOfDay(new Date(`${history.customDateFrom}T00:00:00`)).getTime()
-        : null;
-      const to = history.customDateTo
-        ? startOfDay(new Date(`${history.customDateTo}T00:00:00`)).getTime() + dayMs
-        : null;
-      return { from, to };
+    case 'yesterday': {
+      const value = toDateInputValue(new Date(today.getTime() - DAY_MS));
+      return { fromDate: value, toDate: value };
     }
+    case '7days':
+      return {
+        fromDate: toDateInputValue(new Date(today.getTime() - 6 * DAY_MS)),
+        toDate: todayValue,
+      };
+    case '30days':
+      return {
+        fromDate: toDateInputValue(new Date(today.getTime() - 29 * DAY_MS)),
+        toDate: todayValue,
+      };
+    case 'custom':
+      return {
+        fromDate:
+          history.customDateFrom || toDateInputValue(new Date(today.getTime() - 29 * DAY_MS)),
+        toDate: history.customDateTo || todayValue,
+      };
+    case 'today':
     default:
-      return null;
+      return { fromDate: todayValue, toDate: todayValue };
   }
 }
 
-/** Inclusive local-date key for the active date filter. */
-function currentRangeKey() {
-  const bounds = rangeBoundsMs();
-  if (!bounds || bounds.from === null) return null;
-  const fromDate = toDateInputValue(new Date(bounds.from));
-  const toDate = bounds.to
-    ? toDateInputValue(new Date(bounds.to - 1))
-    : toDateInputValue(new Date());
-  return `${fromDate}|${toDate}`;
+function addDaysToDateValue(value, days) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return toDateInputValue(date);
 }
 
-/** Fetches the selected date range and replaces the closed-ticket ledgers, so
- *  memory is bounded by that range instead of every range browsed this session. */
-function ensureRangeLoaded() {
-  if (!IS_PRODUCTION || rangeLoading) return;
-  const bounds = rangeBoundsMs();
-  if (!bounds || bounds.from === null) return;
-
-  const key = currentRangeKey();
-  if (!key || key === loadedRangeKey) return;
-
-  const fromDate = toDateInputValue(new Date(bounds.from));
-  const toDate = bounds.to
-    ? toDateInputValue(new Date(bounds.to - 1))
-    : toDateInputValue(new Date());
-
-  rangeLoading = true;
-  sendCommand('getHistoryRange', { fromDate, toDate })
-    .then((tickets) => {
-      replaceHistoryTickets(tickets);
-      loadedRangeKey = key;
-      rangeLoading = false;
-      if (state.currentScreen === 'history-screen') {
-        render();
-        buildFilterPanel();
-      }
-    })
-    .catch((err) => {
-      loadedRangeKey = null;
-      rangeLoading = false;
-      console.warn('Could not load tickets for the selected range', err);
-    });
+function rangeSpanDays(fromDate, toDate) {
+  const from = startOfDay(new Date(`${fromDate}T00:00:00`)).getTime();
+  const to = startOfDay(new Date(`${toDate}T00:00:00`)).getTime();
+  return Math.round((to - from) / DAY_MS) + 1;
 }
 
-// Boot already loaded today's closed tickets, so do not fetch them twice.
-loadedRangeKey = currentRangeKey();
+function validateRange(fromDate, toDate) {
+  if (!fromDate || !toDate) throw new Error('Choose both dates for the history range.');
+  const from = startOfDay(new Date(`${fromDate}T00:00:00`)).getTime();
+  const to = startOfDay(new Date(`${toDate}T00:00:00`)).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to)) {
+    throw new Error('Choose a valid history date range.');
+  }
+  if (from > to) throw new Error('The history start date must be before the end date.');
+  if (rangeSpanDays(fromDate, toDate) > MAX_RANGE_DAYS) {
+    throw new Error('Choose a history range of one year or less.');
+  }
+}
+
+function clearSelection() {
+  selectedTicket = null;
+  state.history.selectedTicketId = null;
+}
+
+async function loadHistoryPage({ includeOptions = false } = {}) {
+  const seq = ++requestSeq;
+
+  if (!IS_PRODUCTION) {
+    try {
+      applyPage(computeDemoPage(includeOptions));
+    } catch (err) {
+      showToast(err.message, 'warning');
+    }
+    return;
+  }
+
+  let dates;
+  try {
+    dates = dateFilterDates();
+    validateRange(dates.fromDate, dates.toDate);
+  } catch (err) {
+    showToast(err.message, 'warning');
+    return;
+  }
+
+  const history = state.history;
+  const payload = {
+    fromDate: dates.fromDate,
+    toDate: dates.toDate,
+    search: history.searchQuery,
+    statuses: history.filters.statuses,
+    drivers: history.filters.drivers,
+    operators: history.filters.operators,
+    materials: history.filters.materials,
+    clients: history.filters.clients,
+    directions: history.filters.directions,
+    flags: history.filters.flags,
+    sortKey: history.sortKey,
+    sortDir: history.sortDir,
+    page: history.currentPage,
+    pageSize,
+    includeOptions,
+  };
+
+  try {
+    const result = await sendCommand('queryHistory', payload);
+    if (seq === requestSeq) applyPage(result);
+  } catch (err) {
+    if (seq === requestSeq) {
+      showToast(err?.message || 'Could not load history.', 'error');
+    }
+  }
+}
+
+function applyPage(result) {
+  pageRows = Array.isArray(result?.tickets) ? result.tickets : [];
+  pageTotal = Number(result?.total) || 0;
+  pageNetKg = Number(result?.netKg) || 0;
+  if (Number(result?.pageSize) > 0) pageSize = Number(result.pageSize);
+  if (result?.page !== undefined) state.history.currentPage = Number(result.page) || 0;
+  state.history.pageSize = pageSize;
+
+  if (result?.options) {
+    filterOptions = {
+      drivers: result.options.drivers || [],
+      operators: result.options.operators || [],
+      materials: result.options.materials || [],
+      clients: result.options.clients || [],
+    };
+    buildFilterPanel();
+  }
+
+  if (selectedTicket && !pageRows.some((ticket) => ticket.id === selectedTicket.id)) {
+    clearSelection();
+  }
+  render();
+}
 
 // ─── Sorting ────────────────────────────────────────────────────────────────
 
@@ -415,6 +479,7 @@ function setSort(key) {
   }
   state.history.currentPage = 0;
   focusedIndex = 0;
+  clearSelection();
 }
 
 function updateSortHeaders() {
@@ -559,8 +624,7 @@ function renderDetail() {
   const panel = document.getElementById('history-detail');
   if (!panel) return;
 
-  const id = state.history.selectedTicketId;
-  const ticket = id === null ? null : getAllTickets().find((t) => t.id === id);
+  const ticket = selectedTicket;
   if (!ticket) {
     panel.hidden = true;
     panel.innerHTML = '';
@@ -723,22 +787,19 @@ function render() {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
-  filtered = getFilteredTickets();
-  ensureRangeLoaded();
-
   const measured = calculatePageSize();
   if (measured !== pageSize) {
     pageSize = measured;
     state.history.pageSize = measured;
+    requestAnimationFrame(() => loadHistoryPage());
   }
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(pageTotal / pageSize));
   if (state.history.currentPage > pageCount - 1) state.history.currentPage = pageCount - 1;
   if (state.history.currentPage < 0) state.history.currentPage = 0;
-  if (focusedIndex > filtered.length - 1) focusedIndex = Math.max(0, filtered.length - 1);
+  if (focusedIndex > pageTotal - 1) focusedIndex = Math.max(0, pageTotal - 1);
 
   const start = state.history.currentPage * pageSize;
-  const pageRows = filtered.slice(start, start + pageSize);
 
   updateSortHeaders();
   renderActiveFilters();
@@ -760,19 +821,14 @@ function render() {
   const range = document.getElementById('hist-range');
   if (range) {
     range.textContent =
-      filtered.length === 0
+      pageTotal === 0
         ? '0 of 0'
-        : `${start + 1}–${Math.min(start + pageSize, filtered.length)} of ${filtered.length}`;
+        : `${start + 1}–${Math.min(start + pageRows.length, pageTotal)} of ${pageTotal}`;
   }
 
   const summary = document.getElementById('hist-summary');
   if (summary) {
-    const netKg = filtered.reduce(
-      (sum, ticket) =>
-        getTicketStatus(ticket) === 'completed' ? sum + (ticket.netWeight || 0) : sum,
-      0
-    );
-    summary.textContent = `${filtered.length} ticket${filtered.length === 1 ? '' : 's'} · ${(netKg / 1000).toFixed(1)} MT net`;
+    summary.textContent = `${pageTotal} ticket${pageTotal === 1 ? '' : 's'} · ${(pageNetKg / 1000).toFixed(1)} MT net`;
   }
 
   const prev = document.getElementById('hist-prev');
@@ -780,7 +836,29 @@ function render() {
   if (prev) prev.disabled = state.history.currentPage <= 0;
   if (next) next.disabled = state.history.currentPage >= pageCount - 1;
 
+  renderPageJump(pageCount);
   renderDetail();
+}
+
+function renderPageJump(pageCount) {
+  const wrap = document.getElementById('hist-page-jump');
+  const input = document.getElementById('hist-page-input');
+  const total = document.getElementById('hist-page-total');
+  if (!wrap || !input || !total) return;
+
+  const show = pageCount > 1;
+  wrap.hidden = !show;
+  if (!show) {
+    input.value = '';
+    total.textContent = '';
+    return;
+  }
+
+  input.max = String(pageCount);
+  if (document.activeElement !== input) {
+    input.value = String(state.history.currentPage + 1);
+  }
+  total.textContent = `of ${pageCount}`;
 }
 
 // ─── Advanced filters ───────────────────────────────────────────────────────
@@ -829,11 +907,10 @@ function buildFilterPanel() {
   const body = document.getElementById('hist-more-body');
   if (!body) return;
 
-  const all = getAllTickets();
-  const operators = uniqueValues(all.flatMap((t) => [t.firstOperator, t.secondOperator]));
-  const drivers = uniqueValues(all.map((t) => t.driver));
-  const materials = uniqueValues(all.map((t) => t.material));
-  const clients = uniqueValues(all.map((t) => t.client));
+  const operators = uniqueValues(filterOptions.operators);
+  const drivers = uniqueValues(filterOptions.drivers);
+  const materials = uniqueValues(filterOptions.materials);
+  const clients = uniqueValues(filterOptions.clients);
 
   body.innerHTML = `
     <p class="hist-filter-note">Leave a section empty to include every value. Filters combine with the search and date range.</p>
@@ -899,17 +976,19 @@ function applyFilters() {
   state.history.filters = next;
   state.history.currentPage = 0;
   focusedIndex = 0;
+  clearSelection();
   updateFilterCount();
   setFiltersOpen(false);
-  render();
+  loadHistoryPage();
 }
 
 function clearFilters() {
   state.history.filters = Object.fromEntries(FILTER_KEYS.map((key) => [key, []]));
   state.history.currentPage = 0;
   focusedIndex = 0;
+  clearSelection();
   buildFilterPanel();
-  render();
+  loadHistoryPage();
 }
 
 function filterLabel(key, value) {
@@ -951,14 +1030,15 @@ function removeFilter(key, value) {
   state.history.filters[key] = selectedValues(key).filter((item) => item !== value);
   state.history.currentPage = 0;
   focusedIndex = 0;
+  clearSelection();
   if (document.getElementById('hist-more-popover')?.hidden === false) buildFilterPanel();
-  render();
+  loadHistoryPage();
 }
 
 // ─── Actions ────────────────────────────────────────────────────────────────
 
 function ticketById(id) {
-  return getAllTickets().find((ticket) => ticket.id === id) || null;
+  return pageRows.find((ticket) => ticket.id === id) || null;
 }
 
 function openReport() {
@@ -1005,31 +1085,40 @@ function voidTicketWithReason(ticket) {
         return;
       }
       showToast(`Ticket #${ticket.id} voided`, 'info');
-      render();
+      clearSelection();
+      loadHistoryPage({ includeOptions: true });
     },
   });
 }
 
 function focusRow(index) {
-  if (filtered.length === 0) return;
-  focusedIndex = Math.max(0, Math.min(index, filtered.length - 1));
+  if (pageTotal === 0) return;
+  focusedIndex = Math.max(0, Math.min(index, pageTotal - 1));
   state.history.focusedRowIndex = focusedIndex;
 
   const page = Math.floor(focusedIndex / pageSize);
   if (page !== state.history.currentPage) {
     state.history.currentPage = page;
+    loadHistoryPage();
+    return;
   }
   render();
   document.querySelector('.hist-row.is-focused')?.scrollIntoView({ block: 'nearest' });
 }
 
 function currentFocusedTicket() {
-  return filtered[focusedIndex] || null;
+  const start = state.history.currentPage * pageSize;
+  return pageRows[focusedIndex - start] || null;
 }
 
 function toggleDetail(ticket) {
   if (!ticket) return;
-  state.history.selectedTicketId = state.history.selectedTicketId === ticket.id ? null : ticket.id;
+  if (state.history.selectedTicketId === ticket.id) {
+    clearSelection();
+  } else {
+    state.history.selectedTicketId = ticket.id;
+    selectedTicket = ticket;
+  }
   render();
 }
 
@@ -1049,13 +1138,21 @@ export function initHistoryScreen() {
 
   if (!tbody) return;
 
+  const todayValue = toDateInputValue(new Date());
+  if (dateFrom) dateFrom.max = todayValue;
+  if (dateTo) dateTo.max = todayValue;
+
   buildFilterPanel();
+  pageSize = calculatePageSize();
+  state.history.pageSize = pageSize;
 
   searchInput?.addEventListener('input', (event) => {
     state.history.searchQuery = event.target.value;
     state.history.currentPage = 0;
     focusedIndex = 0;
-    render();
+    clearSelection();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadHistoryPage(), SEARCH_DEBOUNCE_MS);
   });
 
   dateSelect?.addEventListener('change', (event) => {
@@ -1066,7 +1163,7 @@ export function initHistoryScreen() {
 
     if (custom) {
       const today = new Date();
-      const monthAgo = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 29 * DAY_MS);
       if (dateFrom && !dateFrom.value) {
         dateFrom.value = toDateInputValue(monthAgo);
         state.history.customDateFrom = dateFrom.value;
@@ -1079,25 +1176,46 @@ export function initHistoryScreen() {
 
     state.history.currentPage = 0;
     focusedIndex = 0;
-    render();
+    clearSelection();
+    loadHistoryPage({ includeOptions: true });
   });
 
   dateFrom?.addEventListener('change', (event) => {
     state.history.customDateFrom = event.target.value || null;
+    if (state.history.customDateFrom && dateTo) {
+      if (!dateTo.value || dateTo.value < state.history.customDateFrom) {
+        dateTo.value = state.history.customDateFrom;
+      }
+      const maxTo = addDaysToDateValue(state.history.customDateFrom, MAX_RANGE_DAYS - 1);
+      if (dateTo.value > maxTo) dateTo.value = maxTo;
+      if (dateTo.value > todayValue) dateTo.value = todayValue;
+      state.history.customDateTo = dateTo.value;
+    }
     state.history.currentPage = 0;
     focusedIndex = 0;
-    render();
+    clearSelection();
+    loadHistoryPage({ includeOptions: true });
   });
   dateTo?.addEventListener('change', (event) => {
     state.history.customDateTo = event.target.value || null;
+    if (state.history.customDateTo && dateFrom) {
+      if (!dateFrom.value || dateFrom.value > state.history.customDateTo) {
+        dateFrom.value = state.history.customDateTo;
+      }
+      const minFrom = addDaysToDateValue(state.history.customDateTo, -(MAX_RANGE_DAYS - 1));
+      if (dateFrom.value < minFrom) dateFrom.value = minFrom;
+      if (dateFrom.value > todayValue) dateFrom.value = todayValue;
+      state.history.customDateFrom = dateFrom.value;
+    }
     state.history.currentPage = 0;
     focusedIndex = 0;
-    render();
+    clearSelection();
+    loadHistoryPage({ includeOptions: true });
   });
 
   document.getElementById('hist-date-sort')?.addEventListener('click', () => {
     setSort('when');
-    render();
+    loadHistoryPage();
   });
 
   filtersButton?.addEventListener('click', (event) => {
@@ -1131,7 +1249,7 @@ export function initHistoryScreen() {
     const button = event.target.closest('[data-sort-key]');
     if (!button) return;
     setSort(button.dataset.sortKey);
-    render();
+    loadHistoryPage();
   });
 
   document.getElementById('hist-report-btn')?.addEventListener('click', openReport);
@@ -1144,15 +1262,42 @@ export function initHistoryScreen() {
     if (state.history.currentPage > 0) {
       state.history.currentPage--;
       focusedIndex = state.history.currentPage * pageSize;
-      render();
+      loadHistoryPage();
     }
   });
   document.getElementById('hist-next')?.addEventListener('click', () => {
-    const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const pageCount = Math.max(1, Math.ceil(pageTotal / pageSize));
     if (state.history.currentPage < pageCount - 1) {
       state.history.currentPage++;
       focusedIndex = state.history.currentPage * pageSize;
-      render();
+      loadHistoryPage();
+    }
+  });
+
+  const pageInput = document.getElementById('hist-page-input');
+  const goToPage = () => {
+    if (!pageInput) return;
+    const pageCount = Math.max(1, Math.ceil(pageTotal / pageSize));
+    const requested = Number(pageInput.value);
+    if (!Number.isFinite(requested)) {
+      pageInput.value = String(state.history.currentPage + 1);
+      return;
+    }
+    const target = Math.max(0, Math.min(Math.round(requested) - 1, pageCount - 1));
+    if (target === state.history.currentPage) {
+      pageInput.value = String(target + 1);
+      return;
+    }
+    state.history.currentPage = target;
+    focusedIndex = target * pageSize;
+    clearSelection();
+    loadHistoryPage();
+  };
+  pageInput?.addEventListener('change', goToPage);
+  pageInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      goToPage();
     }
   });
 
@@ -1160,15 +1305,15 @@ export function initHistoryScreen() {
     const row = event.target.closest('tr[data-ticket-id]');
     if (!row) return;
     const ticket = ticketById(Number(row.dataset.ticketId));
-    const index = filtered.findIndex((item) => item.id === Number(row.dataset.ticketId));
-    if (index >= 0) focusedIndex = index;
+    const index = pageRows.findIndex((item) => item.id === Number(row.dataset.ticketId));
+    if (index >= 0) focusedIndex = state.history.currentPage * pageSize + index;
     toggleDetail(ticket);
   });
 
   detail?.addEventListener('click', (event) => {
     const action = event.target.closest('[data-detail-action]')?.dataset.detailAction;
     if (event.target.closest('#hist-detail-close')) {
-      state.history.selectedTicketId = null;
+      clearSelection();
       render();
       return;
     }
@@ -1184,21 +1329,22 @@ export function initHistoryScreen() {
     requestAnimationFrame(() => {
       pageSize = calculatePageSize();
       state.history.pageSize = pageSize;
-      render();
+      loadHistoryPage();
       positionFilterPopover();
     });
   });
 
   document.addEventListener('history:refresh', () => {
-    if (state.currentScreen === 'history-screen') render();
-    buildFilterPanel();
+    if (state.currentScreen === 'history-screen') {
+      loadHistoryPage({ includeOptions: true });
+    }
   });
 
   window.addEventListener('resize', () => {
     if (state.currentScreen !== 'history-screen') return;
     pageSize = calculatePageSize();
     state.history.pageSize = pageSize;
-    render();
+    loadHistoryPage();
     positionFilterPopover();
   });
 
@@ -1220,7 +1366,7 @@ export function initHistoryScreen() {
           return;
         }
         if (state.history.selectedTicketId !== null) {
-          state.history.selectedTicketId = null;
+          clearSelection();
           render();
           event.preventDefault();
           event.stopPropagation();
@@ -1229,7 +1375,9 @@ export function initHistoryScreen() {
         if (inInput && searchInput?.value) {
           searchInput.value = '';
           state.history.searchQuery = '';
-          render();
+          state.history.currentPage = 0;
+          focusedIndex = 0;
+          loadHistoryPage();
           event.preventDefault();
           event.stopPropagation();
           return;
@@ -1290,7 +1438,7 @@ export function initHistoryScreen() {
       if (event.key === 'PageDown') {
         event.preventDefault();
         event.stopPropagation();
-        focusRow(Math.min(focusedIndex + pageSize, filtered.length - 1));
+        focusRow(Math.min(focusedIndex + pageSize, pageTotal - 1));
         return;
       }
       if (event.key === 'PageUp') {
@@ -1327,13 +1475,14 @@ export function initHistoryScreen() {
           state.history.searchQuery = event.key;
           state.history.currentPage = 0;
           focusedIndex = 0;
-          render();
+          clearSelection();
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(() => loadHistoryPage(), SEARCH_DEBOUNCE_MS);
         }
       }
     },
     true
   );
 
-  state.history.pageSize = pageSize;
-  render();
+  loadHistoryPage({ includeOptions: true });
 }

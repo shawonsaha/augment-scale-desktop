@@ -201,10 +201,10 @@ public sealed class BridgeService
                 return _database.GetHistory(request.Limit, request.Status);
             }
 
-            case "getHistoryRange":
+            case "queryHistory":
             {
-                var request = Deserialize<HistoryRangeRequest>(payload);
-                return _database.GetHistoryRange(request.FromDate, request.ToDate);
+                var request = Deserialize<HistoryPageRequest>(payload);
+                return _database.HistoryPage(request);
             }
 
             case "getTicket":

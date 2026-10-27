@@ -510,15 +510,6 @@ export async function loadProductionData({ resetHistory = true } = {}) {
   document.dispatchEvent(new CustomEvent('operators:refresh'));
 }
 
-/** Replaces the closed-ticket ledgers with the active History date range.
- *  Pending tickets stay in pendingTickets, so memory is bounded by one range. */
-export function replaceHistoryTickets(tickets) {
-  const rows = (tickets || []).filter(Boolean);
-  setCompletedTickets(rows.filter((ticket) => ticket.status === 'completed'));
-  setVoidedTickets(rows.filter((ticket) => ticket.status === 'voided'));
-  setDeletedTickets(rows.filter((ticket) => ticket.status === 'deleted'));
-}
-
 /** Verifies the PIN in C# (DPAPI-backed hash) when running in the desktop app. */
 export async function authenticateOperator(operatorId, pin) {
   return sendCommand('authenticatePin', { operatorId, pin });
@@ -694,9 +685,6 @@ export function getAllTickets() {
 
 /** Moves a completed ticket to the voided ledger with its audit metadata. */
 export async function voidTicket(ticketId, reason, operatorName) {
-  const idx = completedTickets.findIndex((t) => t.id === ticketId);
-  if (idx === -1) return null;
-
   if (IS_PRODUCTION) {
     const updated = await sendCommand('voidTicket', {
       ticketId,
@@ -704,14 +692,17 @@ export async function voidTicket(ticketId, reason, operatorName) {
       operatorId: state.activeOperator?.id || '',
       operatorName: operatorName || state.activeOperator?.name || 'Unknown',
     });
-    completedTickets.splice(idx, 1);
-    voidedTickets.unshift(updated);
+    const idx = completedTickets.findIndex((t) => t.id === ticketId);
+    if (idx !== -1) completedTickets.splice(idx, 1);
+    if (!voidedTickets.some((t) => t.id === updated.id)) voidedTickets.unshift(updated);
     try {
       await refreshVehiclesFromDatabase();
     } catch {}
     return updated;
   }
 
+  const idx = completedTickets.findIndex((t) => t.id === ticketId);
+  if (idx === -1) return null;
   const ticket = completedTickets[idx];
   ticket.status = 'voided';
   ticket.voidedAt = new Date().toISOString();

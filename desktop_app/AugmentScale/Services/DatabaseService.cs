@@ -113,11 +113,10 @@ public sealed class DatabaseService
     public BootStateDto GetBootState() => _boot.GetBootState();
 
     /// <summary>
-    /// Tickets within a local calendar date range (yyyy-MM-dd). Used to pull
-    /// older ledger data that the boot snapshot intentionally leaves out.
+    /// One filtered, sorted page of the History ledger. Only the visible page
+    /// crosses the bridge; totals and filter options are computed in SQLite.
     /// </summary>
-    public IReadOnlyList<TicketDto> GetHistoryRange(string fromDate, string toDate) =>
-        _tickets.GetHistoryRange(fromDate, toDate);
+    public HistoryPageDto HistoryPage(HistoryPageRequest req) => _tickets.HistoryPage(req);
 
     public TicketDto? GetTicket(long ticketNumber) => _tickets.GetTicket(ticketNumber);
 

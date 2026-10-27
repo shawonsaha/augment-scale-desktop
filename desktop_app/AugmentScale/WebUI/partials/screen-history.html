@@ -172,6 +172,18 @@
               <button type="button" class="hist-page-btn" id="hist-next" aria-label="Next page">
                 ▶
               </button>
+              <span class="hist-page-jump" id="hist-page-jump" hidden>
+                <input
+                  type="number"
+                  id="hist-page-input"
+                  class="hist-page-input"
+                  min="1"
+                  step="1"
+                  inputmode="numeric"
+                  aria-label="Go to page"
+                />
+                <span class="hist-page-total" id="hist-page-total"></span>
+              </span>
             </div>
           </div>
           <div class="hist-summary" id="hist-summary">0 tickets</div>

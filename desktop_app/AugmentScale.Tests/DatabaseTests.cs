@@ -864,7 +864,7 @@ public class DatabaseServiceTests
     }
 
     [Fact]
-    public void GetHistoryRange_FiltersTicketsToTheGivenDateRange()
+    public void HistoryPage_FiltersByDateRange()
     {
         using var temp = new TempDatabase();
         var db = temp.Database;
@@ -872,23 +872,196 @@ public class DatabaseServiceTests
         // business_at is the completion time for completed tickets and the
         // first-weigh time for pending ones — mirror the History UI semantics.
         var yesterday = DateTime.Now.AddDays(-1);
-        var oldRequest = NewTicket("TEST-RANGE-OLD", 11000);
+        var oldRequest = NewTicket("TEST-PAGE-OLD", 11000);
         oldRequest.FirstTime = yesterday.ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture);
         var oldTicket = db.CreateTicket(oldRequest);
 
-        var todayRequest = NewTicket("TEST-RANGE-TODAY", 16000);
+        var todayRequest = NewTicket("TEST-PAGE-TODAY", 16000);
         var todayTicket = db.CreateTicket(todayRequest);
 
-        var today = db.GetHistoryRange(DateValue(DateTime.Now), DateValue(DateTime.Now));
-        Assert.Contains(today, t => t.Id == todayTicket.Id);
-        Assert.DoesNotContain(today, t => t.Id == oldTicket.Id);
+        var today = DateValue(DateTime.Now);
+        var todayPage = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = today,
+            ToDate = today,
+            PageSize = 10,
+        });
+        Assert.Contains(todayPage.Tickets, t => t.Id == todayTicket.Id);
+        Assert.DoesNotContain(todayPage.Tickets, t => t.Id == oldTicket.Id);
 
-        var yesterdayRange = db.GetHistoryRange(DateValue(yesterday), DateValue(yesterday));
-        Assert.Contains(yesterdayRange, t => t.Id == oldTicket.Id);
-        Assert.DoesNotContain(yesterdayRange, t => t.Id == todayTicket.Id);
+        var yesterdayPage = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = DateValue(yesterday),
+            ToDate = DateValue(yesterday),
+            PageSize = 10,
+        });
+        Assert.Contains(yesterdayPage.Tickets, t => t.Id == oldTicket.Id);
+        Assert.DoesNotContain(yesterdayPage.Tickets, t => t.Id == todayTicket.Id);
+    }
 
-        Assert.Throws<InvalidOperationException>(() =>
-            db.GetHistoryRange(DateValue(DateTime.Now), DateValue(DateTime.Now.AddDays(-1))));
+    [Fact]
+    public void HistoryPage_FiltersSortsPagesAndSummarizes()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        var first = NewTicket("TEST-PAGE-1", 10000);
+        first.Driver = "Alpha Driver";
+        first.Material = "Scrap Iron";
+        first.Client = "Alpha Client";
+        var t1 = db.CreateTicket(first);
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = t1.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+
+        var second = NewTicket("TEST-PAGE-2", 20000);
+        second.Driver = "Bravo Driver";
+        second.Material = "Sand";
+        second.Client = "Bravo Client";
+        var t2 = db.CreateTicket(second);
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = t2.Id,
+            WeightKg = 5000,
+            OperatorId = "mr",
+        });
+
+        var third = NewTicket("TEST-PAGE-3", 3000);
+        third.Driver = "Alpha Driver";
+        third.Material = "Scrap Iron";
+        third.Client = "Alpha Client";
+        var t3 = db.CreateTicket(third);
+
+        var fourth = NewTicket("TEST-PAGE-4", 4000);
+        fourth.Driver = "Charlie Driver";
+        fourth.Material = "Sand";
+        fourth.Client = "Charlie Client";
+        var t4 = db.CreateTicket(fourth);
+        db.SoftDeleteTicket(new TicketReasonRequest
+        {
+            TicketId = t4.Id,
+            Reason = "test delete",
+            OperatorId = "mr",
+        });
+
+        var today = DateValue(DateTime.Now);
+        var page = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = today,
+            ToDate = today,
+            Page = 0,
+            PageSize = 2,
+            SortKey = "id",
+            SortDir = "asc",
+            IncludeOptions = true,
+        });
+
+        Assert.Equal(4, page.Total);
+        Assert.Equal(2, page.Tickets.Count);
+        Assert.Equal(new[] { t1.Id, t2.Id }, page.Tickets.Select(t => t.Id).ToArray());
+        Assert.Equal(20000, page.NetKg);
+
+        var secondPage = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = today,
+            ToDate = today,
+            Page = 1,
+            PageSize = 2,
+            SortKey = "id",
+            SortDir = "asc",
+        });
+        Assert.Equal(new[] { t3.Id, t4.Id }, secondPage.Tickets.Select(t => t.Id).ToArray());
+        Assert.Null(secondPage.Options);
+
+        var completed = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = today,
+            ToDate = today,
+            Statuses = ["completed"],
+            PageSize = 10,
+        });
+        Assert.Equal(2, completed.Total);
+        Assert.Equal(20000, completed.NetKg);
+        Assert.All(completed.Tickets, ticket => Assert.Equal("completed", ticket.Status));
+
+        var searched = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = today,
+            ToDate = today,
+            Search = "page-2",
+            PageSize = 10,
+        });
+        Assert.Single(searched.Tickets);
+        Assert.Equal(t2.Id, searched.Tickets[0].Id);
+
+        var byDriver = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = today,
+            ToDate = today,
+            Drivers = ["Alpha Driver"],
+            PageSize = 10,
+        });
+        Assert.Equal(2, byDriver.Total);
+
+        var byNet = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = today,
+            ToDate = today,
+            SortKey = "net",
+            SortDir = "desc",
+            PageSize = 10,
+        });
+        Assert.Equal(new[] { t2.Id, t1.Id, t4.Id, t3.Id },
+            byNet.Tickets.Select(t => t.Id).ToArray());
+
+        Assert.Contains("Alpha Driver", page.Options!.Drivers);
+        Assert.Contains("Bravo Driver", page.Options.Drivers);
+        Assert.Contains("Scrap Iron", page.Options.Materials);
+        Assert.Contains("Alpha Client", page.Options.Clients);
+        Assert.Contains("MD. RAJU", page.Options.Operators);
+    }
+
+    [Fact]
+    public void HistoryPage_RejectsRangesLongerThanOneYear()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        var today = DateTime.Now;
+
+        var error = Assert.Throws<InvalidOperationException>(() => db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = DateValue(today.AddDays(-367)),
+            ToDate = DateValue(today),
+        }));
+        Assert.Contains("one year", error.Message, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Throws<InvalidOperationException>(() => db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = DateValue(today),
+            ToDate = DateValue(today.AddDays(-1)),
+        }));
+
+        var allowed = db.HistoryPage(new HistoryPageRequest
+        {
+            FromDate = DateValue(today.AddDays(-365)),
+            ToDate = DateValue(today),
+        });
+        Assert.Equal(0, allowed.Total);
+    }
+
+    [Fact]
+    public void HistoryReport_RejectsRangeLongerThanOneYear()
+    {
+        using var temp = new TempDatabase();
+        var request = TodayReportRequest();
+        request.FromDate = DateValue(DateTime.Now.AddDays(-367));
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            temp.Database.GenerateHistoryReport(request));
+        Assert.Contains("one year", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

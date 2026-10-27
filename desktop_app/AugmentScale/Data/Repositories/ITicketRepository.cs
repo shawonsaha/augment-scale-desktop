@@ -8,7 +8,7 @@ public interface ITicketRepository
     long PeekNextTicketNumber();
     IReadOnlyList<TicketDto> GetPendingTickets();
     IReadOnlyList<TicketDto> GetHistory(int? limit = null, string? status = null);
-    IReadOnlyList<TicketDto> GetHistoryRange(string fromDate, string toDate);
+    HistoryPageDto HistoryPage(HistoryPageRequest req);
     TicketDto? GetTicket(long ticketNumber);
     TicketDto CreateTicket(CreateTicketRequest req);
     TicketDto CompleteTicket(CompleteTicketRequest req);
