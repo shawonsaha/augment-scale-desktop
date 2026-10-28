@@ -55,6 +55,7 @@ internal sealed class DatabaseContext
             using var connection = OpenConnection();
             SchemaMigrator.Apply(connection);
             Provisioner.Provision(this, connection);
+            DatabaseMaintenance.Run(connection, DateTimeOffset.Now, force: true);
             _initialized = true;
         }
     }
@@ -70,9 +71,32 @@ internal sealed class DatabaseContext
         };
         var connection = new SqliteConnection(builder.ToString());
         connection.Open();
-        using var pragma = connection.CreateCommand();
-        pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
-        pragma.ExecuteNonQuery();
+        using (var pragma = connection.CreateCommand())
+        {
+            pragma.CommandText = "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;";
+            pragma.ExecuteNonQuery();
+        }
+
+        // WAL is stored in the database header, so this only takes effect once.
+        // It silently stays on the previous mode for read-only files or network
+        // shares, which is why the result is logged rather than assumed.
+        try
+        {
+            using var journal = connection.CreateCommand();
+            journal.CommandText = "PRAGMA journal_mode = WAL;";
+            var mode = Convert.ToString(journal.ExecuteScalar(), CultureInfo.InvariantCulture);
+            if (!string.Equals(mode, "wal", StringComparison.OrdinalIgnoreCase))
+                AppLog.Warn($"SQLite journal mode is '{mode}' instead of 'wal' for {_config.DatabasePath}.");
+
+            using var synchronous = connection.CreateCommand();
+            synchronous.CommandText = "PRAGMA synchronous = NORMAL;";
+            synchronous.ExecuteNonQuery();
+        }
+        catch (SqliteException ex)
+        {
+            AppLog.Warn($"SQLite WAL mode unavailable: {ex.Message}");
+        }
+
         return connection;
     }
 
@@ -84,9 +108,25 @@ internal sealed class DatabaseContext
         using (var seq = connection.CreateCommand())
         {
             seq.Transaction = txn;
-            seq.CommandText = "SELECT COALESCE(MAX(sequence), 0) + 1 FROM outbox_events;";
+            // Highest of the newest queued event and the last sequence ever
+            // handed out. Retention pruning deletes old rows, so max(sequence)
+            // alone would restart numbering and replay values the cloud already
+            // saw.
+            seq.CommandText = """
+                SELECT COALESCE(MAX(value), 0) + 1 FROM (
+                    SELECT COALESCE(MAX(sequence), 0) AS value FROM outbox_events
+                    UNION ALL
+                    SELECT last_allocated_sequence FROM sync_cursors WHERE id = 'local'
+                );
+                """;
             sequence = Convert.ToInt32(seq.ExecuteScalar(), CultureInfo.InvariantCulture);
         }
+
+        SqliteHelpers.Exec(connection, txn, """
+            UPDATE sync_cursors
+            SET last_allocated_sequence = $seq
+            WHERE id = 'local' AND last_allocated_sequence < $seq;
+            """, ("$seq", sequence));
 
         SqliteHelpers.Exec(connection, txn, """
             INSERT INTO outbox_events (

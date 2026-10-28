@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using AugmentScale.Data;
 using AugmentScale.Models;
 
 namespace AugmentScale.Services;
@@ -68,6 +69,11 @@ public sealed class PdfArchiveService : IDisposable
         if (!await _runGate.WaitAsync(0, cancellationToken)) return;
         try
         {
+            // Throttled internally to once an hour; the archive loop is the only
+            // scheduler that keeps running on a workstation left on for weeks.
+            using (var connection = _database.OpenConnection())
+                DatabaseMaintenance.Run(connection, _clock());
+
             EnsureSchedule();
             while (!cancellationToken.IsCancellationRequested)
             {

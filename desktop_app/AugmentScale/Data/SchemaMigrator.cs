@@ -80,6 +80,21 @@ internal static class SchemaMigrator
             record.ExecuteNonQuery();
             txn.Commit();
         }
+
+        if (version < 4)
+        {
+            var sql = ReadEmbeddedSql("V004_Hardening.sql");
+            using var txn = connection.BeginTransaction();
+            using var apply = connection.CreateCommand();
+            apply.Transaction = txn;
+            apply.CommandText = sql;
+            apply.ExecuteNonQuery();
+            using var record = connection.CreateCommand();
+            record.Transaction = txn;
+            record.CommandText = "INSERT INTO schema_version (version, name) VALUES (4, 'Hardening');";
+            record.ExecuteNonQuery();
+            txn.Commit();
+        }
     }
 
     private static string ReadEmbeddedSql(string suffix)

@@ -1,6 +1,8 @@
 using System.Globalization;
+using AugmentScale.Data;
 using AugmentScale.Models.Commands;
 using AugmentScale.Services;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace AugmentScale.Tests;
@@ -1076,5 +1078,180 @@ public class DatabaseServiceTests
 
         Assert.False(result.Matched);
         Assert.Contains("No archived snapshot", result.Message);
+    }
+
+    [Fact]
+    public void Connection_EnforcesForeignKeysAndUsesWal()
+    {
+        using var temp = new TempDatabase();
+        using var connection = temp.Database.OpenConnection();
+
+        using (var mode = connection.CreateCommand())
+        {
+            mode.CommandText = "PRAGMA journal_mode;";
+            Assert.Equal("wal", Convert.ToString(mode.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+
+        using (var fk = connection.CreateCommand())
+        {
+            fk.CommandText = "PRAGMA foreign_keys;";
+            Assert.Equal(1L, Convert.ToInt64(fk.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+
+        using var insert = connection.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO user_roles (id, profile_id, organization_id, role, granted_at)
+            VALUES ('role-orphan', 'no-such-profile', $org, 'operator', datetime('now'));
+            """;
+        insert.Parameters.AddWithValue("$org", temp.Database.OrganizationId);
+        Assert.Throws<SqliteException>(() => insert.ExecuteNonQuery());
+    }
+
+    [Fact]
+    public void Maintenance_PrunesExpiredRowsAndKeepsPendingSync()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        var old = DateTimeOffset.Now.AddDays(-40).ToString("O");
+        var recent = DateTimeOffset.Now.ToString("O");
+
+        using (var connection = db.OpenConnection())
+        {
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = """
+                    INSERT INTO scale_health_events
+                        (id, organization_id, workstation_id, weighbridge_id, event_type, occurred_at)
+                    VALUES
+                        ('health-old', $org, $ws, $wb, 'port_error', $old),
+                        ('health-new', $org, $ws, $wb, 'port_error', $recent);
+                    """;
+                cmd.Parameters.AddWithValue("$org", db.OrganizationId);
+                cmd.Parameters.AddWithValue("$ws", db.WorkstationId);
+                cmd.Parameters.AddWithValue("$wb", db.WeighbridgeId);
+                cmd.Parameters.AddWithValue("$old", old);
+                cmd.Parameters.AddWithValue("$recent", recent);
+                cmd.ExecuteNonQuery();
+            }
+
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = """
+                    INSERT INTO outbox_events
+                        (id, sequence, entity_type, entity_id, operation, payload,
+                         workstation_id, operator_id, status, created_at)
+                    VALUES
+                        ('out-old-accepted', 901, 'weigh_tickets', 't1', 'insert', '{}', 'ws', 'op', 'accepted', $old),
+                        ('out-new-accepted', 902, 'weigh_tickets', 't2', 'insert', '{}', 'ws', 'op', 'accepted', $recent),
+                        ('out-old-pending', 903, 'weigh_tickets', 't3', 'insert', '{}', 'ws', 'op', 'pending', $old),
+                        ('out-old-vehicle', 904, 'vehicles', 'v1', 'update', '{}', 'ws', 'op', 'accepted', $old);
+                    """;
+                cmd.Parameters.AddWithValue("$old", old);
+                cmd.Parameters.AddWithValue("$recent", recent);
+                cmd.ExecuteNonQuery();
+            }
+
+            DatabaseMaintenance.Run(connection, DateTimeOffset.Now, force: true);
+        }
+
+        using var check = db.OpenConnection();
+        using var read = check.CreateCommand();
+        read.CommandText = """
+            SELECT
+                (SELECT COUNT(*) FROM scale_health_events WHERE id = 'health-old'),
+                (SELECT COUNT(*) FROM scale_health_events WHERE id = 'health-new'),
+                (SELECT COUNT(*) FROM outbox_events WHERE id = 'out-old-accepted'),
+                (SELECT COUNT(*) FROM outbox_events WHERE id = 'out-new-accepted'),
+                (SELECT COUNT(*) FROM outbox_events WHERE id = 'out-old-pending'),
+                (SELECT COUNT(*) FROM outbox_events WHERE id = 'out-old-vehicle');
+            """;
+        using var reader = read.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(0L, reader.GetInt64(0)); // expired health event
+        Assert.Equal(1L, reader.GetInt64(1)); // recent health event
+        Assert.Equal(0L, reader.GetInt64(2)); // old acknowledged ticket event
+        Assert.Equal(1L, reader.GetInt64(3)); // recent acknowledged ticket event
+        Assert.Equal(1L, reader.GetInt64(4)); // unsent event is never pruned
+        Assert.Equal(1L, reader.GetInt64(5)); // backfill-tracked type is never pruned
+    }
+
+    [Fact]
+    public void Migration_UpgradesExistingV3DatabaseInPlace()
+    {
+        using var temp = new TempDatabase();
+
+        // Roll the database back to its pre-V004 shape, then reopen it.
+        using (var connection = temp.Database.OpenConnection())
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = """
+                DROP INDEX IF EXISTS idx_outbox_entity;
+                DELETE FROM schema_version WHERE version = 4;
+                ALTER TABLE sync_cursors DROP COLUMN last_allocated_sequence;
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        var upgraded = new DatabaseService(temp.Config);
+        upgraded.EnsureInitialized();
+
+        using var check = upgraded.OpenConnection();
+        using (var cmd = check.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM schema_version WHERE version = 4;";
+            Assert.Equal(1L, Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+
+        using (var cmd = check.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT COUNT(*) FROM pragma_table_info('sync_cursors')
+                WHERE name = 'last_allocated_sequence';
+                """;
+            Assert.Equal(1L, Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+
+        using (var cmd = check.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT COUNT(*) FROM sqlite_master
+                WHERE type = 'index' AND name = 'idx_outbox_entity';
+                """;
+            Assert.Equal(1L, Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+    }
+
+    [Fact]
+    public void Outbox_SequenceDoesNotRestartAfterEveryRowIsPruned()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+        db.CreateTicket(NewTicket("TEST-SEQ-1", 12000));
+
+        long highest;
+        using (var connection = db.OpenConnection())
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT MAX(sequence) FROM outbox_events;";
+            highest = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        // Worst case: retention removed every queued row.
+        using (var connection = db.OpenConnection())
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM outbox_events;";
+            cmd.ExecuteNonQuery();
+        }
+
+        db.CreateTicket(NewTicket("TEST-SEQ-2", 9000));
+
+        using (var connection = db.OpenConnection())
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT MAX(sequence) FROM outbox_events;";
+            var next = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+            Assert.True(next > highest, $"sequence restarted: {next} after {highest}");
+        }
     }
 }

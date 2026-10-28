@@ -6,7 +6,6 @@ internal sealed class ScaleHealthService : IScaleHealthService
 {
     private readonly DatabaseContext _db;
     private readonly object _healthGate = new();
-    private bool _healthPruned;
     private SqliteConnection? _healthConnection;
 
     public ScaleHealthService(DatabaseContext db)
@@ -20,16 +19,6 @@ internal sealed class ScaleHealthService : IScaleHealthService
         lock (_healthGate)
         {
             _healthConnection ??= _db.OpenConnection();
-            if (!_healthPruned)
-            {
-                _healthPruned = true;
-                using var prune = _healthConnection.CreateCommand();
-                prune.CommandText = """
-                    DELETE FROM scale_health_events
-                    WHERE julianday(occurred_at) < julianday('now', '-30 days');
-                    """;
-                try { prune.ExecuteNonQuery(); } catch (SqliteException) { }
-            }
 
             using var cmd = _healthConnection.CreateCommand();
             cmd.CommandText = """
