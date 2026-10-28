@@ -49,11 +49,13 @@ public sealed class BridgeService
             if (_cloud is not null)
             {
                 _cloud.StatusChanged -= OnCloudStatusChanged;
+                _cloud.TicketSequenceSynchronized -= OnTicketSequenceSynchronized;
             }
             _cloud = value;
             if (_cloud is not null)
             {
                 _cloud.StatusChanged += OnCloudStatusChanged;
+                _cloud.TicketSequenceSynchronized += OnTicketSequenceSynchronized;
             }
         }
     }
@@ -472,6 +474,16 @@ public sealed class BridgeService
         RunOnUi(() =>
         {
             var script = $"window.ScaleApp && window.ScaleApp.onSyncStatus && window.ScaleApp.onSyncStatus({json});";
+            _webView?.ExecuteScriptAsync(script);
+        });
+    }
+
+    private void OnTicketSequenceSynchronized(long watermark)
+    {
+        var nextTicketNumber = _database.PeekNextTicketNumber();
+        RunOnUi(() =>
+        {
+            var script = $"window.ScaleApp && window.ScaleApp.onTicketSequenceUpdated && window.ScaleApp.onTicketSequenceUpdated({nextTicketNumber});";
             _webView?.ExecuteScriptAsync(script);
         });
     }

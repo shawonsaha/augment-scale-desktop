@@ -116,7 +116,12 @@ internal static class Provisioner
                 ("$site", db.SiteId), ("$role", op.Role.ToLowerInvariant()), ("$now", now));
         }
 
+        // Demo plates are for development only. Release builds start with an empty
+        // vehicle list so a fresh install cannot collide with another workstation's
+        // seeded plates on the unique (organization_id, plate_normalized) index.
+#if DEBUG
         SeedVehiclesIfEmpty(db, connection, txn, now);
+#endif
 
         SqliteHelpers.Exec(connection, txn, """
             INSERT INTO sync_cursors (id, last_sync_change_id, last_synced_at)
@@ -127,6 +132,7 @@ internal static class Provisioner
         txn.Commit();
     }
 
+#if DEBUG
     private static void SeedVehiclesIfEmpty(DatabaseContext db, SqliteConnection connection,
         SqliteTransaction txn, string now)
     {
@@ -160,4 +166,5 @@ internal static class Provisioner
                 ("$now", now));
         }
     }
+#endif
 }

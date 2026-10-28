@@ -118,7 +118,7 @@ public class DatabaseServiceTests
     {
         using var temp = new TempDatabase();
 
-        Assert.Equal(5, temp.Database.GetOperators().Count);
+        Assert.Equal(1, temp.Database.GetOperators().Count);
         Assert.Equal(5, temp.Database.GetVehicles().Count);
         Assert.Equal(1, temp.Database.PeekNextTicketNumber());
         Assert.All(temp.Database.GetOperators(), op => Assert.True(op.PinSet));
@@ -182,18 +182,23 @@ public class DatabaseServiceTests
     public void Profile_DeactivatedSeededProfileIsNotRestoredFromSetup()
     {
         using var temp = new TempDatabase();
+        var seeded = temp.Database.GetOperators().Single(op => op.Id == "mr");
+
+        var request = NewProfile("SUP");
+        request.Role = "Supervisor";
+        var supervisor = temp.Database.CreateProfile(request, seeded.Id, seeded.Name);
 
         Assert.True(temp.Database.DeactivateProfile(new DeactivateProfileRequest
         {
-            ProfileId = "sh",
+            ProfileId = "mr",
             Reason = "Left the company",
-        }, "mr", "MD. RAJU"));
+        }, supervisor.Id, supervisor.Name));
 
-        Assert.DoesNotContain(temp.Database.GetOperators(), op => op.Id == "sh");
-        Assert.False(temp.Config.HasPin("sh"));
+        Assert.DoesNotContain(temp.Database.GetOperators(), op => op.Id == "mr");
+        Assert.False(temp.Config.HasPin("mr"));
 
         var restarted = new DatabaseService(temp.Config);
-        Assert.DoesNotContain(restarted.GetOperators(), op => op.Id == "sh");
+        Assert.DoesNotContain(restarted.GetOperators(), op => op.Id == "mr");
     }
 
     [Fact]
@@ -770,7 +775,7 @@ public class DatabaseServiceTests
 
         var boot = db.GetBootState();
 
-        Assert.Equal(5, boot.Operators.Count);
+        Assert.Equal(1, boot.Operators.Count);
         Assert.Equal(5, boot.Vehicles.Count);
         Assert.Single(boot.Pending);
         Assert.Contains(boot.History, t => t.Id == completed.Id && t.Status == "completed");

@@ -22,14 +22,18 @@ internal static class SchemaMigrator
             create.ExecuteNonQuery();
         }
 
-        long version = 0;
+        var appliedVersions = new HashSet<long>();
         using (var read = connection.CreateCommand())
         {
-            read.CommandText = "SELECT COALESCE(MAX(version), 0) FROM schema_version;";
-            version = Convert.ToInt64(read.ExecuteScalar(), CultureInfo.InvariantCulture);
+            read.CommandText = "SELECT version FROM schema_version;";
+            using var reader = read.ExecuteReader();
+            while (reader.Read())
+            {
+                appliedVersions.Add(reader.GetInt64(0));
+            }
         }
 
-        if (version < 1)
+        if (!appliedVersions.Contains(1))
         {
             var sql = ReadEmbeddedSql("V001_InitialSchema.sql");
             using var apply = connection.CreateCommand();
@@ -40,7 +44,7 @@ internal static class SchemaMigrator
             record.ExecuteNonQuery();
         }
 
-        if (version < 2)
+        if (!appliedVersions.Contains(2))
         {
             var sql = ReadEmbeddedSql("V002_ArchiveRuns.sql");
             using var txn = connection.BeginTransaction();
@@ -55,7 +59,7 @@ internal static class SchemaMigrator
             txn.Commit();
         }
 
-        if (version < 3)
+        if (!appliedVersions.Contains(3))
         {
             var sql = ReadEmbeddedSql("V003_CloudSync.sql");
             using var txn = connection.BeginTransaction();
@@ -81,7 +85,7 @@ internal static class SchemaMigrator
             txn.Commit();
         }
 
-        if (version < 4)
+        if (!appliedVersions.Contains(4))
         {
             var sql = ReadEmbeddedSql("V004_Hardening.sql");
             using var txn = connection.BeginTransaction();
@@ -92,6 +96,32 @@ internal static class SchemaMigrator
             using var record = connection.CreateCommand();
             record.Transaction = txn;
             record.CommandText = "INSERT INTO schema_version (version, name) VALUES (4, 'Hardening');";
+            record.ExecuteNonQuery();
+            txn.Commit();
+        }
+
+        if (!appliedVersions.Contains(5))
+        {
+            var sql = ReadEmbeddedSql("V005_TicketSequenceWatermark.sql");
+            using var txn = connection.BeginTransaction();
+            foreach (var statement in sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (string.IsNullOrWhiteSpace(statement)) continue;
+                try
+                {
+                    using var apply = connection.CreateCommand();
+                    apply.Transaction = txn;
+                    apply.CommandText = statement;
+                    apply.ExecuteNonQuery();
+                }
+                catch (SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Column already exists, safe to ignore
+                }
+            }
+            using var record = connection.CreateCommand();
+            record.Transaction = txn;
+            record.CommandText = "INSERT INTO schema_version (version, name) VALUES (5, 'TicketSequenceWatermark');";
             record.ExecuteNonQuery();
             txn.Commit();
         }

@@ -34,8 +34,11 @@ internal sealed class TicketRepository : ITicketRepository
         using var cmd = connection.CreateCommand();
         cmd.Transaction = txn;
         cmd.CommandText = """
-            SELECT COALESCE(MAX(ticket_number), $fallback) + 1
-            FROM weigh_tickets WHERE organization_id = $org;
+            SELECT COALESCE(MAX(value), $fallback) + 1 FROM (
+                SELECT COALESCE(MAX(ticket_number), 0) AS value FROM weigh_tickets WHERE organization_id = $org
+                UNION ALL
+                SELECT COALESCE(last_allocated_ticket_number, 0) AS value FROM sync_cursors WHERE id = 'local'
+            );
             """;
         cmd.Parameters.AddWithValue("$fallback", FirstTicketNumber - 1);
         cmd.Parameters.AddWithValue("$org", _db.OrganizationId);
@@ -463,6 +466,12 @@ internal sealed class TicketRepository : ITicketRepository
             InsertPrintJob(connection, txn, ticketId, "first_weigh_slip", 1, false, null,
                 req.OperatorId, createdAt);
         }
+
+        SqliteHelpers.Exec(connection, txn, """
+            UPDATE sync_cursors
+            SET last_allocated_ticket_number = $number
+            WHERE id = 'local' AND last_allocated_ticket_number < $number;
+            """, ("$number", ticketNumber));
 
         var ticket = GetTicket(connection, txn, ticketNumber)
             ?? throw new InvalidOperationException("Ticket could not be read after creation.");

@@ -133,7 +133,11 @@ This is the validated production package. The target computer must have the .NET
 
 ```powershell
 dotnet publish AugmentScale\AugmentScale.csproj -c Release -r win-x64 --self-contained false -o ".\publish\win-x64"
+dotnet publish AugmentScale.ScaleSimulator\AugmentScale.ScaleSimulator.csproj -c Release -r win-x64 --self-contained false -o ".\publish\win-x64\Simulator"
+Copy-Item .\Run-With-Simulator.ps1, .\Run-With-Simulator.cmd .\publish\win-x64\ -Force
 ```
+
+The second command adds the scale simulator under `Simulator\`; the copy adds the launcher described in "Run with the simulator" below.
 
 ### Self-contained publish
 
@@ -152,6 +156,51 @@ dotnet publish AugmentScale\AugmentScale.csproj -c Release -r win-x64 --self-con
 5. Create a desktop shortcut if required.
 
 Do not copy only `AugmentScale.exe`; the application loads the `WebUI` and `Resources` folders from its own directory.
+
+A Release build starts with an **empty vehicle list** — demo plates are seeded only in Debug builds for local development. Trucks are registered on the Trucks screen.
+
+### Run with the simulator (test workstations)
+
+The package ships a launcher that runs the app and the simulator together:
+
+```
+publish\win-x64\
+├─ AugmentScale.exe
+├─ Run-With-Simulator.cmd        <- double-click this
+├─ Run-With-Simulator.ps1
+└─ Simulator\AugmentScale.ScaleSimulator.exe
+```
+
+On the test PC:
+
+1. Close Augment Scale if it is running.
+2. Double-click `Run-With-Simulator.cmd`.
+3. The simulator window opens first, then the workstation window with live weight.
+4. Close the workstation window when finished; the simulator is stopped automatically.
+
+What the launcher does:
+
+- Points `scaleConnection.portName` in the data directory's `setup.json` at `TCP:127.0.0.1:9876` (default port).
+- Starts `Simulator\AugmentScale.ScaleSimulator.exe` and waits 2 seconds for it to listen.
+- Starts `AugmentScale.exe`, then waits for it to exit.
+- Stops the simulator and restores the previous `portName` (for example `COM1`) so a later real-scale run is unaffected.
+
+Optional arguments (from PowerShell):
+
+```powershell
+.\Run-With-Simulator.ps1 -Port 9877
+.\Run-With-Simulator.ps1 -DataDir "$env:TEMP\augment-scale-test"
+```
+
+`-DataDir` runs against an isolated data directory; the app then titles itself `Augment Scale — TEST DATA` and the live `%LOCALAPPDATA%\AugmentScale` data is untouched.
+
+Manual alternative, if the launcher cannot be used:
+
+1. Start `Simulator\AugmentScale.ScaleSimulator.exe` (it listens on port 9876 by default).
+2. With the app closed, set `scaleConnection.portName` to `TCP:127.0.0.1:9876` in `%LOCALAPPDATA%\AugmentScale\setup.json` (create the file by copying `Resources\setup.json` if the app has never run).
+3. Start `AugmentScale.exe`.
+
+There is no in-app screen for the scale port, and changing `setup.json` while the app is running has no effect until it restarts.
 
 ### Clean rebuild
 

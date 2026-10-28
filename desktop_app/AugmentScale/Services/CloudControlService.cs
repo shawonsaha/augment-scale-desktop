@@ -1,3 +1,4 @@
+using System.Net;
 using System.Data;
 using System.Globalization;
 using System.Net.Http;
@@ -57,6 +58,9 @@ public sealed class CloudControlService : IDisposable
 
     /// <summary>Raised whenever cloud sync state or outbox status updates.</summary>
     public event Action<SyncStatusDto>? StatusChanged;
+
+    /// <summary>Raised whenever cloud ticket sequence watermark advances.</summary>
+    public event Action<long>? TicketSequenceSynchronized;
 
     public CloudControlService(DatabaseService database, ConfigService config, HttpClient? httpClient = null)
     {
@@ -231,6 +235,12 @@ public sealed class CloudControlService : IDisposable
 
             // Step 1: Heartbeat & Remote Controls
             var controlsSuccess = await ProcessWorkstationControlsAsync(baseUrl, apiKey, ct);
+
+            // Step 1.5: Synchronize cloud ticket watermark before bootstrap or outbox streaming
+            if (controlsSuccess)
+            {
+                await SyncCloudTicketWatermarkAsync(baseUrl, apiKey, ct);
+            }
 
             // Step 2: Bootstrap if controls succeeded & bootstrap pending
             if (controlsSuccess && LicenseActive)
@@ -709,7 +719,9 @@ public sealed class CloudControlService : IDisposable
                         var rowData = ReadRowById(entityType, evt.EntityId);
                         if (rowData != null)
                         {
-                            success = await UpsertRowToSupabaseAsync(baseUrl, apiKey, entityType, rowData, ct);
+                            var upsertRes = await UpsertRowToSupabaseAsync(baseUrl, apiKey, entityType, rowData, ct);
+                            success = upsertRes.Success;
+                            if (!success) errorMessage = upsertRes.ErrorMessage;
                         }
                         else
                         {
@@ -730,7 +742,40 @@ public sealed class CloudControlService : IDisposable
                         var rowData = ReadRowById(entityType, evt.EntityId);
                         if (rowData != null)
                         {
-                            success = await UpsertRowToSupabaseAsync(baseUrl, apiKey, entityType, rowData, ct);
+                            var upsertRes = await UpsertRowToSupabaseAsync(baseUrl, apiKey, entityType, rowData, ct);
+                            success = upsertRes.Success;
+                            if (!success) errorMessage = upsertRes.ErrorMessage;
+
+                            if (!success && entityType == "weigh_tickets" && errorMessage != null && errorMessage.Contains("idx_tickets_number"))
+                            {
+                                AppLog.Warn($"Cloud: Conflict on idx_tickets_number detected for ticket {evt.EntityId}. Auto-resolving ticket number...");
+                                var cloudMax = await FetchCloudMaxTicketNumberAsync(baseUrl, apiKey, ct);
+                                long currentNum = 0;
+                                if (rowData.TryGetValue("ticket_number", out var numObj) && numObj != null)
+                                {
+                                    currentNum = Convert.ToInt64(numObj, CultureInfo.InvariantCulture);
+                                }
+
+                                var newTicketNumber = Math.Max(cloudMax ?? 0, currentNum) + 1;
+                                RenumberLocalTicket(evt.EntityId, newTicketNumber);
+
+                                rowData["ticket_number"] = newTicketNumber;
+                                rowData["ticket_display_id"] = newTicketNumber.ToString(CultureInfo.InvariantCulture);
+                                UpdateOutboxEventPayload(evt.Id, rowData);
+
+                                upsertRes = await UpsertRowToSupabaseAsync(baseUrl, apiKey, entityType, rowData, ct);
+                                if (upsertRes.Success)
+                                {
+                                    AppLog.Info($"Cloud: Successfully healed ticket {evt.EntityId} with #{newTicketNumber} and synced to Supabase.");
+                                    success = true;
+                                    errorMessage = null;
+                                }
+                                else
+                                {
+                                    success = false;
+                                    errorMessage = upsertRes.ErrorMessage;
+                                }
+                            }
                         }
                         else
                         {
@@ -783,7 +828,7 @@ public sealed class CloudControlService : IDisposable
         UpdateLocalCursorCloudStatus("online");
     }
 
-    private async Task<bool> UpsertRowToSupabaseAsync(string baseUrl, string apiKey, string entityType, Dictionary<string, object?> rowData, CancellationToken ct)
+    private async Task<(bool Success, HttpStatusCode StatusCode, string? ErrorMessage)> UpsertRowToSupabaseAsync(string baseUrl, string apiKey, string entityType, Dictionary<string, object?> rowData, CancellationToken ct)
     {
         var url = $"{baseUrl}/rest/v1/{entityType}";
         using var req = new HttpRequestMessage(HttpMethod.Post, url);
@@ -798,10 +843,135 @@ public sealed class CloudControlService : IDisposable
         {
             var err = await resp.Content.ReadAsStringAsync(ct);
             AppLog.Warn($"Cloud: Upsert to '{entityType}' returned {resp.StatusCode}: {err}");
+            return (false, resp.StatusCode, err);
+        }
+
+        return (true, resp.StatusCode, null);
+    }
+
+    internal async Task<long?> FetchCloudMaxTicketNumberAsync(string baseUrl, string apiKey, CancellationToken ct)
+    {
+        try
+        {
+            var orgId = _database.OrganizationId;
+            var url = $"{baseUrl}/rest/v1/weigh_tickets?organization_id=eq.{Uri.EscapeDataString(orgId)}&select=ticket_number&order=ticket_number.desc&limit=1";
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            AddSupabaseHeaders(req, apiKey);
+
+            using var resp = await _http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var err = await resp.Content.ReadAsStringAsync(ct);
+                AppLog.Warn($"Cloud: Failed to fetch max ticket number ({resp.StatusCode}): {err}");
+                return null;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array && doc.RootElement.GetArrayLength() > 0)
+            {
+                var first = doc.RootElement[0];
+                if (first.TryGetProperty("ticket_number", out var numProp) && numProp.TryGetInt64(out var num))
+                {
+                    return num;
+                }
+            }
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn($"Cloud: Error fetching max ticket number: {ex.Message}");
+            return null;
+        }
+    }
+
+    internal async Task<bool> SyncCloudTicketWatermarkAsync(string baseUrl, string apiKey, CancellationToken ct)
+    {
+        var cloudMax = await FetchCloudMaxTicketNumberAsync(baseUrl, apiKey, ct);
+        if (!cloudMax.HasValue || cloudMax.Value <= 0)
+        {
             return false;
         }
 
-        return true;
+        long previousWatermark = 0;
+        using (var conn = _database.OpenConnection())
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT last_allocated_ticket_number FROM sync_cursors WHERE id = 'local';";
+            var result = cmd.ExecuteScalar();
+            if (result != null && result != DBNull.Value)
+            {
+                previousWatermark = Convert.ToInt64(result, CultureInfo.InvariantCulture);
+            }
+
+            if (cloudMax.Value > previousWatermark)
+            {
+                using var updateCmd = conn.CreateCommand();
+                updateCmd.CommandText = """
+                    UPDATE sync_cursors
+                    SET last_allocated_ticket_number = $num
+                    WHERE id = 'local' AND last_allocated_ticket_number < $num;
+                    """;
+                updateCmd.Parameters.AddWithValue("$num", cloudMax.Value);
+                updateCmd.ExecuteNonQuery();
+
+                AppLog.Info($"Cloud: Synchronized ticket watermark from {previousWatermark} to {cloudMax.Value}.");
+                TicketSequenceSynchronized?.Invoke(cloudMax.Value);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void RenumberLocalTicket(string ticketId, long newNumber)
+    {
+        using var conn = _database.OpenConnection();
+        using var txn = conn.BeginTransaction();
+        var now = DateTimeOffset.UtcNow.ToString("O");
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = txn;
+            cmd.CommandText = """
+                UPDATE weigh_tickets
+                SET ticket_number = $num,
+                    ticket_display_id = $display,
+                    updated_at = $now
+                WHERE id = $id;
+                """;
+            cmd.Parameters.AddWithValue("$num", newNumber);
+            cmd.Parameters.AddWithValue("$display", newNumber.ToString(CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$now", now);
+            cmd.Parameters.AddWithValue("$id", ticketId);
+            cmd.ExecuteNonQuery();
+        }
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = txn;
+            cmd.CommandText = """
+                UPDATE sync_cursors
+                SET last_allocated_ticket_number = $num
+                WHERE id = 'local' AND last_allocated_ticket_number < $num;
+                """;
+            cmd.Parameters.AddWithValue("$num", newNumber);
+            cmd.ExecuteNonQuery();
+        }
+
+        txn.Commit();
+        TicketSequenceSynchronized?.Invoke(newNumber);
+    }
+
+    private void UpdateOutboxEventPayload(string outboxId, Dictionary<string, object?> rowData)
+    {
+        using var conn = _database.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE outbox_events SET payload = $payload WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(rowData, JsonDefaults.CamelCase));
+        cmd.Parameters.AddWithValue("$id", outboxId);
+        cmd.ExecuteNonQuery();
     }
 
     private List<Dictionary<string, object?>> ReadAllRowsFromTable(string table)

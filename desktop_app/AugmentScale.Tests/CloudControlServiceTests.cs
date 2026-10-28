@@ -441,6 +441,150 @@ public class CloudControlServiceTests
         Assert.True(interceptedVehiclePost, "Expected POST to vehicles in Supabase");
     }
 
+    [Fact]
+    public void SchemaV005_CreatesTicketWatermarkColumn()
+    {
+        using var temp = new TempDatabase();
+        using var conn = temp.Database.OpenConnection();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT last_allocated_ticket_number FROM sync_cursors WHERE id = 'local';";
+        var val = Convert.ToInt64(cmd.ExecuteScalar());
+        Assert.Equal(0, val);
+    }
+
+    [Fact]
+    public void PeekNextTicketNumber_RespectsWatermark()
+    {
+        using var temp = new TempDatabase();
+        using var conn = temp.Database.OpenConnection();
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE sync_cursors SET last_allocated_ticket_number = 50 WHERE id = 'local';";
+            cmd.ExecuteNonQuery();
+        }
+
+        Assert.Equal(51, temp.Database.PeekNextTicketNumber());
+    }
+
+    [Fact]
+    public async Task SyncCloudTicketWatermark_AdvancesSequence()
+    {
+        using var temp = new TempDatabase();
+
+        var handler = new MockSupabaseHandler((req) =>
+        {
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("weigh_tickets"))
+            {
+                var json = """[{"ticket_number": 42}]""";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]", Encoding.UTF8, "application/json")
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var cloud = new CloudControlService(temp.Database, temp.Config, httpClient);
+
+        long notifiedWatermark = 0;
+        cloud.TicketSequenceSynchronized += (w) => notifiedWatermark = w;
+
+        var synced = await cloud.SyncCloudTicketWatermarkAsync("https://mock.supabase.co", "key", CancellationToken.None);
+
+        Assert.True(synced);
+        Assert.Equal(42, notifiedWatermark);
+        Assert.Equal(43, temp.Database.PeekNextTicketNumber());
+    }
+
+    [Fact]
+    public async Task OutboxConflict_RenumberAndRetry_AutoHeals()
+    {
+        using var temp = new TempDatabase();
+
+        // Create local ticket #1
+        var req = new CreateTicketRequest
+        {
+            TruckNo = "DHK-11-2222",
+            WeightKg = 25000,
+            OperatorId = "mr",
+            OperatorName = "MD. RAJU",
+            Direction = "IN"
+        };
+        var ticket = temp.Database.CreateTicket(req);
+        Assert.Equal(1, ticket.Id);
+
+        int postCount = 0;
+        var handler = new MockSupabaseHandler((req) =>
+        {
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("workstation_controls"))
+            {
+                var json = """[{"workstation_id": "test-ws", "license_active": true, "enable_cloud_sync": true}]""";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("weigh_tickets"))
+            {
+                // Supabase already has ticket #1
+                var json = """[{"ticket_number": 1}]""";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.Contains("weigh_tickets"))
+            {
+                postCount++;
+                if (postCount == 1)
+                {
+                    // First attempt: simulate PostgreSQL 23505 duplicate key violation on idx_tickets_number
+                    var conflictJson = """{"code":"23505","message":"duplicate key value violates unique constraint \"idx_tickets_number\""}""";
+                    return new HttpResponseMessage(HttpStatusCode.Conflict)
+                    {
+                        Content = new StringContent(conflictJson, Encoding.UTF8, "application/json")
+                    };
+                }
+
+                // Second attempt: succeeds with renumbered ticket
+                return new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var cloud = new CloudControlService(temp.Database, temp.Config, httpClient);
+
+        await cloud.SyncNowAsync();
+
+        Assert.Equal(2, postCount);
+
+        // Verify local ticket was renumbered to #2
+        var updated = temp.Database.GetTicket(2);
+        Assert.NotNull(updated);
+        Assert.Equal(2, updated.Id);
+        Assert.Equal("2", updated.TicketDisplayId);
+
+        // Verify watermark updated to 2, next peek is 3
+        Assert.Equal(3, temp.Database.PeekNextTicketNumber());
+    }
+
     private sealed class MockSupabaseHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
