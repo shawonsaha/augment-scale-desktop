@@ -40,41 +40,41 @@ export const ScaleApp = {
   // Connection changes from the serial reader (cable pulled, port busy, etc.)
   /** @param {import('./types.js').ScaleStatusData} data */
   onScaleStatus: (data) => {
-    if (!data) return;\
-    applyExternalWeight({\
-      weight: state.currentLiveWeight,\
-      isStable: false,\
-      isConnected: data.isConnected !== false,\
-      source: data.isSimulator ? 'simulator' : 'hardware',\
-    });\
-    if (!data.isConnected && data.message) {\
-      showToast(data.message, 'warning');\
-    }\
-  },\
+    if (!data) return;
+    applyExternalWeight({
+      weight: state.currentLiveWeight,
+      isStable: false,
+      isConnected: data.isConnected !== false,
+      source: data.isSimulator ? 'simulator' : 'hardware',
+    });
+    if (!data.isConnected && data.message) {
+      showToast(data.message, 'warning');
+    }
+  },
 
-  // Live cloud sync telemetry updates pushed from C#\
-  /** @param {any} data */\
-  onSyncStatus: (data) => {\
-    if (data) {\
-      applySyncStatus(data);\
-    }\
-  },\
+  // Live cloud sync telemetry updates pushed from C#
+  /** @param {any} data */
+  onSyncStatus: (data) => {
+    if (data) {
+      applySyncStatus(data);
+    }
+  },
 
-  // Live ticket sequence watermark updates pushed from C#\
-  /** @param {number} nextNumber */\
-  onTicketSequenceUpdated: (nextNumber) => {\
-    if (typeof nextNumber === 'number' && Number.isFinite(nextNumber)) {\
-      setNextTicketId(nextNumber);\
-      const ticketIdEl = document.getElementById('fw-ticket-id');\
-      if (ticketIdEl) {\
-        ticketIdEl.textContent = `#${nextNumber}`;\
-      }\
-    }\
-  },\
-};\
+  // Live ticket sequence watermark updates pushed from C#
+  /** @param {number} nextNumber */
+  onTicketSequenceUpdated: (nextNumber) => {
+    if (typeof nextNumber === 'number' && Number.isFinite(nextNumber)) {
+      setNextTicketId(nextNumber);
+      const ticketIdEl = document.getElementById('fw-ticket-id');
+      if (ticketIdEl) {
+        ticketIdEl.textContent = `#${nextNumber}`;
+      }
+    }
+  },
+};
 
-if (typeof window !== 'undefined') {\
-  /** @type {any} */ (window).ScaleApp = ScaleApp;\
-}\
+if (typeof window !== 'undefined') {
+  /** @type {any} */ (window).ScaleApp = ScaleApp;
+}
 
-export default ScaleApp;\
+export default ScaleApp;
