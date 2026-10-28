@@ -64,7 +64,7 @@ A full run produced `Passed: 91, Failed: 0, Skipped: 0, Total: 91` in about 50 s
 | Simulator engine and TCP transport | — | Yes | — | Loopback TCP test in `SimulatorProtocolTests.TcpTransport_PublishesDecodedReadings` |
 | PIN hashing and seeded authentication | Yes | Yes | — | PBKDF2 verification and seeded operator login |
 | Secrets loss/corruption behavior | — | Yes | — | Existing DB with missing `secrets.dat` refuses to create a new key |
-| Schema provisioning/seed | — | Yes | — | 5 operators, 5 vehicles, ticket 11353 |
+| Schema provisioning/seed | — | Yes | — | 5 operators, 5 vehicles, ticket 1 |
 | Profile lifecycle and supervisor rules | — | Yes | — | Create/update/deactivate, duplicates, last-supervisor guard |
 | Vehicle lifecycle | — | Yes | — | Archive blocked by open ticket; delete requires archive and preserves ticket history |
 | Ticket lifecycle | — | Yes | — | Create, duplicate guard, complete, reprint, void, soft-delete, numbering |

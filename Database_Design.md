@@ -402,7 +402,7 @@ The ticket header. One row per weighing cycle (first weigh → second weigh).
 | `weighbridge_id` | TEXT (uuid) | FK → weighbridges, NN | |
 | `workstation_id` | TEXT (uuid) | FK → workstations, NN | Cabin PC that created it |
 | `ticket_number` | INTEGER | NN | Human-facing sequential number, unique per org+site |
-| `ticket_display_id` | TEXT | NN | Formatted: e.g. "I-11353" or "O-11353" |
+| `ticket_display_id` | TEXT | NN | Formatted: e.g. "I-1" or "O-1" |
 | `direction` | TEXT | NN | `IN` or `OUT` |
 | `status` | TEXT | NN | `pending`, `completed`, `voided`; deleted pending is `pending` + `deleted_at` |
 | `vehicle_id` | TEXT (uuid) | FK → vehicles | NULL if ad-hoc plate |

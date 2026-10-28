@@ -8,8 +8,7 @@ namespace AugmentScale.Data.Repositories;
 
 internal sealed class TicketRepository : ITicketRepository
 {
-    private const long FirstTicketNumber = 11353;
-    private const long LastHistoricalTicketNumber = 11352;
+    private const long FirstTicketNumber = 1;
     private const int DefaultHistoryLimit = 1000;
     private const int DefaultHistoryPageSize = 20;
     private const int MaxHistoryPageSize = 200;
@@ -38,7 +37,7 @@ internal sealed class TicketRepository : ITicketRepository
             SELECT COALESCE(MAX(ticket_number), $fallback) + 1
             FROM weigh_tickets WHERE organization_id = $org;
             """;
-        cmd.Parameters.AddWithValue("$fallback", LastHistoricalTicketNumber);
+        cmd.Parameters.AddWithValue("$fallback", FirstTicketNumber - 1);
         cmd.Parameters.AddWithValue("$org", _db.OrganizationId);
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }

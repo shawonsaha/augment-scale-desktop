@@ -120,7 +120,7 @@ public class DatabaseServiceTests
 
         Assert.Equal(5, temp.Database.GetOperators().Count);
         Assert.Equal(5, temp.Database.GetVehicles().Count);
-        Assert.Equal(11353, temp.Database.PeekNextTicketNumber());
+        Assert.Equal(1, temp.Database.PeekNextTicketNumber());
         Assert.All(temp.Database.GetOperators(), op => Assert.True(op.PinSet));
     }
 
@@ -309,7 +309,7 @@ public class DatabaseServiceTests
 
         var ticket = db.CreateTicket(NewTicket("TEST-001", 12000));
 
-        Assert.Equal(11353, ticket.Id);
+        Assert.Equal(1, ticket.Id);
         Assert.Equal("pending", ticket.Status);
         Assert.Equal(12000, ticket.FirstWeight);
         Assert.Single(db.GetPendingTickets());
@@ -381,7 +381,7 @@ public class DatabaseServiceTests
         Assert.Empty(db.GetPendingTickets());
 
         var second = db.CreateTicket(NewTicket("TEST-002", 9000));
-        Assert.Equal(11354, second.Id);
+        Assert.Equal(2, second.Id);
         Assert.Single(db.GetPendingTickets());
     }
 
@@ -776,7 +776,7 @@ public class DatabaseServiceTests
         Assert.Contains(boot.History, t => t.Id == completed.Id && t.Status == "completed");
         Assert.DoesNotContain(boot.History, t => t.Status == "pending");
         Assert.NotNull(boot.Sync);
-        Assert.Equal(11355, boot.NextTicketNumber);
+        Assert.Equal(3, boot.NextTicketNumber);
     }
 
     [Fact]

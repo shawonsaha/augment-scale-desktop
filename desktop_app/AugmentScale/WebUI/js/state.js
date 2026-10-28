@@ -222,7 +222,7 @@ export async function refreshVehiclesFromDatabase(includeArchived = false) {
   return REGISTERED_TRUCKS;
 }
 
-let nextTicketId = 11353;
+let nextTicketId = 1;
 
 /**
  * Sets the next ticket ID watermark.
@@ -230,7 +230,7 @@ let nextTicketId = 11353;
  */
 export function setNextTicketId(id) {
   const value = Number(id);
-  nextTicketId = Number.isFinite(value) ? Math.max(11353, value) : 11353;
+  nextTicketId = Number.isFinite(value) ? Math.max(1, value) : 1;
 }
 
 /**
@@ -531,7 +531,7 @@ export async function recordReprint(ticket, reason, operatorName) {
 }
 
 function computeNextTicketId() {
-  const maxExisting = pendingTickets.reduce((max, t) => Math.max(max, t.id || 0), 11352);
+  const maxExisting = pendingTickets.reduce((max, t) => Math.max(max, t.id || 0), 0);
   return Math.max(nextTicketId, maxExisting + 1);
 }
 
