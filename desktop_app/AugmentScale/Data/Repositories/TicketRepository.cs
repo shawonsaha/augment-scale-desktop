@@ -571,7 +571,7 @@ internal sealed class TicketRepository : ITicketRepository
                 req.OperatorId, completedAt);
         }
 
-        _vehicles.ApplyCompletionStats(connection, txn, plateNormalized, tare, completedAt);
+        _vehicles.ApplyCompletionStats(connection, txn, plateNormalized, tare, completedAt, req.OperatorId);
 
         var ticket = GetTicket(connection, txn, req.TicketId)
             ?? throw new InvalidOperationException("Ticket could not be read after completion.");
@@ -612,6 +612,7 @@ internal sealed class TicketRepository : ITicketRepository
             ("$id", ticket.Uuid), ("$now", now.ToString("O")), ("$by", operatorName),
             ("$reason", req.Reason), ("$opId", SqliteHelpers.OperatorId(req.OperatorId)));
 
+        var correctionId = Guid.NewGuid().ToString();
         using (var correction = connection.CreateCommand())
         {
             correction.Transaction = txn;
@@ -625,7 +626,7 @@ internal sealed class TicketRepository : ITicketRepository
                     $reason, $by, $now, $by, $now, 'approved'
                 );
                 """;
-            correction.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            correction.Parameters.AddWithValue("$id", correctionId);
             correction.Parameters.AddWithValue("$ticket", ticket.Uuid);
             correction.Parameters.AddWithValue("$org", _db.OrganizationId);
             correction.Parameters.AddWithValue("$reason", req.Reason);
@@ -634,13 +635,35 @@ internal sealed class TicketRepository : ITicketRepository
             correction.ExecuteNonQuery();
         }
 
-        _vehicles.ApplyVoidStats(connection, txn, ticket.PlateNormalized);
+        _vehicles.ApplyVoidStats(connection, txn, ticket.PlateNormalized, req.OperatorId);
 
         var updated = GetTicket(connection, txn, req.TicketId)!;
         _db.Audit.InsertMutation(connection, txn, _db.OrganizationId, _db.WorkstationId,
             "weigh_tickets", ticket.Uuid, "void", req.OperatorId, operatorName, updated,
             before: ticket.Dto, reason: req.Reason);
         _db.InsertOutbox(connection, txn, "weigh_tickets", ticket.Uuid, "update", updated,
+            req.OperatorId, req.Reason);
+
+        var correctionRecord = new
+        {
+            id = correctionId,
+            ticket_id = ticket.Uuid,
+            organization_id = _db.OrganizationId,
+            correction_type = "void",
+            field_changed = "status",
+            old_value = "completed",
+            new_value = "voided",
+            reason = req.Reason,
+            requested_by = SqliteHelpers.OperatorId(req.OperatorId),
+            requested_at = now.ToString("O"),
+            approved_by = SqliteHelpers.OperatorId(req.OperatorId),
+            approved_at = now.ToString("O"),
+            approval_status = "approved"
+        };
+        _db.Audit.InsertMutation(connection, txn, _db.OrganizationId, _db.WorkstationId,
+            "ticket_corrections", correctionId, "insert", req.OperatorId, operatorName, correctionRecord,
+            reason: req.Reason);
+        _db.InsertOutbox(connection, txn, "ticket_corrections", correctionId, "insert", correctionRecord,
             req.OperatorId, req.Reason);
 
         txn.Commit();

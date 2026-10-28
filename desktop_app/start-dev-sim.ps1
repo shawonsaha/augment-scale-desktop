@@ -12,6 +12,26 @@ $appExe = Join-Path $root 'AugmentScale\bin\Debug\net10.0-windows\win-x64\Augmen
 $simExe = Join-Path $root 'AugmentScale.ScaleSimulator\bin\Debug\net10.0-windows\win-x64\AugmentScale.ScaleSimulator.exe'
 $productionDataDir = Join-Path $env:LOCALAPPDATA 'AugmentScale'
 
+function Write-JsonWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Content,
+        [int]$MaxRetries = 5,
+        [int]$DelayMs = 250
+    )
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    for ($i = 0; $i -lt $MaxRetries; $i++) {
+        try {
+            [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+            return
+        }
+        catch [System.IO.IOException] {
+            if ($i -eq $MaxRetries - 1) { throw }
+            Start-Sleep -Milliseconds $DelayMs
+        }
+    }
+}
+
 if ($Port -lt 1 -or $Port -gt 65535) {
     throw "Port must be between 1 and 65535."
 }
@@ -112,10 +132,14 @@ $originalPortName = [string]$setup.scaleConnection.portName
 if ([string]::IsNullOrWhiteSpace($originalPortName)) {
     throw "setup.json does not contain a scaleConnection.portName value: $setupPath"
 }
+if ($originalPortName.StartsWith('TCP:', [System.StringComparison]::OrdinalIgnoreCase)) {
+    Write-Warning "setup.json was already configured for a simulator TCP port ($originalPortName). Defaulting fallback restore port to 'COM1'."
+    $originalPortName = 'COM1'
+}
 
 $restoreScaleConfig = $true
 $setup.scaleConnection.portName = "TCP:127.0.0.1:$Port"
-$setup | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $setupPath -Encoding UTF8
+Write-JsonWithRetry -Path $setupPath -Content ($setup | ConvertTo-Json -Depth 10)
 $sim = $null
 
 try {
@@ -137,7 +161,7 @@ try {
             Write-Warning "simulator.json is invalid; using default simulator settings."
         }
     }
-    $simSettings | ConvertTo-Json | Set-Content -LiteralPath $simSettingsPath -Encoding UTF8
+    Write-JsonWithRetry -Path $simSettingsPath -Content ($simSettings | ConvertTo-Json)
 
     $env:AUGMENTSCALE_DATA_DIR = $DataDir
 
@@ -167,7 +191,7 @@ finally {
                 throw 'setup.json no longer contains a scaleConnection section.'
             }
             $restored.scaleConnection.portName = $originalPortName
-            $restored | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $setupPath -Encoding UTF8
+            Write-JsonWithRetry -Path $setupPath -Content ($restored | ConvertTo-Json -Depth 10)
             Write-Host "Restored scale port to '$originalPortName' in $setupPath"
         }
         catch {

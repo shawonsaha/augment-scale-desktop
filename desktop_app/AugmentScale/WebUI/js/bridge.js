@@ -7,6 +7,7 @@ import { state, pendingTickets } from './state.js';
 import { showScreen } from './router.js';
 import { showToast } from './toast.js';
 import { applyExternalWeight } from './telemetry.js';
+import { applySyncStatus } from './sync.js';
 import { IS_PRODUCTION, sendCommand } from './runtime.js';
 
 export const ScaleApp = {
@@ -48,6 +49,14 @@ export const ScaleApp = {
     });
     if (!data.isConnected && data.message) {
       showToast(data.message, 'warning');
+    }
+  },
+
+  // Live cloud sync telemetry updates pushed from C#
+  /** @param {any} data */
+  onSyncStatus: (data) => {
+    if (data) {
+      applySyncStatus(data);
     }
   },
 };

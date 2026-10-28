@@ -33,6 +33,9 @@ internal sealed class DatabaseContext
     public string ScaleProfileId { get; private set; } = string.Empty;
     public string DatabasePath => _config.DatabasePath;
 
+    /// <summary>Raised whenever a new event is appended to outbox_events.</summary>
+    public event Action? OutboxEnqueued;
+
     public void EnsureInitialized()
     {
         if (_initialized) return;
@@ -100,5 +103,7 @@ internal sealed class DatabaseContext
             ("$ws", WorkstationId), ("$op", SqliteHelpers.OperatorId(operatorId)),
             ("$reason", (object?)reason ?? DBNull.Value),
             ("$now", DateTimeOffset.Now.ToString("O")));
+
+        OutboxEnqueued?.Invoke();
     }
 }

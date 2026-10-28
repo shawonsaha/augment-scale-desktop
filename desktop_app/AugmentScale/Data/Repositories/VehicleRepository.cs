@@ -274,7 +274,7 @@ internal sealed class VehicleRepository : IVehicleRepository
             var id = Guid.NewGuid().ToString();
             var now = DateTimeOffset.Now.ToString("O");
             SqliteHelpers.Exec(connection, txn, """
-                INSERT INTO vehicles (
+                INSERT INTO vehicles (
                     id, organization_id, plate_number, plate_normalized,
                     default_driver_name, default_driver_phone, default_client,
                     default_material, registered_by, created_at, updated_at
@@ -284,7 +284,12 @@ internal sealed class VehicleRepository : IVehicleRepository
                 ("$normalized", normalized), ("$driver", req.Driver), ("$phone", req.Phone),
                 ("$client", req.Client), ("$material", req.Material), ("$by", operatorName),
                 ("$now", now));
-            return ReadVehicle(connection, txn, id)!;
+
+            var created = ReadVehicle(connection, txn, id)!;
+            _db.Audit.InsertMutation(connection, txn, _db.OrganizationId, _db.WorkstationId,
+                "vehicles", id, "insert", req.OperatorId, operatorName, created);
+            _db.InsertOutbox(connection, txn, "vehicles", id, "insert", created, req.OperatorId);
+            return created;
         }
 
         SqliteHelpers.Exec(connection, txn, """
@@ -301,11 +306,17 @@ internal sealed class VehicleRepository : IVehicleRepository
             ("$id", existing.Id), ("$driver", req.Driver), ("$phone", req.Phone),
             ("$client", req.Client), ("$material", req.Material), ("$by", operatorName),
             ("$now", DateTimeOffset.Now.ToString("O")));
-        return ReadVehicle(connection, txn, existing.Id)!;
+
+        var updated = ReadVehicle(connection, txn, existing.Id)!;
+        _db.Audit.InsertMutation(connection, txn, _db.OrganizationId, _db.WorkstationId,
+            "vehicles", existing.Id, "update", req.OperatorId, operatorName, updated,
+            before: existing);
+        _db.InsertOutbox(connection, txn, "vehicles", existing.Id, "update", updated, req.OperatorId);
+        return updated;
     }
 
     internal void ApplyCompletionStats(SqliteConnection connection, SqliteTransaction txn,
-        string normalizedPlate, double tare, DateTimeOffset completedAt)
+        string normalizedPlate, double tare, DateTimeOffset completedAt, string? operatorId = null)
     {
         SqliteHelpers.Exec(connection, txn, """
             UPDATE vehicles SET
@@ -318,10 +329,20 @@ internal sealed class VehicleRepository : IVehicleRepository
             """,
             ("$org", _db.OrganizationId), ("$plate", normalizedPlate),
             ("$tare", tare), ("$at", completedAt.ToString("O")));
+
+        var existing = FindVehicleByPlate(connection, txn, normalizedPlate);
+        if (existing is not null)
+        {
+            var updated = ReadVehicle(connection, txn, existing.Id);
+            if (updated is not null)
+            {
+                _db.InsertOutbox(connection, txn, "vehicles", existing.Id, "update", updated, operatorId ?? "system");
+            }
+        }
     }
 
     internal void ApplyVoidStats(SqliteConnection connection, SqliteTransaction txn,
-        string normalizedPlate)
+        string normalizedPlate, string? operatorId = null)
     {
         double? lastTare = null;
         string? lastAt = null;
@@ -358,6 +379,16 @@ internal sealed class VehicleRepository : IVehicleRepository
             ("$at", (object?)lastAt ?? DBNull.Value),
             ("$tare", (object?)lastTare ?? DBNull.Value),
             ("$now", DateTimeOffset.Now.ToString("O")));
+
+        var existing = FindVehicleByPlate(connection, txn, normalizedPlate);
+        if (existing is not null)
+        {
+            var updated = ReadVehicle(connection, txn, existing.Id);
+            if (updated is not null)
+            {
+                _db.InsertOutbox(connection, txn, "vehicles", existing.Id, "update", updated, operatorId ?? "system");
+            }
+        }
     }
 
     private VehicleDto? FindVehicleByPlate(SqliteConnection connection, SqliteTransaction txn,

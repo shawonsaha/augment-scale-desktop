@@ -23,3 +23,5 @@ env/
 .DS_Store
 Thumbs.db
 .idea/
+.agents/
+desktop_app/.agents/skills/

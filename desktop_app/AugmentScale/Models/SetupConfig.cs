@@ -6,6 +6,7 @@ public sealed class SetupConfig
     public SiteSetup Site { get; set; } = new();
     public WeighbridgeSetup Weighbridge { get; set; } = new();
     public ScaleConnectionSetup ScaleConnection { get; set; } = new();
+    public CloudSetup Cloud { get; set; } = new();
     public List<OperatorSetup> Operators { get; set; } = DefaultOperators();
 
     public static List<OperatorSetup> DefaultOperators() =>
@@ -16,6 +17,14 @@ public sealed class SetupConfig
         new() { Id = "rh", Code = "RH", DisplayName = "RAHIM A.", FirstName = "Rahim", Role = "Operator", Shift = "Shift C", Color = "#F2C2B6", Avatar = "avatars/frame-1.svg", Pin = "1234" },
         new() { Id = "kh", Code = "KH", DisplayName = "KAMAL H.", FirstName = "Kamal", Role = "Relief Operator", Shift = "Shift B", Color = "#526E7E", Avatar = "avatars/frame-5.svg", Pin = "1234" },
     ];
+}
+
+public sealed class CloudSetup
+{
+    public string SupabaseUrl { get; set; } = "https://fydikuezxmbjnkjyskwi.supabase.co";
+    public string SupabaseAnonKey { get; set; } = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78";
+    public int HeartbeatIntervalSeconds { get; set; } = 3600; // 1 hour
+    public int LicenseGraceDays { get; set; } = 30; // 30 days
 }
 
 public sealed class OrganizationSetup

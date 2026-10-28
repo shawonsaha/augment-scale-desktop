@@ -61,9 +61,21 @@ public sealed class DatabaseService
     public string ScaleProfileId { get { EnsureInitialized(); return _context.ScaleProfileId; } }
     public string DatabasePath => _context.DatabasePath;
 
+    /// <summary>Raised whenever a new outbox event is appended to the local queue.</summary>
+    public event Action? OutboxEnqueued
+    {
+        add => _context.OutboxEnqueued += value;
+        remove => _context.OutboxEnqueued -= value;
+    }
+
     public void EnsureInitialized() => _context.EnsureInitialized();
 
     public SqliteConnection OpenConnection() => _context.OpenConnection();
+
+    internal void InsertOutbox(SqliteConnection connection, Microsoft.Data.Sqlite.SqliteTransaction txn,
+        string entityType, string entityId, string operation, object payload,
+        string operatorId, string? reason = null) =>
+        _context.InsertOutbox(connection, txn, entityType, entityId, operation, payload, operatorId, reason);
 
     public IReadOnlyList<ProfileDto> GetOperators() => _operators.GetOperators();
 

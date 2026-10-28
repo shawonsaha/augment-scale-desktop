@@ -54,6 +54,32 @@ internal static class SchemaMigrator
             record.ExecuteNonQuery();
             txn.Commit();
         }
+
+        if (version < 3)
+        {
+            var sql = ReadEmbeddedSql("V003_CloudSync.sql");
+            using var txn = connection.BeginTransaction();
+            foreach (var statement in sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (string.IsNullOrWhiteSpace(statement)) continue;
+                try
+                {
+                    using var apply = connection.CreateCommand();
+                    apply.Transaction = txn;
+                    apply.CommandText = statement;
+                    apply.ExecuteNonQuery();
+                }
+                catch (SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Column already exists, safe to ignore
+                }
+            }
+            using var record = connection.CreateCommand();
+            record.Transaction = txn;
+            record.CommandText = "INSERT INTO schema_version (version, name) VALUES (3, 'CloudSync');";
+            record.ExecuteNonQuery();
+            txn.Commit();
+        }
     }
 
     private static string ReadEmbeddedSql(string suffix)

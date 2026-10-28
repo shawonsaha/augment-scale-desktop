@@ -16,6 +16,7 @@ public partial class App : Application
     private DatabaseService? _database;
     private BridgeService? _bridge;
     private PdfArchiveService? _archive;
+    private CloudControlService? _cloud;
 
     [DllImport("shell32.dll", SetLastError = true)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(
@@ -97,12 +98,16 @@ public partial class App : Application
                 _config);
             _bridge.Archive = _archive;
 
+            _cloud = new CloudControlService(_database, _config);
+            _bridge.Cloud = _cloud;
+
             window.Show();
 
             // Show the window first so the splash mask paints immediately, then
             // initialize the database while WebView2 spins up in the background.
             _database.EnsureInitialized();
             _archive.Start();
+            _cloud.Start();
         }
         catch (Exception ex)
         {
@@ -118,6 +123,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { _cloud?.Dispose(); } catch (Exception ex) { AppLog.Error("Cloud shutdown failed", ex); }
         try { _archive?.Dispose(); } catch (Exception ex) { AppLog.Error("Archive shutdown failed", ex); }
         try { _scale?.Dispose(); } catch (Exception ex) { AppLog.Error("Scale shutdown failed", ex); }
         _singleInstance?.ReleaseMutex();
@@ -169,59 +175,5 @@ public partial class App : Application
             Padding = new Thickness(12, 6, 12, 6),
             Margin = new Thickness(0, 16, 0, 0),
         };
-
-        var panel = new StackPanel { Margin = new Thickness(20) };
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"Enter a new 4-digit PIN for {profile.Name} ({profile.Id}):",
-            TextWrapping = TextWrapping.Wrap,
-        });
-        panel.Children.Add(pinBox);
-        panel.Children.Add(new TextBlock { Text = "Confirm PIN:", Margin = new Thickness(0, 12, 0, 0) });
-        panel.Children.Add(confirmBox);
-        panel.Children.Add(resetButton);
-
-        var window = new Window
-        {
-            Title = "Reset operator PIN",
-            Content = panel,
-            Width = 380,
-            SizeToContent = SizeToContent.Height,
-            ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen,
-        };
-
-        resetButton.Click += (_, _) =>
-        {
-            var pin = pinBox.Password;
-            if (pin.Length != 4 || !pin.All(char.IsAsciiDigit))
-            {
-                MessageBox.Show("PIN must be exactly 4 digits.", "Reset PIN",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            if (pin != confirmBox.Password)
-            {
-                MessageBox.Show("PINs do not match.", "Reset PIN",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            try
-            {
-                config.SetPin(profile.Id, pin);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message, "Reset PIN", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
-            MessageBox.Show($"PIN for {profile.Name} was updated.", "Reset PIN",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            window.Close();
-        };
-
-        window.ShowDialog();
     }
 }

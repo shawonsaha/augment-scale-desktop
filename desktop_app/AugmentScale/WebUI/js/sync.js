@@ -1,6 +1,6 @@
 /**
  * Cloud Sync Engine & Health Telemetry
- * Simulates real-time outbox synchronization with Supabase Cloud.
+ * Real-time outbox synchronization and remote controls with Supabase Cloud.
  */
 import { state } from './state.js';
 import { showToast } from './toast.js';
@@ -114,40 +114,80 @@ export function updateSyncUI() {
     relativeStr = `${elapsedSec}s ago`;
   }
 
-  const timeStr = state.sync.lastSyncTimestamp.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-
   if (state.sync.syncInProgress) {
     syncPill.className = 'telemetry-item sync-pill syncing';
     if (syncDot) syncDot.className = 'telemetry-dot pulse';
     if (syncIcon) syncIcon.textContent = '↻';
-    if (syncText) syncText.textContent = 'Checking...';
-    if (syncDetail) syncDetail.textContent = 'local outbox';
+    if (syncText) syncText.textContent = 'Cloud syncing...';
+    if (syncDetail) syncDetail.textContent = 'sending outbox';
     return;
   }
 
-  syncPill.className = 'telemetry-item sync-pill';
-  if (syncDot) syncDot.className = 'telemetry-dot';
-  if (syncIcon) syncIcon.textContent = '●';
-  if (syncText) syncText.textContent = 'Local only';
-  if (syncDetail) {
-    const queueText = state.sync.pendingQueue > 0
-      ? `${state.sync.pendingQueue} pending`
-      : 'saved locally';
-    const archiveText = archiveDetailText();
-    syncDetail.textContent = archiveText ? `${queueText} • ${archiveText}` : queueText;
+  if (!state.sync.licenseActive) {
+    syncPill.className = 'telemetry-item sync-pill error';
+    if (syncDot) syncDot.className = 'telemetry-dot danger';
+    if (syncIcon) syncIcon.textContent = '⚠';
+    if (syncText) syncText.textContent = 'License Expired';
+    if (syncDetail) syncDetail.textContent = 'grace exceeded';
+    if (popoverBadge) {
+      popoverBadge.className = 'sync-popover-badge is-error';
+      popoverBadge.textContent = 'License Expired';
+    }
+  } else if (state.sync.cloudStatus === 'paused' || !state.sync.cloudSyncEnabled) {
+    syncPill.className = 'telemetry-item sync-pill paused';
+    if (syncDot) syncDot.className = 'telemetry-dot warning';
+    if (syncIcon) syncIcon.textContent = '❚❚';
+    if (syncText) syncText.textContent = 'Sync paused';
+    if (syncDetail) syncDetail.textContent = 'remote control';
+    if (popoverBadge) {
+      popoverBadge.className = 'sync-popover-badge is-warning';
+      popoverBadge.textContent = 'Sync Paused';
+    }
+  } else if (state.sync.cloudStatus === 'online' || state.sync.cloudStatus === 'syncing') {
+    syncPill.className = 'telemetry-item sync-pill online';
+    if (syncDot) syncDot.className = 'telemetry-dot online';
+    if (syncIcon) syncIcon.textContent = '☁';
+    if (syncText) syncText.textContent = 'Cloud synced';
+    if (syncDetail) {
+      const queueText = state.sync.pendingQueue > 0
+        ? `${state.sync.pendingQueue} pending`
+        : 'up to date';
+      const archiveText = archiveDetailText();
+      syncDetail.textContent = archiveText ? `${queueText} • ${archiveText}` : queueText;
+    }
+    if (popoverBadge) {
+      popoverBadge.className = 'sync-popover-badge is-success';
+      popoverBadge.textContent = 'Supabase Cloud';
+    }
+  } else {
+    // Offline mode
+    syncPill.className = 'telemetry-item sync-pill offline';
+    if (syncDot) syncDot.className = 'telemetry-dot';
+    if (syncIcon) syncIcon.textContent = '●';
+    if (syncText) syncText.textContent = 'Cloud offline';
+    if (syncDetail) {
+      const queueText = state.sync.pendingQueue > 0
+        ? `${state.sync.pendingQueue} pending`
+        : 'offline grace';
+      const archiveText = archiveDetailText();
+      syncDetail.textContent = archiveText ? `${queueText} • ${archiveText}` : queueText;
+    }
+    if (popoverBadge) {
+      popoverBadge.className = 'sync-popover-badge';
+      popoverBadge.textContent = 'Offline Grace';
+    }
   }
 
-  if (popoverBadge) {
-    popoverBadge.className = 'sync-popover-badge';
-    popoverBadge.textContent = 'Local only';
+  if (popoverLastSync) {
+    if (state.sync.lastCloudSyncTimestamp) {
+      popoverLastSync.textContent = archiveTimestamp(state.sync.lastCloudSyncTimestamp);
+    } else {
+      popoverLastSync.textContent = state.sync.cloudStatus === 'offline' ? 'Offline (Grace active)' : 'Pending sync';
+    }
   }
-  if (popoverLastSync) popoverLastSync.textContent = 'Not configured';
+
   if (popoverPending) {
-    popoverPending.textContent = `${state.sync.pendingQueue} events in local outbox`;
+    popoverPending.textContent = `${state.sync.pendingQueue} events in outbox`;
   }
 }
 
@@ -238,32 +278,60 @@ function updateArchiveUI() {
     .join('');
 }
 
+export function applySyncStatus(status) {
+  if (!status) return;
+  state.sync.isHealthy = status.isHealthy !== false;
+  state.sync.pendingQueue = status.pendingQueue || 0;
+  state.sync.lastSyncTimestamp = status.lastSyncTimestamp
+    ? new Date(status.lastSyncTimestamp)
+    : new Date();
+  state.sync.cloudStatus = status.cloudStatus || 'offline';
+  state.sync.cloudSyncEnabled = status.cloudSyncEnabled !== false;
+  state.sync.licenseActive = status.licenseActive !== false;
+  state.sync.lastCloudSyncTimestamp = status.lastCloudSyncTimestamp
+    ? new Date(status.lastCloudSyncTimestamp)
+    : null;
+  state.sync.archive = status.archive || null;
+  updateSyncUI();
+}
+
 export function triggerSync(isManual = false) {
   if (state.sync.syncInProgress) return;
 
   state.sync.syncInProgress = true;
   updateSyncUI();
-  sendCommand('getSyncStatus')
+
+  const cmd = isManual ? sendCommand('syncNow') : sendCommand('getSyncStatus');
+  cmd
     .then((status) => {
-      state.sync.isHealthy = status?.isHealthy !== false;
-      state.sync.pendingQueue = status?.pendingQueue || 0;
-      state.sync.lastSyncTimestamp = status?.lastSyncTimestamp
-        ? new Date(status.lastSyncTimestamp)
-        : new Date();
-      state.sync.archive = status?.archive || null;
+      applySyncStatus(status);
+
       if (isManual) {
-        showToast(
-          state.sync.pendingQueue > 0
-            ? `${state.sync.pendingQueue} events queued in the encrypted outbox`
-            : 'Outbox is clear — no pending events',
-          state.sync.pendingQueue > 0 ? 'warning' : 'success'
-        );
+        if (!state.sync.licenseActive) {
+          showToast('License grace period expired — contact support', 'error');
+        } else if (!state.sync.cloudSyncEnabled) {
+          showToast('Cloud sync is paused remotely by administrator', 'warning');
+        } else if (state.sync.cloudStatus === 'offline') {
+          showToast(
+            state.sync.pendingQueue > 0
+              ? `Cloud offline — ${state.sync.pendingQueue} events queued safely in local outbox`
+              : 'Cloud offline — operating normally in local grace period',
+            'warning'
+          );
+        } else {
+          showToast(
+            state.sync.pendingQueue > 0
+              ? `${state.sync.pendingQueue} events queued in outbox`
+              : 'Cloud synced — all outbox events sent to Supabase',
+            'success'
+          );
+        }
       }
     })
     .catch((err) => {
       state.sync.isHealthy = false;
       if (isManual) {
-        showToast(err?.message || 'Could not read outbox status', 'error');
+        showToast(err?.message || 'Could not sync with Supabase', 'error');
       }
     })
     .finally(() => {
@@ -272,4 +340,3 @@ export function triggerSync(isManual = false) {
       scheduleHeartbeat();
     });
 }
-

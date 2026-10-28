@@ -258,6 +258,12 @@ export async function loadProductionData({ resetHistory = true } = {}) {
   state.sync.lastSyncTimestamp = boot.sync?.lastSyncTimestamp
     ? new Date(boot.sync.lastSyncTimestamp)
     : new Date();
+  state.sync.cloudStatus = boot.sync?.cloudStatus || 'offline';
+  state.sync.cloudSyncEnabled = boot.sync?.cloudSyncEnabled !== false;
+  state.sync.licenseActive = boot.sync?.licenseActive !== false;
+  state.sync.lastCloudSyncTimestamp = boot.sync?.lastCloudSyncTimestamp
+    ? new Date(boot.sync.lastCloudSyncTimestamp)
+    : null;
 
   document.dispatchEvent(new CustomEvent('data:refresh'));
   document.dispatchEvent(new CustomEvent('vehicle:refresh'));
@@ -604,6 +610,11 @@ export const state = {
     lastSyncTimestamp: new Date(),
     pendingQueue: 0,
     syncInProgress: false,
+    cloudStatus: 'offline',
+    cloudSyncEnabled: true,
+    licenseActive: true,
+    /** @type {Date | null} */
+    lastCloudSyncTimestamp: null,
     /** @type {any} */
     archive: null,
   },

@@ -40,6 +40,23 @@ public sealed class BridgeService
     public event Action<string>? ThemeChanged;
 
     public PdfArchiveService? Archive { get; set; }
+    private CloudControlService? _cloud;
+    public CloudControlService? Cloud
+    {
+        get => _cloud;
+        set
+        {
+            if (_cloud is not null)
+            {
+                _cloud.StatusChanged -= OnCloudStatusChanged;
+            }
+            _cloud = value;
+            if (_cloud is not null)
+            {
+                _cloud.StatusChanged += OnCloudStatusChanged;
+            }
+        }
+    }
 
     public BridgeService(DatabaseService database, ScaleReaderService scale)
     {
@@ -231,6 +248,23 @@ public sealed class BridgeService
 
             case "getSyncStatus":
                 return _database.GetSyncStatus();
+
+            case "getCloudStatus":
+                return Cloud?.GetCloudStatus() ?? new
+                {
+                    status = "offline",
+                    licenseActive = true,
+                    cloudSyncEnabled = true,
+                    lastHeartbeatAt = (string?)null,
+                    lastSyncAt = (string?)null,
+                    lastError = (string?)null,
+                    graceDaysRemaining = 30,
+                };
+
+            case "syncNow":
+                return Cloud is not null
+                    ? await Cloud.SyncNowAsync()
+                    : _database.GetSyncStatus();
 
             case "retryArchive":
             {
@@ -429,6 +463,16 @@ public sealed class BridgeService
             var script = $"window.ScaleApp && window.ScaleApp.onScaleStatus && window.ScaleApp.onScaleStatus({json});";
             _webView?.ExecuteScriptAsync(script).ContinueWith(_ =>
                 Interlocked.Exchange(ref _statusPushInFlight, 0));
+        });
+    }
+
+    private void OnCloudStatusChanged(SyncStatusDto status)
+    {
+        var json = JsonSerializer.Serialize(status, Json);
+        RunOnUi(() =>
+        {
+            var script = $"window.ScaleApp && window.ScaleApp.onSyncStatus && window.ScaleApp.onSyncStatus({json});";
+            _webView?.ExecuteScriptAsync(script);
         });
     }
 
