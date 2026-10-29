@@ -1,0 +1,137 @@
+[CmdletBinding()]
+param(
+    [ValidateSet('Release', 'Debug')]
+    [string]$Configuration = 'Release',
+
+    [string]$Runtime = 'win-x64',
+
+    [string]$OutputDir = '',
+
+    [switch]$SelfContained,
+
+    [switch]$NoZip
+)
+
+$ErrorActionPreference = 'Stop'
+$root = $PSScriptRoot
+
+if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+    $OutputDir = Join-Path $root "publish\$Runtime"
+}
+$OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
+$zipPath = "$OutputDir.zip"
+
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "AugmentScale Clean & Republish Pipeline" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Configuration  : $Configuration"
+Write-Host "Runtime        : $Runtime"
+Write-Host "Self-Contained : $SelfContained"
+Write-Host "Output Dir     : $OutputDir"
+Write-Host "Create Zip     : $(-not $NoZip)"
+Write-Host ""
+
+# Check and close running processes to avoid file lock errors
+$running = Get-Process -Name AugmentScale, AugmentScale.ScaleSimulator -ErrorAction SilentlyContinue
+if ($running) {
+    Write-Host "Detected running process(es): $(($running.Name | Select-Object -Unique) -join ', ') (PID: $(($running.Id) -join ', ')). Attempting to close..." -ForegroundColor Yellow
+    try {
+        $running | Stop-Process -Force -ErrorAction Stop
+        Start-Sleep -Milliseconds 500
+        Write-Host "      Processes terminated successfully." -ForegroundColor Green
+    } catch {
+        Write-Warning "Could not automatically terminate running processes ($($_.Exception.Message)). Please ensure they are closed if file lock errors occur."
+    }
+}
+
+# 1. Clean existing publish directory
+if (Test-Path -LiteralPath $OutputDir) {
+    Write-Host "[1/4] Deleting existing publish directory: $OutputDir..." -ForegroundColor Yellow
+    Remove-Item -LiteralPath $OutputDir -Recurse -Force
+    Write-Host "      Cleaned successfully." -ForegroundColor Green
+} else {
+    Write-Host "[1/4] Publish directory does not exist yet (clean start)." -ForegroundColor Gray
+}
+
+# Clean existing zip if creating a new one
+if (-not $NoZip -and (Test-Path -LiteralPath $zipPath)) {
+    Write-Host "      Removing old zip archive: $zipPath..." -ForegroundColor Yellow
+    Remove-Item -LiteralPath $zipPath -Force
+}
+
+# 2. Publish Main App (AugmentScale)
+$appProject = Join-Path $root 'AugmentScale\AugmentScale.csproj'
+if (-not (Test-Path -LiteralPath $appProject)) {
+    throw "Project file not found: $appProject"
+}
+
+Write-Host "`n[2/4] Publishing AugmentScale..." -ForegroundColor Cyan
+$selfContainedValue = if ($SelfContained) { 'true' } else { 'false' }
+dotnet publish $appProject -c $Configuration -r $Runtime --self-contained $selfContainedValue -o $OutputDir
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet publish for AugmentScale failed with exit code $LASTEXITCODE"
+}
+
+# 3. Publish ScaleSimulator into Simulator/
+$simProject = Join-Path $root 'AugmentScale.ScaleSimulator\AugmentScale.ScaleSimulator.csproj'
+if (Test-Path -LiteralPath $simProject) {
+    Write-Host "`n[3/4] Publishing ScaleSimulator..." -ForegroundColor Cyan
+    $simOutputDir = Join-Path $OutputDir 'Simulator'
+    dotnet publish $simProject -c $Configuration -r $Runtime --self-contained $selfContainedValue -o $simOutputDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet publish for AugmentScale.ScaleSimulator failed with exit code $LASTEXITCODE"
+    }
+} else {
+    Write-Host "`n[3/4] ScaleSimulator project not found, skipping." -ForegroundColor Yellow
+}
+
+# Copy auxiliary launcher scripts into the published directory
+$launcherPs1 = Join-Path $root 'Run-With-Simulator.ps1'
+$launcherCmd = Join-Path $root 'Run-With-Simulator.cmd'
+if (Test-Path -LiteralPath $launcherPs1) {
+    Copy-Item -LiteralPath $launcherPs1 -Destination $OutputDir -Force
+}
+if (Test-Path -LiteralPath $launcherCmd) {
+    Copy-Item -LiteralPath $launcherCmd -Destination $OutputDir -Force
+}
+
+# 4. Create zip archive (unless -NoZip specified) with retry logic
+if (-not $NoZip) {
+    Write-Host "`n[4/4] Creating distribution archive: $zipPath..." -ForegroundColor Cyan
+    $maxRetries = 5
+    $delaySeconds = 1
+    $archived = $false
+
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        try {
+            if (Test-Path -LiteralPath $zipPath) {
+                Remove-Item -LiteralPath $zipPath -Force
+            }
+            # Brief pause to allow background file scanners (e.g. Defender/indexer) to release newly written files
+            Start-Sleep -Milliseconds 500
+            Compress-Archive -Path $OutputDir -DestinationPath $zipPath -Force
+            $archived = $true
+            break
+        } catch {
+            if ($attempt -eq $maxRetries) {
+                throw
+            }
+            Write-Warning "Archive creation temporarily blocked (attempt $attempt/$maxRetries): $($_.Exception.Message). Retrying in $delaySeconds s..."
+            Start-Sleep -Seconds $delaySeconds
+        }
+    }
+
+    if ($archived) {
+        Write-Host "      Archive created successfully: $zipPath" -ForegroundColor Green
+    }
+} else {
+    Write-Host "`n[4/4] Skipping zip archive creation (-NoZip)." -ForegroundColor Gray
+}
+
+Write-Host "`n========================================" -ForegroundColor Green
+Write-Host "Republish completed successfully!" -ForegroundColor Green
+Write-Host "Output location: $OutputDir" -ForegroundColor Green
+if (-not $NoZip) {
+    Write-Host "Zip location   : $zipPath" -ForegroundColor Green
+}
+Write-Host "========================================" -ForegroundColor Green
