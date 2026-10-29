@@ -585,6 +585,107 @@ public class CloudControlServiceTests
         Assert.Equal(3, temp.Database.PeekNextTicketNumber());
     }
 
+    [Fact]
+    public void CloudControlService_DynamicQueries_ThrowArgumentException_OnDisallowedTable()
+    {
+        using var temp = new TempDatabase();
+        using var client = new HttpClient();
+        using var cloud = new CloudControlService(temp.Database, temp.Config, client);
+
+        // Disallowed table injection attempts
+        Assert.Throws<ArgumentException>(() =>
+            cloud.ReadAllRowsFromTable("weigh_tickets; DROP TABLE profiles;--"));
+
+        Assert.Throws<ArgumentException>(() =>
+            cloud.ReadRowById("sqlite_master; DROP TABLE weigh_tickets;--", "1"));
+
+        Assert.Throws<ArgumentException>(() =>
+            cloud.ReadRowById("invalid_table_name", "1"));
+
+        // Allowed tables do not throw
+        var rows = cloud.ReadAllRowsFromTable("vehicles");
+        Assert.NotNull(rows);
+
+        var row = cloud.ReadRowById("weigh_tickets", "non-existent-id");
+        Assert.Null(row);
+    }
+
+    [Fact]
+    public async Task CloudControlService_RejectsMaliciousOutboxEntityType()
+    {
+        using var temp = new TempDatabase();
+
+        // Seed an outbox event with a malicious entity_type
+        using (var conn = temp.Database.OpenConnection())
+        using (var txn = conn.BeginTransaction())
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = txn;
+            cmd.CommandText = """
+                INSERT INTO outbox_events (
+                    id, sequence, entity_type, entity_id, operation, payload, workstation_id, operator_id, status, created_at
+                ) VALUES (
+                    'evt-malicious-1', 9999, 'vehicles; DROP TABLE weigh_tickets;--', 'veh-1', 'insert', '{"plateNumber":"TEST"}', 'ws-1', 'op-1', 'pending', datetime('now')
+                );
+                """;
+            cmd.ExecuteNonQuery();
+            txn.Commit();
+        }
+
+        var handler = new MockSupabaseHandler((req) =>
+        {
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("workstation_controls"))
+            {
+                var json = """
+                    [
+                        {
+                            "workstation_id": "test-ws",
+                            "organization_id": "test-org",
+                            "license_active": true,
+                            "enable_cloud_sync": true,
+                            "enable_cloud_backup": false,
+                            "trigger_immediate_backup": false
+                        }
+                    ]
+                    """;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var cloud = new CloudControlService(temp.Database, temp.Config, httpClient);
+
+        await cloud.SyncNowAsync();
+
+        // The malicious event must not execute SQL or succeed; it should be marked with error in outbox_events
+        using (var conn = temp.Database.OpenConnection())
+        {
+            using var check = conn.CreateCommand();
+            check.CommandText = "SELECT status, server_response FROM outbox_events WHERE id = 'evt-malicious-1';";
+            using var reader = check.ExecuteReader();
+            Assert.True(reader.Read());
+            var status = reader.GetString(0);
+            var serverResponse = reader.IsDBNull(1) ? null : reader.GetString(1);
+            Assert.Equal("pending", status);
+            Assert.NotNull(serverResponse);
+            Assert.Contains("Disallowed or unrecognized entity type", serverResponse);
+
+            // Verify weigh_tickets table still exists intact
+            using var tableCheck = conn.CreateCommand();
+            tableCheck.CommandText = "SELECT COUNT(*) FROM weigh_tickets;";
+            var count = Convert.ToInt32(tableCheck.ExecuteScalar());
+            Assert.True(count >= 0);
+        }
+    }
+
     private sealed class MockSupabaseHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;

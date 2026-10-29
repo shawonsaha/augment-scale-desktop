@@ -29,6 +29,32 @@ public sealed class CloudControlService : IDisposable
         "before_values", "after_values"
     };
 
+    /// <summary>
+    /// Explicit static allowlist of tables permitted for dynamic querying
+    /// (bootstrap reading and outbox entity row retrieval) to prevent SQL injection.
+    /// </summary>
+    internal static readonly HashSet<string> AllowedQueryTables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "organizations",
+        "sites",
+        "weighbridges",
+        "scale_connection_profiles",
+        "workstations",
+        "profiles",
+        "user_roles",
+        "vehicles",
+        "customers",
+        "products",
+        "drivers",
+        "weigh_tickets",
+        "weight_captures",
+        "ticket_corrections",
+        "print_jobs",
+        "scale_health_events",
+        "audit_events",
+        "archive_runs",
+    };
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -713,6 +739,11 @@ public sealed class CloudControlService : IDisposable
 
                 try
                 {
+                    if (!AllowedQueryTables.Contains(entityType))
+                    {
+                        throw new ArgumentException($"Disallowed or unrecognized entity type '{evt.EntityType}' in outbox event #{evt.Sequence}.");
+                    }
+
                     if (evt.Operation == "delete")
                     {
                         // Check if row has soft delete in SQLite
@@ -974,8 +1005,13 @@ public sealed class CloudControlService : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    private List<Dictionary<string, object?>> ReadAllRowsFromTable(string table)
+    internal List<Dictionary<string, object?>> ReadAllRowsFromTable(string table)
     {
+        if (!AllowedQueryTables.Contains(table))
+        {
+            throw new ArgumentException($"Table '{table}' is not permitted for query execution.", nameof(table));
+        }
+
         var list = new List<Dictionary<string, object?>>();
         using var conn = _database.OpenConnection();
         using var cmd = conn.CreateCommand();
@@ -997,8 +1033,13 @@ public sealed class CloudControlService : IDisposable
         return list;
     }
 
-    private Dictionary<string, object?>? ReadRowById(string table, string id)
+    internal Dictionary<string, object?>? ReadRowById(string table, string id)
     {
+        if (!AllowedQueryTables.Contains(table))
+        {
+            throw new ArgumentException($"Table '{table}' is not permitted for query execution.", nameof(table));
+        }
+
         using var conn = _database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT * FROM {table} WHERE id = $id LIMIT 1;";

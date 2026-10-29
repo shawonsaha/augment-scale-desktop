@@ -1181,6 +1181,26 @@ public class DatabaseServiceTests
     }
 
     [Fact]
+    public void DatabaseMaintenance_Prune_ThrowsArgumentException_OnDisallowedTableName()
+    {
+        using var temp = new TempDatabase();
+        using var conn = temp.Database.OpenConnection();
+
+        // Disallowed table / injection attempt
+        Assert.Throws<ArgumentException>(() =>
+            DatabaseMaintenance.Prune(conn, "weigh_tickets; DROP TABLE outbox_events;--", "1=1", DateTimeOffset.Now));
+
+        // Arbitrary unlisted table
+        Assert.Throws<ArgumentException>(() =>
+            DatabaseMaintenance.Prune(conn, "profiles", "1=1", DateTimeOffset.Now));
+
+        // Allowed tables do not throw ArgumentException
+        var ex = Record.Exception(() =>
+            DatabaseMaintenance.Prune(conn, "outbox_events", "1=0", DateTimeOffset.Now));
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public void Migration_UpgradesExistingV3DatabaseInPlace()
     {
         using var temp = new TempDatabase();

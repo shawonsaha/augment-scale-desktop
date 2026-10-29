@@ -15,6 +15,16 @@ internal static class DatabaseMaintenance
     private static readonly TimeSpan OutboxRetention = TimeSpan.FromDays(30);
     private static readonly TimeSpan OutboxFailureRetention = TimeSpan.FromDays(90);
 
+    /// <summary>
+    /// Explicit static allowlist of tables permitted for maintenance pruning
+    /// to prevent SQL injection via dynamic table name interpolation.
+    /// </summary>
+    internal static readonly HashSet<string> AllowedPruneTables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "scale_health_events",
+        "outbox_events"
+    };
+
     // CloudControlService re-enqueues these whenever no outbox row exists for
     // them ("has this been queued?" is answered by row absence), so pruning
     // them would push them back to the cloud every retention cycle.
@@ -55,9 +65,14 @@ internal static class DatabaseMaintenance
             now - OutboxFailureRetention);
     }
 
-    private static void Prune(SqliteConnection connection, string table, string predicate,
+    internal static void Prune(SqliteConnection connection, string table, string predicate,
         DateTimeOffset cutoff)
     {
+        if (!AllowedPruneTables.Contains(table))
+        {
+            throw new ArgumentException($"Table '{table}' is not permitted for maintenance pruning.", nameof(table));
+        }
+
         try
         {
             using var cmd = connection.CreateCommand();

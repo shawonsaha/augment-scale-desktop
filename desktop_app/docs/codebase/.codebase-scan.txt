@@ -1,11 +1,42 @@
 
 === DIRECTORY TREE (max depth 3, source files only) ===
+.agents
+.agents\skills
+.agents\skills\acquire-codebase-knowledge
+.agents\skills\acquire-codebase-knowledge\assets
+.agents\skills\acquire-codebase-knowledge\references
+.agents\skills\acquire-codebase-knowledge\scripts
+.agents\skills\acquire-codebase-knowledge\SKILL.md
+.agents\skills\ponytail
+.agents\skills\ponytail\SKILL.md
+.agents\skills\ponytail-audit
+.agents\skills\ponytail-audit\SKILL.md
+.agents\skills\ponytail-debt
+.agents\skills\ponytail-debt\SKILL.md
+.agents\skills\ponytail-gain
+.agents\skills\ponytail-gain\SKILL.md
+.agents\skills\ponytail-help
+.agents\skills\ponytail-help\SKILL.md
+.agents\skills\ponytail-review
+.agents\skills\ponytail-review\SKILL.md
+.agents\skills\supabase
+.agents\skills\supabase\assets
+.agents\skills\supabase\CHANGELOG.md
+.agents\skills\supabase\references
+.agents\skills\supabase\SKILL.md
+.agents\skills\supabase-postgres-best-practices
+.agents\skills\supabase-postgres-best-practices\CHANGELOG.md
+.agents\skills\supabase-postgres-best-practices\references
+.agents\skills\supabase-postgres-best-practices\SKILL.md
+.gitignore
 AugmentScale
 AugmentScale\App.xaml
 AugmentScale\App.xaml.cs
 AugmentScale\AugmentScale.csproj
 AugmentScale\Data
 AugmentScale\Data\DatabaseContext.cs
+AugmentScale\Data\DatabaseMaintenance.cs
+AugmentScale\Data\HistoryRangeLimits.cs
 AugmentScale\Data\JsonDefaults.cs
 AugmentScale\Data\Provisioner.cs
 AugmentScale\Data\Repositories
@@ -19,6 +50,9 @@ AugmentScale\Data\Repositories\VehicleRepository.cs
 AugmentScale\Data\Schema
 AugmentScale\Data\Schema\V001_InitialSchema.sql
 AugmentScale\Data\Schema\V002_ArchiveRuns.sql
+AugmentScale\Data\Schema\V003_CloudSync.sql
+AugmentScale\Data\Schema\V004_Hardening.sql
+AugmentScale\Data\Schema\V005_TicketSequenceWatermark.sql
 AugmentScale\Data\SchemaMigrator.cs
 AugmentScale\Data\Services
 AugmentScale\Data\Services\BootStateService.cs
@@ -42,6 +76,7 @@ AugmentScale\Models\Commands\CommandEnvelope.cs
 AugmentScale\Models\Commands\ProfileCommands.cs
 AugmentScale\Models\Commands\TicketCommands.cs
 AugmentScale\Models\Commands\VehicleCommands.cs
+AugmentScale\Models\HistoryPageDto.cs
 AugmentScale\Models\HistoryReportDto.cs
 AugmentScale\Models\ProfileDto.cs
 AugmentScale\Models\SetupConfig.cs
@@ -50,11 +85,13 @@ AugmentScale\Models\TicketDto.cs
 AugmentScale\Models\VehicleDto.cs
 AugmentScale\Models\WeightReading.cs
 AugmentScale\Resources
+AugmentScale\Resources\app.ico
 AugmentScale\Resources\setup.json
 AugmentScale\Services
 AugmentScale\Services\AppLog.cs
 AugmentScale\Services\AuditService.cs
 AugmentScale\Services\BridgeService.cs
+AugmentScale\Services\CloudControlService.cs
 AugmentScale\Services\ConfigService.cs
 AugmentScale\Services\DatabaseService.cs
 AugmentScale\Services\IPdfArchiveRenderer.cs
@@ -87,7 +124,6 @@ AugmentScale\WebUI\css\tokens.css
 AugmentScale\WebUI\css\trucks.css
 AugmentScale\WebUI\css\weigh.css
 AugmentScale\WebUI\index.html
-AugmentScale\WebUI\jsconfig.json
 AugmentScale\WebUI\js
 AugmentScale\WebUI\js\archive-report.js
 AugmentScale\WebUI\js\audio.js
@@ -114,6 +150,7 @@ AugmentScale\WebUI\js\toast.js
 AugmentScale\WebUI\js\types.d.ts
 AugmentScale\WebUI\js\utils.js
 AugmentScale\WebUI\js\verify-report.js
+AugmentScale\WebUI\jsconfig.json
 AugmentScale\WebUI\partials
 AugmentScale\WebUI\partials\history-report-modal.html
 AugmentScale\WebUI\partials\hud.html
@@ -141,12 +178,15 @@ AugmentScale.ScaleSimulator\MainWindow.xaml
 AugmentScale.ScaleSimulator\MainWindow.xaml.cs
 AugmentScale.ScaleSimulator\Networking
 AugmentScale.ScaleSimulator\Networking\TcpFrameServer.cs
+AugmentScale.ScaleSimulator\Resources
+AugmentScale.ScaleSimulator\Resources\app.ico
 AugmentScale.ScaleSimulator\Simulation
 AugmentScale.ScaleSimulator\Simulation\SimulatorEngine.cs
 AugmentScale.ScaleSimulator\SimulatorSettings.cs
 AugmentScale.slnx
 AugmentScale.Tests
 AugmentScale.Tests\AugmentScale.Tests.csproj
+AugmentScale.Tests\CloudControlServiceTests.cs
 AugmentScale.Tests\DatabaseTests.cs
 AugmentScale.Tests\PdfArchiveTests.cs
 AugmentScale.Tests\ProtocolTests.cs
@@ -155,11 +195,11 @@ AugmentScale.Tests\SimulatorProtocolTests.cs
 docs
 docs\codebase
 docs\codebase\.codebase-scan.txt
-OPEN_RAW_DB.md
-start-dev-sim.ps1
-tools
-tools\Get-DbKey.ps1
-USER_MANUAL.md
+docs\OPEN_RAW_DB.md
+docs\ponytail-audit.md
+docs\supabase_integration_plan.md
+docs\USER_MANUAL.md
+publish
 
 === STACK DETECTION (manifest files) ===
 
@@ -182,80 +222,91 @@ No linting or formatting config files found in project root.
 No .env.example or .env.template found. Identify required environment variables by searching the code and config for environment variable reads.
 
 === TODO / FIXME / HACK (production code only, test dirs excluded) ===
-None found.
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:28: TODO_LIMIT = 60
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:320: return todos[:TODO_LIMIT]
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:617: # TODOs
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+.agents\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
 
 === GIT RECENT COMMITS (last 20) ===
+2c7d96b Add Ponytail audit report for desktop app
+546265e Fix trailing backslashes in bridge.js causing WebView2 script failure
+e0388d9 Add ticket watermark sync and scale simulator launcher
+51c98ab Reset starting ticket number to 1
+fd43418 Implement database hardening and retention maintenance
+7969c32 Integrate Supabase Cloud sync and remote workstation controls
+2678502 Add helper script to export unencrypted database copy
+cb05c1e Add TypeScript type definitions and jsconfig for WebUI
+c0afc99 Retire standalone browser demo mode and require WebView2 host
+7621c10 Add history page query and pagination controls
+c281989 Enforce exactly 4-digit PIN policy in ConfigService
+be96809 Add custom app icon and dark title bar theme support
+4e0a2bb Refactor CSS selectors and dashboard buttons
+d749d0d Filter boot state and vehicle queries to exclude archived vehicles and old history
+3da07db Update reprint register table columns and bump asset versions
+5cc0c93 Update history report styling and print formatting
+afffa8e Update virtual host domain to scale.augmentlab.net
+1881694 Add automated PDF archive service and background renderer
 d60c608 Refactor data access layer into repositories and domain service
 d8dbb61 Remove obsolete codebase documentation files
-2ca772b Add codebase documentation from deepseek and gemini analyses
-d8f508a Fix Xk3190 frame splitting and handle stream read timeouts
-ae240f3 Add operator profile management screen and supervisor workflows
-70a1931 Blur nav tab on click and allow keyboard shortcuts
-7715595 Optimize startup performance and add boot state endpoint
-66a7a69 Constrain window size to screen work area
-36676cd Add reading capture and PIN reset support
-92cd554 Update print report layout and fallback logic
-cc0c070 Redesign history screen table layout and sorting
-ac5f539 Remove Meghna to Augment
-34db1ce Add printable history reports with PIN security and SHA-256 verification
-bbf3a97 Add dynamic dashboard stats to footer
-1ca70c8 Add permanent vehicle deletion and rename trucks to vehicles
-d8f5dcb Add column sorting to pending tickets table
-20f4709 Add data refresh functionality and UI controls
-84c127f Add manual database refresh and auto-register vehicle features
-fbb3b7e Update keyboard-focused table row styles in dashboard
-63c258c Refactor print slip metadata layout and rendering
 
 === HIGH-CHURN FILES (last 90 days, top 20) ===
-  11 desktop_app/AugmentScale/WebUI/index.html
-  10 desktop_app/AugmentScale/WebUI/js/state.js
-   8 desktop_app/AugmentScale.Tests/DatabaseTests.cs
-   8 desktop_app/AugmentScale/WebUI/js/html-loader.js
-   8 desktop_app/USER_MANUAL.md
-   7 desktop_app/AugmentScale/Services/DatabaseService.cs
-   6 desktop_app/AugmentScale/Services/BridgeService.cs
-   6 desktop_app/AugmentScale/WebUI/js/main.js
-   6 desktop_app/AugmentScale/WebUI/partials/modals.html
-   6 desktop_app/AugmentScale/WebUI/partials/telemetry-bar.html
-   6 desktop_app/AugmentScale/WebUI/js/screens/history.js
-   6 desktop_app/AugmentScale/WebUI/js/screens/dashboard.js
-   5 desktop_app/AugmentScale/WebUI/js/keyboard.js
-   5 desktop_app/AugmentScale/MainWindow.xaml.cs
-   5 desktop_app/AugmentScale/WebUI/js/screens/first-weigh.js
-   5 desktop_app/AugmentScale/WebUI/css/dashboard.css
-   4 desktop_app/AugmentScale/App.xaml.cs
-   4 desktop_app/AugmentScale/Services/ConfigService.cs
-   4 desktop_app/AugmentScale/WebUI/js/screens/trucks.js
-   4 desktop_app/AugmentScale/WebUI/js/print.js
+  19 desktop_app/AugmentScale/WebUI/index.html
+  17 desktop_app/AugmentScale/WebUI/js/state.js
+  14 desktop_app/AugmentScale.Tests/DatabaseTests.cs
+  12 desktop_app/AugmentScale/Services/BridgeService.cs
+  12 desktop_app/USER_MANUAL.md
+  12 desktop_app/AugmentScale/Services/DatabaseService.cs
+  10 desktop_app/AugmentScale/WebUI/js/main.js
+   9 desktop_app/AugmentScale/WebUI/js/screens/history.js
+   9 desktop_app/AugmentScale/WebUI/js/html-loader.js
+   8 desktop_app/docs/codebase/TESTING.md
+   8 desktop_app/AugmentScale/WebUI/partials/modals.html
+   8 desktop_app/docs/codebase/ARCHITECTURE.md
+   8 desktop_app/docs/codebase/CONCERNS.md
+   8 desktop_app/AugmentScale/MainWindow.xaml.cs
+   7 desktop_app/AugmentScale/App.xaml.cs
+   7 desktop_app/docs/codebase/STRUCTURE.md
+   7 desktop_app/AugmentScale/WebUI/js/history-report.js
+   7 desktop_app/AugmentScale/WebUI/partials/telemetry-bar.html
+   6 desktop_app/AugmentScale/WebUI/js/bridge.js
+   6 desktop_app/AugmentScale/Data/Repositories/TicketRepository.cs
 
 === MONOREPO SIGNALS ===
 No monorepo signals detected.
 
 === CODE METRICS ===
-Total files scanned: 157
-Total lines of code: 18496 (code/config lines; CSS, HTML, Markdown, and font binaries excluded)
+Total files scanned: 332
+Total lines of code: 44242
 
 Files by language:
-  Other: 66
-  C#: 60
-  JavaScript: 31
+  Other: 203
+  C#: 65
+  JavaScript: 60
+  Python: 2
+  TypeScript: 2
 
 Top 10 largest files:
+publish\win-x64.zip: 3013.1KB
+publish\win-x64\e_sqlcipher.dll: 1809.5KB
+publish\win-x64\Microsoft.Web.WebView2.Core.dll: 681.8KB
+publish\win-x64\Microsoft.Web.WebView2.Core.xml: 597.7KB
+publish\win-x64\AugmentScale.dll: 394.5KB
 AugmentScale\WebUI\css\fonts\ibm-plex-sans-500.ttf: 200.5KB
+publish\win-x64\WebUI\css\fonts\ibm-plex-sans-500.ttf: 200.5KB
 AugmentScale\WebUI\css\fonts\ibm-plex-sans-600.ttf: 200.5KB
+publish\win-x64\WebUI\css\fonts\ibm-plex-sans-600.ttf: 200.5KB
 AugmentScale\WebUI\css\fonts\ibm-plex-sans-400.ttf: 200.4KB
-AugmentScale\WebUI\css\fonts\ibm-plex-sans-700.ttf: 200.4KB
-AugmentScale\WebUI\css\fonts\jetbrains-mono-500.ttf: 109.6KB
-AugmentScale\WebUI\css\fonts\jetbrains-mono-600.ttf: 109.5KB
-AugmentScale\WebUI\css\fonts\jetbrains-mono-700.ttf: 109.5KB
-AugmentScale\WebUI\css\fonts\jetbrains-mono-800.ttf: 109.5KB
-AugmentScale\WebUI\avatars\frame-3.svg: 73.3KB
-AugmentScale\WebUI\avatars\frame-4.svg: 73.1KB
-
-Largest C#/JS source: AugmentScale\WebUI\js\screens\first-weigh.js: 58.1KB,
-AugmentScale\WebUI\js\screens\history.js: 45.5KB,
-AugmentScale\Data\Repositories\TicketRepository.cs: 37.5KB,
-AugmentScale.Tests\DatabaseTests.cs: 30.0KB.
 
 === CI/CD PIPELINES ===
 No CI/CD pipelines detected.

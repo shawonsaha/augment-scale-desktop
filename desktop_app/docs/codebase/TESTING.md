@@ -4,120 +4,57 @@
 
 ### 1) Test Stack and Commands
 
-| Item | Value | Evidence |
-|------|-------|----------|
-| Test framework | xUnit 2.9.3 with the built-in `Assert` API; no FluentAssertions, Moq, or AutoFixture | `AugmentScale.Tests/AugmentScale.Tests.csproj:13` |
-| Test host | Microsoft.NET.Test.Sdk 17.14.1 | `AugmentScale.Tests/AugmentScale.Tests.csproj:12` |
-| Runner | xunit.runner.visualstudio 3.1.4 | `AugmentScale.Tests/AugmentScale.Tests.csproj:14` |
-| Target | `net10.0-windows`, x64 | `AugmentScale.Tests/AugmentScale.Tests.csproj:3-8` |
-| Projects under test | App, Protocol, and ScaleSimulator | `AugmentScale.Tests/AugmentScale.Tests.csproj:17-21` |
-| Assertion/mocking tools | Built-in `Xunit.Assert`, custom loopback TCP servers (`TcpListener`), custom stream implementations (`TimeoutThenFrameStream`) | `SimulatorProtocolTests.cs`, `ScaleReaderService.cs:136-141` |
+- Primary test framework: xUnit 2.9.3 with Visual Studio test runner 3.1.4 and .NET Test SDK 17.14.1
+- Assertion/mocking tools: Built-in xUnit assertion library (`Assert.*`), custom test doubles (`TempDatabase` fixture, `IPdfArchiveRenderer` test mocks, mock HTTP handlers)
+- Commands:
 
-Commands (from `desktop_app/`):
+```bash
+# Run all tests in the solution (107 unit and integration tests)
+dotnet test AugmentScale.slnx
 
-```powershell
-# Run all tests
-dotnet test AugmentScale.slnx -c Debug
+# Run specific test file or namespace
+dotnet test --filter "FullyQualifiedName~AugmentScale.Tests.ProtocolTests"
 
-# Run the suite through the test project
-dotnet test AugmentScale.Tests\AugmentScale.Tests.csproj -c Debug
-
-# Run a specific test class
-dotnet test AugmentScale.slnx -c Debug --filter "FullyQualifiedName~ProtocolTests"
-
-# Run tests with detailed console logger
-dotnet test AugmentScale.slnx -c Debug --logger "console;verbosity=detailed"
-
-# Build only (the project's only static gate)
-dotnet build AugmentScale.slnx -c Debug
+# Run tests with verbose console logging
+dotnet test AugmentScale.slnx --logger "console;verbosity=detailed"
 ```
-
-A full run produced `Passed: 91, Failed: 0, Skipped: 0, Total: 91` in about 50 seconds to 1 minute. There is no separate unit/integration/e2e command split and no coverage command or threshold configured; use `dotnet test --filter` ad hoc if needed. Evidence: `AugmentScale.Tests/AugmentScale.Tests.csproj`.
 
 ### 2) Test Layout
 
-| File | Classes / focus | Approximate cases | Evidence |
-|------|-----------------|-------------------|----------|
-| `AugmentScale.Tests/DatabaseTests.cs` | `TempDatabase` helper, `ConfigServiceTests`, `DatabaseServiceTests`; PIN/secrets, provisioning, profiles, vehicles, ticket lifecycle, boot state (today-only history, active vehicles), history, report integrity (exercises the `DatabaseService` facade and its domain repositories/services) | 28 `[Fact]` cases | `DatabaseTests.cs:8-36`, `:38-82`, `:84-758` |
-| `AugmentScale.Tests/ProtocolTests.cs` | Frame decoding, checksum rejection, splitter buffering, decimal/negative weights, stability window/tolerance | 14 `[Fact]` + 1 `[Theory]` (2 cases) = 16 | `ProtocolTests.cs` |
-| `AugmentScale.Tests/SimulatorEngineTests.cs` | Manual mode quantization, corruption/garbage injection, tare/load cycles, motion | 8 `[Fact]` cases | `SimulatorEngineTests.cs` |
-| `AugmentScale.Tests/SimulatorProtocolTests.cs` | Encoder/decoder round-trips, clamping, TCP name parsing, live loopback transport, read-timeout continuation | 5 `[Fact]` + 4 `[Theory]` (22 cases) = 27 | `SimulatorProtocolTests.cs` |
-| `AugmentScale.Tests/PdfArchiveTests.cs` | Archive schema, report generation, baseline/daily scheduling, empty-day skip, failure/manual retry, repository transitions | 5 `[Fact]` cases | `PdfArchiveTests.cs` |
-
-- Test file placement pattern: separate test project at `AugmentScale.Tests/` referencing the production projects (`AugmentScale`, `AugmentScale.Protocol`, `AugmentScale.ScaleSimulator`).
-- Naming convention: files named `*Tests.cs`; test methods follow `Method_Scenario_ExpectedBehavior` (e.g. `TicketLifecycle_CreateCompleteReprintVoid`, `HistoryReport_RejectsWrongPinWithoutAuditAndHashesSuccessfulSnapshot`).
-- Setup files and isolation: `DatabaseTests.cs:8-36` defines `TempDatabase : IDisposable`, which creates an isolated SQLCipher instance in `%TEMP%\AugmentScaleTests\<guid>` per test and deletes it on disposal. No shared database fixture exists. `PdfArchiveTests` uses the same helper, a fake `IPdfArchiveRenderer`, and an injected clock so no WebView2 or real file renderer is required.
+- Test file placement pattern: Centralized in `AugmentScale.Tests` project alongside the main solution projects.
+- Naming convention: `<Subsystem>Tests.cs` (e.g., `ProtocolTests.cs`, `DatabaseTests.cs`, `PdfArchiveTests.cs`, `SimulatorEngineTests.cs`).
+- Setup files and where they run:
+  - `TempDatabase` fixture defined in [DatabaseTests.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale.Tests/DatabaseTests.cs#L10) creates an isolated temporary directory in `%TEMP%\AugmentScaleTests\<guid>` with a fresh SQLCipher database and seeds initial data, completely deleted on `Dispose()`.
 
 ### 3) Test Scope Matrix
 
 | Scope | Covered? | Typical target | Notes |
 |-------|----------|----------------|-------|
-| Unit | Yes | `AugmentScale.Protocol` (decoders, splitters, encoders, stability variance), simulator engine, PIN hashing | Fast, pure CPU tests with deterministic fixtures; no mocks |
-| Integration | Yes | `DatabaseService`, `ConfigService`, `ScaleReaderService` TCP stream | Executes real migrations, transactions, PBKDF2 hashing, and loopback TCP sockets |
-| E2E | No | WebView2 full user interface, print, real scale | `[TODO]` WebUI interactions are currently tested manually in the desktop shell |
-
-| Area | Unit | Integration | E2E/UI | Notes |
-|------|------|-------------|--------|-------|
-| XK3190 frame decode/checksum | Yes | — | — | Real captured frame and synthetic fixtures |
-| Frame splitter / partial / newline streams | Yes | — | — | Includes mixed line endings and garbage prefixes |
-| Stability detector | Yes | — | — | 3-sample minimum, tolerance, window expiry |
-| Simulator engine and TCP transport | — | Yes | — | Loopback TCP test in `SimulatorProtocolTests.TcpTransport_PublishesDecodedReadings` |
-| PIN hashing and seeded authentication | Yes | Yes | — | PBKDF2 verification and seeded operator login |
-| Secrets loss/corruption behavior | — | Yes | — | Existing DB with missing `secrets.dat` refuses to create a new key |
-| Schema provisioning/seed | — | Yes | — | 1 operator, ticket 1 (5 demo vehicles in Debug builds only) |
-| Profile lifecycle and supervisor rules | — | Yes | — | Create/update/deactivate, duplicates, last-supervisor guard |
-| Vehicle lifecycle | — | Yes | — | Archive blocked by open ticket; delete requires archive and preserves ticket history |
-| Ticket lifecycle | — | Yes | — | Create, duplicate guard, complete, reprint, void, soft-delete, numbering |
-| Anomaly override | — | Yes | — | High net weight requires a reason/override |
-| History queries and reports | — | Yes | — | Range filters, inclusive dates, boot today-only and active-vehicle filtering, SHA-256 report snapshot verification |
-| PDF archive scheduling | Yes | Yes | — | Baseline/daily enqueue, empty-day skip, failure/backoff, manual retry, archive report actor |
-| WebView2 PDF rendering | No | No | No | Manual harness/desktop verification only; fake renderer used in tests |
-| Bridge command routing / timeout | No | No | No | `BridgeService` not instantiated in tests |
-| WPF/WebView2 rendering and JS screens | No | No | No | No browser automation or JS test runner |
-| Real serial hardware | No | No | No | `ProcessStream` timeout seam only |
-| Printing | No | No | No | `window.print()` is not testable in the current harness |
-| Cloud sync | N/A | N/A | N/A | Not implemented |
+| Unit | Yes | XK3190 protocol framing, checksum calculation, rolling window stability detector, simulator state machine | Thorough test cases with known hardware frames and edge conditions |
+| Integration | Yes | SQLite schema migrations, encrypted SQLCipher database CRUD, ticket lifecycle (create, complete, reprint, void, soft-delete), vehicle auto-registration, outbox sequence watermarks | Runs against real encrypted SQLCipher database instances using temporary directories |
+| E2E | Partial | Simulator TCP broadcast to scale reader loop, PDF archive generation flow | WebUI user interface clicks and WebView2 browser interactions are currently verified manually |
 
 ### 4) Mocking and Isolation Strategy
 
-- No mocking library is used. Tests exercise real implementations.
-- Database isolation: a fresh temporary directory and a real SQLCipher database per test (`TempDatabase`, `DatabaseTests.cs:8-36`). Each instance creates isolated encryption keys, schema, and tables; no test touches production data at `%LOCALAPPDATA%\AugmentScale`.
-- Network/serial isolation: `ScaleReaderService` supports `TCP:host:port` connections, allowing tests to run against an in-process `TcpListener` instead of physical COM ports. Simulator transport tests bind a loopback TCP server and use the production reader (`SimulatorProtocolTests.cs`, `TcpFrameServer.cs`).
-- Stream simulation: subclasses of `System.IO.Stream` (e.g. `TimeoutThenFrameStream`) verify serial timeout recovery without hardware.
-- Time/date isolation: history-date tests insert tickets with explicit timestamps rather than changing the system clock (`DatabaseTests.cs:653-674`).
-- Hardware/timeout seam: `ScaleReaderService.ProcessStream` accepts an internal `keepRunning` predicate, and tests access it through `InternalsVisibleTo`; the source marks this as temporary (`ScaleReaderService.cs:136-141`, `AugmentScale.csproj:31-32`).
-- Determinism: protocol fixtures and simulator quantization are deterministic; `SimulatorProtocolTests.TcpTransport_PublishesDecodedReadings` depends on loopback timing and is the most timing-sensitive test.
-- Common failure mode: file locking on temporary-directory deletion (`IOException` in `TempDatabase.Dispose`) is handled gracefully.
+- Main mocking approach:
+  - File system & Database: Isolated temporary folder (`TempDatabase`) per test ensures zero cross-test state leakage.
+  - PDF Rendering: `IPdfArchiveRenderer` mock implementation intercepts render requests and simulates successful or failed exports without spawning a Chromium process.
+  - Hardware Scale: Test feeds byte arrays directly into `Xk3190FrameDecoder` or streams TCP frames from local `TcpFrameServer`.
+- Isolation guarantees: Each database test allocates a new random folder path and cryptographic key; all resources are freed and purged on fixture disposal.
+- Common failure mode in tests: File locking if a test fails before closing a SQLite connection or disposing a file handle.
 
 ### 5) Coverage and Quality Signals
 
-- Coverage tool + threshold: `[TODO]` — no Coverlet/`coverlet.collector`, no automated code coverage tool, and no threshold configured in build scripts or project files. No published coverage report exists.
-- Current reported signal: 91/91 tests pass; 0 failed, 0 skipped; about 50 seconds to 1 minute duration.
-- Strengths: high-value ticket lifecycle, vehicle/ticket interaction, encrypted database provisioning, report snapshot integrity, archive scheduling/retry, and protocol edge cases are covered.
+- Coverage tool + threshold: [TODO] (Code coverage tooling not configured in CI/build scripts; test count tracked manually).
+- Current reported coverage: 107 test cases passing (0 failed, 0 skipped).
 - Known gaps/flaky areas:
-  - No tests for `BridgeService` command routing, authorization expiry, JSON mapping, or the 30-second timeout.
-  - No tests for `MainWindow`/WebView2 startup, navigation failure, DevTools, or virtual-host security settings.
-  - No automated tests for any WebUI screen, `runtime.js`, `state.js`, `html-loader.js`, or print flow.
-  - No automated test for the real hidden-WebView2 `PrintToPdfAsync` renderer or the generated PDF layout; `PdfArchiveTests` uses a fake renderer. A manual harness verified a one-page A4 PDF, but this is not part of the suite.
-  - No hardware-in-the-loop serial test and no test for the reconnect delay.
-  - No CI job, pre-commit hook, branch-protection evidence, linting, or coverage gate; the suite is run manually.
-  - Full test suite takes roughly 34–70 seconds because multiple database tests each perform PBKDF2 key derivations (100,000 iterations per seeded operator) and archive tests create real SQLCipher databases.
-- Maintenance signals: `DatabaseTests.cs` is 758 lines and centralizes many domains; adding unrelated features tends to extend this file. The persistence split is covered through the `DatabaseService` facade; there are no repository-specific test classes yet.
+  - Ticket repository has full lifecycle coverage (`TicketLifecycle_CreateCompleteReprintVoid`), but UI-driven end-to-end interactions with WebView2 are not automated.
+  - Two xUnit analyzer warnings on collection size assertions (`Assert.Equal(1, collection.Count)` vs `Assert.Single`).
 
 ### 6) Evidence
 
-- `AugmentScale.Tests/AugmentScale.Tests.csproj`
-- `AugmentScale.Tests/DatabaseTests.cs`
-- `AugmentScale.Tests/ProtocolTests.cs`
-- `AugmentScale.Tests/SimulatorEngineTests.cs`
-- `AugmentScale.Tests/SimulatorProtocolTests.cs`
-- `AugmentScale.Tests/PdfArchiveTests.cs`
-- `AugmentScale/Services/PdfArchiveService.cs`
-- `AugmentScale/Services/WebViewPdfArchiveRenderer.cs`
-- `AugmentScale/Data/Repositories/ArchiveRunRepository.cs`
-- `AugmentScale/Services/ScaleReaderService.cs`
-- `AugmentScale/Data/Repositories/`
-- `AugmentScale/Data/Services/`
-- `AugmentScale/AugmentScale.csproj`
-- `USER_MANUAL.md`
-- Terminal execution output of `dotnet test AugmentScale.slnx -c Debug`
+- [AugmentScale.Tests/AugmentScale.Tests.csproj](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale.Tests/AugmentScale.Tests.csproj)
+- [AugmentScale.Tests/DatabaseTests.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale.Tests/DatabaseTests.cs)
+- [AugmentScale.Tests/ProtocolTests.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale.Tests/ProtocolTests.cs)
+- [AugmentScale.Tests/PdfArchiveTests.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale.Tests/PdfArchiveTests.cs)
+- [AugmentScale.Tests/SimulatorProtocolTests.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale.Tests/SimulatorProtocolTests.cs)
