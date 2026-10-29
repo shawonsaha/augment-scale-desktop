@@ -49,7 +49,7 @@
 
 ### 5) Known Architectural Risks
 
-- Outbox queue stall on permanent failure: In `CloudControlService.cs`, an error on any outbox sync event causes an immediate `break;`, leaving the failed event `pending` and blocking subsequent records without an automatic dead-letter path.
+- Outbox queue stall on permanent failure: [Resolved] Previously, an error on any outbox sync event caused an immediate break, leaving the failed event pending indefinitely. CloudControlService now tracks retry attempts against `MaxOutboxAttempts` (10). Repeatedly failing events transition to `dead_letter` status (supported via `V006_OutboxDeadLetterStatus.sql` schema migration), logging `AppLog.Error` and allowing the queue worker to proceed to subsequent events without head-of-line blocking.
 - Single workstation process model: The application assumes a single exclusive workstation lock per machine (`Local\AugmentScale.SingleInstance`).
 
 ### 6) Evidence

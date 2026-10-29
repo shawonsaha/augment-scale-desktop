@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Data;
 using System.Globalization;
 using System.Net.Http;
@@ -18,6 +18,8 @@ namespace AugmentScale.Services;
 /// </summary>
 public sealed class CloudControlService : IDisposable
 {
+    public const int MaxOutboxAttempts = 10;
+
     private static readonly HashSet<string> BooleanColumns = new(StringComparer.OrdinalIgnoreCase)
     {
         "license_active", "enable_cloud_sync", "enable_cloud_backup", "trigger_immediate_backup",
@@ -839,10 +841,17 @@ public sealed class CloudControlService : IDisposable
                 }
                 else
                 {
-                    MarkOutboxFailed(evt.Id, errorMessage ?? "HTTP error", nowStr);
-                    AppLog.Warn($"Cloud: Outbox event #{evt.Sequence} ({evt.EntityType}) failed: {errorMessage}");
-                    hasFailure = true;
-                    break;
+                    var deadLettered = MarkOutboxFailed(evt.Id, evt.Attempts, errorMessage ?? "HTTP error", nowStr);
+                    if (deadLettered)
+                    {
+                        AppLog.Error($"Cloud: Outbox event #{evt.Sequence} ({evt.EntityType}) reached max retry attempts ({MaxOutboxAttempts}) and transitioned to 'dead_letter': {errorMessage}");
+                    }
+                    else
+                    {
+                        AppLog.Warn($"Cloud: Outbox event #{evt.Sequence} ({evt.EntityType}) attempt {evt.Attempts + 1}/{MaxOutboxAttempts} failed: {errorMessage}");
+                        hasFailure = true;
+                        break;
+                    }
                 }
             }
 
@@ -1110,7 +1119,7 @@ public sealed class CloudControlService : IDisposable
         using var conn = _database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT id, sequence, entity_type, entity_id, operation, payload
+            SELECT id, sequence, entity_type, entity_id, operation, payload, attempts
             FROM outbox_events
             WHERE status = 'pending'
             ORDER BY sequence ASC
@@ -1127,7 +1136,8 @@ public sealed class CloudControlService : IDisposable
                 reader.GetString(2),
                 reader.GetString(3),
                 reader.GetString(4),
-                reader.GetString(5)));
+                reader.GetString(5),
+                reader.GetInt32(6)));
         }
 
         return list;
@@ -1163,19 +1173,27 @@ public sealed class CloudControlService : IDisposable
         txn.Commit();
     }
 
-    private void MarkOutboxFailed(string id, string error, string nowStr)
+    private bool MarkOutboxFailed(string id, int currentAttempts, string error, string nowStr)
     {
+        var newAttempts = currentAttempts + 1;
+        var deadLettered = newAttempts >= MaxOutboxAttempts;
+        var newStatus = deadLettered ? "dead_letter" : "pending";
+
         using var conn = _database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             UPDATE outbox_events
-            SET attempts = attempts + 1, last_attempt_at = $now, server_response = $err
+            SET status = $status, attempts = $attempts, last_attempt_at = $now, server_response = $err
             WHERE id = $id;
             """;
+        cmd.Parameters.AddWithValue("$status", newStatus);
+        cmd.Parameters.AddWithValue("$attempts", newAttempts);
         cmd.Parameters.AddWithValue("$now", nowStr);
         cmd.Parameters.AddWithValue("$err", error.Length > 300 ? error[..300] : error);
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
+
+        return deadLettered;
     }
 
     private int GetPendingOutboxCount()
@@ -1257,5 +1275,5 @@ public sealed class CloudControlService : IDisposable
         _http.Dispose();
     }
 
-    private sealed record OutboxEventRecord(string Id, int Sequence, string EntityType, string EntityId, string Operation, string Payload);
+    private sealed record OutboxEventRecord(string Id, int Sequence, string EntityType, string EntityId, string Operation, string Payload, int Attempts);
 }

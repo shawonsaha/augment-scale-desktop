@@ -36,7 +36,7 @@
 
 - Retry/backoff behavior:
   - Scale Reader: If disconnected, enters automatic reconnect loop checking port availability every 1 second.
-  - Cloud Sync: If sync fails or network drops, outbox worker records error in `last_error` and retries on next heartbeat interval or manual operator trigger (`syncNow`).
+  - Cloud Sync: If sync fails or network drops, outbox worker records error in `last_error` and retries on next heartbeat interval or manual operator trigger (`syncNow`). Repeatedly failing events (attempts >= 10) transition to `dead_letter` status (enabled via `V006_OutboxDeadLetterStatus.sql` migration) and are recorded with error payloads in `server_response` to prevent stalling subsequent pending outbox events.
   - PDF Archiving: Interrupted or failed PDF renders remain recorded in `archive_runs` as `failed` and are automatically retried on next application startup.
 - Timeout policy:
   - SQLite: `busy_timeout` set to 5000ms (`PRAGMA busy_timeout = 5000;`).

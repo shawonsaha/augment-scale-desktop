@@ -686,6 +686,164 @@ public class CloudControlServiceTests
         }
     }
 
+    [Fact]
+    public void SchemaV006_AllowsDeadLetterStatusInCheckConstraint()
+    {
+        using var temp = new TempDatabase();
+        using var conn = temp.Database.OpenConnection();
+
+        // Verify version 6 is recorded in schema_version
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM schema_version WHERE version = 6;";
+            var count = Convert.ToInt32(cmd.ExecuteScalar());
+            Assert.Equal(1, count);
+        }
+
+        // Verify inserting an outbox row with 'dead_letter' status is permitted by the CHECK constraint
+        using (var insert = conn.CreateCommand())
+        {
+            insert.CommandText = """
+                INSERT INTO outbox_events (
+                    id, sequence, entity_type, entity_id, operation, payload, workstation_id, operator_id, attempts, status, created_at
+                ) VALUES (
+                    'evt-dl-test', 99998, 'vehicles', 'veh-dl', 'insert', '{}', 'ws-1', 'op-1', 10, 'dead_letter', datetime('now')
+                );
+                """;
+            insert.ExecuteNonQuery();
+        }
+
+        using (var query = conn.CreateCommand())
+        {
+            query.CommandText = "SELECT status FROM outbox_events WHERE id = 'evt-dl-test';";
+            Assert.Equal("dead_letter", query.ExecuteScalar() as string);
+        }
+    }
+
+    [Fact]
+    public async Task CloudControlService_OutboxFailure_ReachesMaxAttempts_TransitionsToDeadLetter_AndUnblocksQueue()
+    {
+        using var temp = new TempDatabase();
+
+        // Seed 2 outbox events:
+        // Event 1 (sequence 1): failing vehicle, already attempted 9 times
+        // Event 2 (sequence 2): valid vehicle, attempted 0 times
+        using (var conn = temp.Database.OpenConnection())
+        {
+            using var txn = conn.BeginTransaction();
+            using var cmd1 = conn.CreateCommand();
+            cmd1.Transaction = txn;
+            cmd1.CommandText = """
+                INSERT INTO outbox_events (
+                    id, sequence, entity_type, entity_id, operation, payload, workstation_id, operator_id, attempts, status, created_at
+                ) VALUES (
+                    'evt-fail-1', 1, 'vehicles', 'veh-fail-1', 'insert', '{"plateNumber":"FAIL-01"}', 'ws-1', 'op-1', 9, 'pending', datetime('now')
+                );
+                """;
+            cmd1.ExecuteNonQuery();
+
+            using var cmd2 = conn.CreateCommand();
+            cmd2.Transaction = txn;
+            cmd2.CommandText = """
+                INSERT INTO outbox_events (
+                    id, sequence, entity_type, entity_id, operation, payload, workstation_id, operator_id, attempts, status, created_at
+                ) VALUES (
+                    'evt-success-2', 2, 'vehicles', 'veh-succ-2', 'insert', '{"plateNumber":"SUCC-02"}', 'ws-1', 'op-1', 0, 'pending', datetime('now')
+                );
+                """;
+            cmd2.ExecuteNonQuery();
+
+            using var seedVeh = conn.CreateCommand();
+            seedVeh.Transaction = txn;
+            seedVeh.CommandText = """
+                INSERT INTO vehicles (id, organization_id, plate_number, plate_normalized, created_at, updated_at)
+                VALUES ('veh-fail-1', $org, 'FAIL-01', 'FAIL01', datetime('now'), datetime('now')),
+                       ('veh-succ-2', $org, 'SUCC-02', 'SUCC02', datetime('now'), datetime('now'));
+                """;
+            seedVeh.Parameters.AddWithValue("$org", temp.Database.OrganizationId);
+            seedVeh.ExecuteNonQuery();
+
+            // Mark bootstrap completed so it streams outbox directly
+            using var bootCmd = conn.CreateCommand();
+            bootCmd.Transaction = txn;
+            bootCmd.CommandText = "UPDATE license_cache SET bootstrap_completed = 1 WHERE id = 'current';";
+            bootCmd.ExecuteNonQuery();
+
+            txn.Commit();
+        }
+
+        var handler = new MockSupabaseHandler(req =>
+        {
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("workstation_controls"))
+            {
+                var json = """
+                    [
+                        {
+                            "workstation_id": "test-ws",
+                            "organization_id": "test-org",
+                            "license_active": true,
+                            "enable_cloud_sync": true,
+                            "enable_cloud_backup": false,
+                            "trigger_immediate_backup": false
+                        }
+                    ]
+                    """;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.Contains("vehicles"))
+            {
+                // Fail veh-fail-1 with 400 Bad Request
+                var content = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? "";
+                if (content.Contains("FAIL-01"))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    {
+                        Content = new StringContent("{\"error\":\"Invalid vehicle format\"}", Encoding.UTF8, "application/json")
+                    };
+                }
+
+                // Succeed for valid vehicle
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var cloud = new CloudControlService(temp.Database, temp.Config, httpClient);
+
+        await cloud.SyncNowAsync();
+
+        using (var conn = temp.Database.OpenConnection())
+        {
+            // Verify event 1 transitioned to 'dead_letter' with 10 attempts
+            using var check1 = conn.CreateCommand();
+            check1.CommandText = "SELECT status, attempts, server_response FROM outbox_events WHERE id = 'evt-fail-1';";
+            using var r1 = check1.ExecuteReader();
+            Assert.True(r1.Read());
+            Assert.Equal("dead_letter", r1.GetString(0));
+            Assert.Equal(10, r1.GetInt32(1));
+            Assert.Contains("Invalid vehicle format", r1.GetString(2));
+
+            // Verify event 2 synced and is 'accepted' (proving the queue was NOT stalled by event 1!)
+            using var check2 = conn.CreateCommand();
+            check2.CommandText = "SELECT status, attempts FROM outbox_events WHERE id = 'evt-success-2';";
+            using var r2 = check2.ExecuteReader();
+            Assert.True(r2.Read());
+            Assert.Equal("accepted", r2.GetString(0));
+        }
+    }
+
     private sealed class MockSupabaseHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;

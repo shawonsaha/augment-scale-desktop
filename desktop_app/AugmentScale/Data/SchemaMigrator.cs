@@ -125,6 +125,25 @@ internal static class SchemaMigrator
             record.ExecuteNonQuery();
             txn.Commit();
         }
+
+        if (!appliedVersions.Contains(6))
+        {
+            var sql = ReadEmbeddedSql("V006_OutboxDeadLetterStatus.sql");
+            using var txn = connection.BeginTransaction();
+            foreach (var statement in sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (string.IsNullOrWhiteSpace(statement)) continue;
+                using var apply = connection.CreateCommand();
+                apply.Transaction = txn;
+                apply.CommandText = statement;
+                apply.ExecuteNonQuery();
+            }
+            using var record = connection.CreateCommand();
+            record.Transaction = txn;
+            record.CommandText = "INSERT INTO schema_version (version, name) VALUES (6, 'OutboxDeadLetterStatus');";
+            record.ExecuteNonQuery();
+            txn.Commit();
+        }
     }
 
     private static string ReadEmbeddedSql(string suffix)

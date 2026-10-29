@@ -58,7 +58,7 @@ internal static class DatabaseMaintenance
 
         Prune(connection, "outbox_events",
             $"""
-            status IN ('rejected', 'conflict')
+            status IN ('rejected', 'conflict', 'dead_letter')
               AND entity_type NOT IN ({BackfillTrackedTypes})
               AND julianday(created_at) < julianday($cutoff)
             """,

@@ -9,7 +9,7 @@
 - Commands:
 
 ```bash
-# Run all tests in the solution (107 unit and integration tests)
+# Run all tests in the solution (112 unit and integration tests)
 dotnet test AugmentScale.slnx
 
 # Run specific test file or namespace
@@ -31,7 +31,7 @@ dotnet test AugmentScale.slnx --logger "console;verbosity=detailed"
 | Scope | Covered? | Typical target | Notes |
 |-------|----------|----------------|-------|
 | Unit | Yes | XK3190 protocol framing, checksum calculation, rolling window stability detector, simulator state machine | Thorough test cases with known hardware frames and edge conditions |
-| Integration | Yes | SQLite schema migrations, encrypted SQLCipher database CRUD, ticket lifecycle (create, complete, reprint, void, soft-delete), vehicle auto-registration, outbox sequence watermarks | Runs against real encrypted SQLCipher database instances using temporary directories |
+| Integration | Yes | SQLite schema migrations (V001-V006), encrypted SQLCipher database CRUD, ticket lifecycle (create, complete, reprint, void, soft-delete), vehicle auto-registration, outbox sequence watermarks, outbox dead-letter queue unblocking | Runs against real encrypted SQLCipher database instances using temporary directories |
 | E2E | Partial | Simulator TCP broadcast to scale reader loop, PDF archive generation flow | WebUI user interface clicks and WebView2 browser interactions are currently verified manually |
 
 ### 4) Mocking and Isolation Strategy
@@ -46,7 +46,7 @@ dotnet test AugmentScale.slnx --logger "console;verbosity=detailed"
 ### 5) Coverage and Quality Signals
 
 - Coverage tool + threshold: [TODO] (Code coverage tooling not configured in CI/build scripts; test count tracked manually).
-- Current reported coverage: 107 test cases passing (0 failed, 0 skipped).
+- Current reported coverage: 112 test cases passing (0 failed, 0 skipped).
 - Known gaps/flaky areas:
   - Ticket repository has full lifecycle coverage (`TicketLifecycle_CreateCompleteReprintVoid`), but UI-driven end-to-end interactions with WebView2 are not automated.
   - Two xUnit analyzer warnings on collection size assertions (`Assert.Equal(1, collection.Count)` vs `Assert.Single`).

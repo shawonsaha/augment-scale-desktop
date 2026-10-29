@@ -1,5 +1,5 @@
--- Augment Scale — local SQLite schema (Phase 1)
--- Mirrors Database_Design.md §Table Definitions. Cloud-only tables
+﻿-- Augment Scale â€” local SQLite schema (Phase 1)
+-- Mirrors Database_Design.md Â§Table Definitions. Cloud-only tables
 -- (sync_changes, device_events) are intentionally excluded.
 
 PRAGMA foreign_keys = ON;
@@ -338,7 +338,7 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     reason          TEXT,
     device_signature TEXT,
     status          TEXT NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending', 'sent', 'accepted', 'rejected', 'conflict')),
+                    CHECK (status IN ('pending', 'sent', 'accepted', 'rejected', 'conflict', 'dead_letter')),
     server_response TEXT,
     attempts        INTEGER NOT NULL DEFAULT 0,
     last_attempt_at TEXT,
@@ -392,7 +392,7 @@ SELECT
 FROM weigh_tickets t;
 
 -- ---------------------------------------------------------------------------
--- Indexes (Database_Design.md §Indexes).
+-- Indexes (Database_Design.md Â§Indexes).
 -- ---------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON weigh_tickets(status) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_tickets_plate ON weigh_tickets(plate_number, status) WHERE deleted_at IS NULL;
