@@ -9,34 +9,12 @@ import {
   Truck, 
   HardDriveDownload, 
   LogOut, 
-  Clock,
-  Radio,
-  User
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { RealtimeControls } from '@/components/realtime-controls';
 
 export function DashboardHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const [time, setTime] = useState<string>('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setTime(
-        new Intl.DateTimeFormat('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-          timeZone: 'Asia/Dhaka',
-        }).format(now)
-      );
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -101,12 +79,8 @@ export function DashboardHeader() {
 
         {/* Right Info & Profile Actions */}
         <div className="flex items-center gap-3">
-          {/* Realtime Dhaka Clock */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-900/60 border border-white/5 text-slate-300 font-mono text-xs num-tabular">
-            <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span>{time || '--:--:--'}</span>
-            <span className="text-[10px] text-slate-500 font-sans">Dhaka</span>
-          </div>
+          {/* Hybrid Realtime & Auto-Refresh Controls */}
+          <RealtimeControls />
 
           {/* Operator Badge */}
           <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-white/8">

@@ -247,13 +247,12 @@ export function LiveActivityStream({
               <th className="py-3 px-4 w-[200px]">SECOND WEIGHT</th>
               <th className="py-3 px-4 w-[140px]">NET</th>
               <th className="py-3 px-4">STATUS</th>
-              <th className="py-3 px-4 text-right w-[90px]">PRINTS</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5 font-sans">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-slate-500">
+                <td colSpan={6} className="py-12 text-center text-slate-500">
                   <p className="text-sm">No tickets found for this period.</p>
                   <p className="text-xs text-slate-600 mt-1">Try switching date range to &quot;All time&quot; or clearing search filters.</p>
                 </td>
@@ -265,7 +264,6 @@ export function LiveActivityStream({
                 const isVoided = status === 'voided';
                 const hasNet = t.net_weight_kg !== null && t.net_weight_kg !== undefined;
                 const isNegativeOrZeroNet = hasNet && (t.net_weight_kg as number) <= 0;
-                const printCount = Math.max(1, Number(t.print_count) || 0);
 
                 return (
                   <tr
@@ -416,21 +414,6 @@ export function LiveActivityStream({
                           </span>
                         )}
                       </div>
-                    </td>
-
-                    {/* PRINTS */}
-                    <td className="py-3.5 px-4 align-top text-right">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-mono text-[11px] border',
-                          printCount > 1
-                            ? 'bg-amber-500/15 border-amber-500/35 text-amber-300 font-semibold'
-                            : 'bg-slate-900 border-white/10 text-slate-400'
-                        )}
-                      >
-                        <Printer className="w-3 h-3 text-amber-400/80" />
-                        {printCount}
-                      </span>
                     </td>
                   </tr>
                 );
