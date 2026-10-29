@@ -1,40 +1,42 @@
 export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server';
-import { WorkstationStatusPill } from '@/components/workstation-status-pill';
-import { StatsCards } from '@/components/stats-cards';
-import { ActivityChart } from '@/components/activity-chart';
-import { LiveActivityStream } from '@/components/live-activity-stream';
-import { WeighTicket, Workstation, Weighbridge } from '@/lib/types';
+import { WeighTicket, Workstation, Weighbridge, PrintJobEntry } from '@/lib/types';
+import { DashboardView } from '@/components/dashboard-view';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  const [ticketsRes, workstationRes, weighbridgeRes] = await Promise.all([
+  const [ticketsRes, workstationRes, weighbridgeRes, printJobsRes] = await Promise.all([
     supabase
-      .from('weigh_tickets')
+      .from('ticket_history')
       .select('*')
       .order('ticket_number', { ascending: false }),
     supabase.from('workstations').select('*').limit(1).maybeSingle(),
     supabase.from('weighbridges').select('*').limit(1).maybeSingle(),
+    supabase.from('print_jobs').select('*'),
   ]);
 
-  const tickets = (ticketsRes.data || []) as WeighTicket[];
+  const rawTickets = (ticketsRes.data || []) as WeighTicket[];
+  const printJobs = (printJobsRes.data || []) as PrintJobEntry[];
+
+  // Attach print_jobs to corresponding tickets
+  const tickets: WeighTicket[] = rawTickets.map((t) => {
+    const jobs = printJobs.filter((pj) => pj.ticket_id === t.id);
+    return {
+      ...t,
+      print_jobs: jobs,
+      print_count: Math.max(t.print_count || 0, jobs.length),
+    };
+  });
+
   const workstation = workstationRes.data as Workstation | null;
   const weighbridge = weighbridgeRes.data as Weighbridge | null;
 
   return (
-    <div className="space-y-6">
-      {/* Live Scale & Workstation Health Strip */}
-      <WorkstationStatusPill workstation={workstation} weighbridge={weighbridge} />
-
-      {/* Key Performance Indicators */}
-      <StatsCards tickets={tickets} />
-
-      {/* Middle Row: Analytics Chart & Live Monitor */}
-      <ActivityChart tickets={tickets} />
-
-      {/* Live Activity Stream & Inspection Table */}
-      <LiveActivityStream initialTickets={tickets} />
-    </div>
+    <DashboardView
+      initialTickets={tickets}
+      workstation={workstation}
+      weighbridge={weighbridge}
+    />
   );
 }

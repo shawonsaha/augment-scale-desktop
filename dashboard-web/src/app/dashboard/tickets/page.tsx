@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server';
-import { WeighTicket } from '@/lib/types';
+import { WeighTicket, PrintJobEntry } from '@/lib/types';
 import { LiveActivityStream } from '@/components/live-activity-stream';
 import { HardDriveDownload } from 'lucide-react';
 import Link from 'next/link';
@@ -8,10 +8,25 @@ import Link from 'next/link';
 export default async function TicketsPage() {
   const supabase = await createClient();
 
-  const { data: tickets } = await supabase
-    .from('weigh_tickets')
-    .select('*')
-    .order('ticket_number', { ascending: false });
+  const [ticketsRes, printJobsRes] = await Promise.all([
+    supabase
+      .from('ticket_history')
+      .select('*')
+      .order('ticket_number', { ascending: false }),
+    supabase.from('print_jobs').select('*'),
+  ]);
+
+  const rawTickets = (ticketsRes.data || []) as WeighTicket[];
+  const printJobs = (printJobsRes.data || []) as PrintJobEntry[];
+
+  const tickets: WeighTicket[] = rawTickets.map((t) => {
+    const jobs = printJobs.filter((pj) => pj.ticket_id === t.id);
+    return {
+      ...t,
+      print_jobs: jobs,
+      print_count: Math.max(t.print_count || 0, jobs.length),
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -22,7 +37,7 @@ export default async function TicketsPage() {
             Weight Tickets Ledger
           </h1>
           <p className="text-xs text-slate-400">
-            Comprehensive audit registry for all weighbridge captures and transactions.
+            Comprehensive audit registry for all weighbridge captures, overrides, and transactions.
           </p>
         </div>
 
@@ -38,7 +53,7 @@ export default async function TicketsPage() {
       </div>
 
       {/* Tickets Ledger Table */}
-      <LiveActivityStream initialTickets={(tickets || []) as WeighTicket[]} />
+      <LiveActivityStream initialTickets={tickets} />
     </div>
   );
 }

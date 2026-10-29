@@ -60,6 +60,18 @@ export interface WeighTicket {
   print_count?: number;
   first_operator_avatar?: string | null;
   second_operator_avatar?: string | null;
+  print_jobs?: PrintJobEntry[];
+}
+
+export interface PrintJobEntry {
+  id: string;
+  ticket_id: string;
+  document_type: string;
+  is_reprint: boolean;
+  copy_number: number;
+  reprint_reason?: string | null;
+  printed_by?: string | null;
+  printed_at: string;
 }
 
 export interface Vehicle {
