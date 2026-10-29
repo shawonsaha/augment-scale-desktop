@@ -46,11 +46,20 @@ New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
 
 # The app copies Resources\setup.json into the data directory on first run; do it up front so the port can be set.
 $setupPath = Join-Path $DataDir 'setup.json'
-if (-not (Test-Path -LiteralPath $setupPath)) {
-    Copy-Item -LiteralPath $setupTemplate -Destination $setupPath
+if (-not (Test-Path -LiteralPath $setupPath) -or (Get-Item -LiteralPath $setupPath).Length -eq 0) {
+    Copy-Item -LiteralPath $setupTemplate -Destination $setupPath -Force
 }
 
-$setup = Get-Content -LiteralPath $setupPath -Raw | ConvertFrom-Json
+$setup = $null
+try {
+    $setup = Get-Content -LiteralPath $setupPath -Raw | ConvertFrom-Json
+}
+catch {
+    Write-Warning "setup.json is not valid JSON. Replacing with template from Resources\setup.json: $setupPath"
+    Copy-Item -LiteralPath $setupTemplate -Destination $setupPath -Force
+    $setup = Get-Content -LiteralPath $setupPath -Raw | ConvertFrom-Json
+}
+
 if ($null -eq $setup -or $null -eq $setup.scaleConnection) {
     throw "setup.json has no scaleConnection section: $setupPath"
 }

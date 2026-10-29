@@ -163,12 +163,12 @@ public sealed class ConfigService
 
     private SetupConfig LoadOrCreateSetup()
     {
-        if (!File.Exists(_setupPath))
+        if (!File.Exists(_setupPath) || new FileInfo(_setupPath).Length == 0)
         {
             var template = Path.Combine(AppContext.BaseDirectory, "Resources", "setup.json");
             if (File.Exists(template))
             {
-                File.Copy(template, _setupPath, overwrite: false);
+                File.Copy(template, _setupPath, overwrite: true);
             }
             else
             {

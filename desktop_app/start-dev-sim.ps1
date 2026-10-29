@@ -119,11 +119,20 @@ if ($BackupDatabase) {
     Write-Host "Backup         : $backupDir"
 }
 
-if (-not (Test-Path -LiteralPath $setupPath)) {
-    Copy-Item -LiteralPath (Join-Path $root 'AugmentScale\Resources\setup.json') -Destination $setupPath
+if (-not (Test-Path -LiteralPath $setupPath) -or (Get-Item -LiteralPath $setupPath).Length -eq 0) {
+    Copy-Item -LiteralPath (Join-Path $root 'AugmentScale\Resources\setup.json') -Destination $setupPath -Force
 }
 
-$setup = Get-Content -LiteralPath $setupPath -Raw | ConvertFrom-Json
+$setup = $null
+try {
+    $setup = Get-Content -LiteralPath $setupPath -Raw | ConvertFrom-Json
+}
+catch {
+    Write-Warning "setup.json is not valid JSON. Replacing with template from Resources\setup.json: $setupPath"
+    Copy-Item -LiteralPath (Join-Path $root 'AugmentScale\Resources\setup.json') -Destination $setupPath -Force
+    $setup = Get-Content -LiteralPath $setupPath -Raw | ConvertFrom-Json
+}
+
 if ($null -eq $setup -or $null -eq $setup.scaleConnection) {
     throw "setup.json does not contain a scaleConnection section: $setupPath"
 }
