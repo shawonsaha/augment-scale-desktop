@@ -52,6 +52,13 @@ public class SetupConfigTests
         // Cloud
         Assert.Equal(expected.Cloud.SupabaseUrl, fresh.Cloud.SupabaseUrl);
         Assert.Equal(expected.Cloud.SupabaseAnonKey, fresh.Cloud.SupabaseAnonKey);
+
+        // Security guard: source code defaults must NEVER contain real credentials
+        Assert.True(string.IsNullOrEmpty(fresh.Cloud.SupabaseUrl),
+            "CloudSetup.SupabaseUrl must be empty in source code defaults. Real values go in setup.json on deployed machines.");
+        Assert.True(string.IsNullOrEmpty(fresh.Cloud.SupabaseAnonKey),
+            "CloudSetup.SupabaseAnonKey must be empty in source code defaults. Real values go in setup.json on deployed machines.");
+
         Assert.Equal(expected.Cloud.HeartbeatIntervalSeconds, fresh.Cloud.HeartbeatIntervalSeconds);
         Assert.Equal(expected.Cloud.LicenseGraceDays, fresh.Cloud.LicenseGraceDays);
 
@@ -68,6 +75,47 @@ public class SetupConfigTests
             Assert.Equal(expected.Operators[i].Avatar, fresh.Operators[i].Avatar);
             Assert.Equal(expected.Operators[i].Color, fresh.Operators[i].Color);
             Assert.Equal(expected.Operators[i].Pin, fresh.Operators[i].Pin);
+        }
+    }
+
+    [Fact]
+    public void ProvisionCloudCredentials_MigratesPlaintextFromSetupJson_AndBlanksSetupJson()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "AugmentScaleTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var setup = new SetupConfig
+            {
+                Cloud = new CloudSetup
+                {
+                    SupabaseUrl = "https://custom.supabase.co",
+                    SupabaseAnonKey = "custom-anon-key-12345"
+                }
+            };
+            var setupPath = Path.Combine(tempDir, "setup.json");
+            File.WriteAllText(setupPath, JsonSerializer.Serialize(setup, new JsonSerializerOptions { WriteIndented = true }));
+
+            var config = new AugmentScale.Services.ConfigService(tempDir);
+            config.EnsureInitialized();
+
+            // Credentials should be in ConfigService (from DPAPI secrets)
+            Assert.Equal("https://custom.supabase.co", config.SupabaseUrl);
+            Assert.Equal("custom-anon-key-12345", config.SupabaseAnonKey);
+
+            // setup.json on disk must have credentials blanked
+            var updatedJson = File.ReadAllText(setupPath);
+            var updatedSetup = JsonSerializer.Deserialize<SetupConfig>(updatedJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+            Assert.NotNull(updatedSetup);
+            Assert.True(string.IsNullOrEmpty(updatedSetup.Cloud.SupabaseUrl));
+            Assert.True(string.IsNullOrEmpty(updatedSetup.Cloud.SupabaseAnonKey));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
         }
     }
 }

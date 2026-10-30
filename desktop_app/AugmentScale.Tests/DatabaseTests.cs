@@ -14,6 +14,7 @@ public sealed class TempDatabase : IDisposable
         DataDirectory = Path.Combine(Path.GetTempPath(), "AugmentScaleTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(DataDirectory);
         Config = new ConfigService(DataDirectory);
+        Config.SetCloudCredentials("https://test.supabase.co", "test-anon-key");
         Database = new DatabaseService(Config);
         Database.EnsureInitialized();
     }

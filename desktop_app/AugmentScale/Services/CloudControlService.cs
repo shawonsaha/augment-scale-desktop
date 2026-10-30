@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Data;
 using System.Globalization;
 using System.Net.Http;
@@ -83,6 +83,7 @@ public sealed class CloudControlService : IDisposable
     public DateTimeOffset? LastHeartbeatAt { get; private set; }
     public DateTimeOffset? LastSyncAt { get; private set; }
     public string? LastError { get; private set; }
+    public UpdateService? Updater { get; set; }
 
     /// <summary>Raised whenever cloud sync state or outbox status updates.</summary>
     public event Action<SyncStatusDto>? StatusChanged;
@@ -247,8 +248,9 @@ public sealed class CloudControlService : IDisposable
         {
             _database.EnsureInitialized();
 
-            var cloudConfig = _config.Setup.Cloud;
-            if (string.IsNullOrWhiteSpace(cloudConfig.SupabaseUrl) || string.IsNullOrWhiteSpace(cloudConfig.SupabaseAnonKey))
+            var supabaseUrl = _config.SupabaseUrl;
+            var supabaseAnonKey = _config.SupabaseAnonKey;
+            if (string.IsNullOrWhiteSpace(supabaseUrl) || string.IsNullOrWhiteSpace(supabaseAnonKey))
             {
                 lock (_stateGate)
                 {
@@ -258,8 +260,8 @@ public sealed class CloudControlService : IDisposable
                 return;
             }
 
-            var baseUrl = cloudConfig.SupabaseUrl.TrimEnd('/');
-            var apiKey = cloudConfig.SupabaseAnonKey.Trim();
+            var baseUrl = supabaseUrl.TrimEnd('/');
+            var apiKey = supabaseAnonKey.Trim();
 
             // Step 1: Heartbeat & Remote Controls
             var controlsSuccess = await ProcessWorkstationControlsAsync(baseUrl, apiKey, ct);
@@ -375,6 +377,10 @@ public sealed class CloudControlService : IDisposable
             }
 
             UpdateLocalCursorCloudStatus(Status);
+            if (Updater != null && !string.IsNullOrWhiteSpace(minAppVersion))
+            {
+                Updater.TriggerCheck();
+            }
             AppLog.Info($"Cloud: Controls read OK — license={licenseActive}, sync={enableCloudSync}");
             return true;
         }
@@ -395,7 +401,7 @@ public sealed class CloudControlService : IDisposable
         var payload = new
         {
             last_heartbeat_at = DateTimeOffset.UtcNow.ToString("O"),
-            app_version = "1.0.0",
+            app_version = Updater?.CurrentVersion ?? "1.0.0",
             hostname = Environment.MachineName,
             outbox_pending_count = pendingCount,
         };
@@ -424,7 +430,7 @@ public sealed class CloudControlService : IDisposable
             license_active = true,
             enable_cloud_sync = true,
             enable_cloud_backup = false,
-            app_version = "1.0.0",
+            app_version = Updater?.CurrentVersion ?? "1.0.0",
             last_startup_at = DateTimeOffset.UtcNow.ToString("O"),
             last_heartbeat_at = DateTimeOffset.UtcNow.ToString("O"),
             outbox_pending_count = pendingCount,

@@ -40,6 +40,24 @@ public sealed class BridgeService
     public event Action<string>? ThemeChanged;
 
     public PdfArchiveService? Archive { get; set; }
+
+    private UpdateService? _updater;
+    public UpdateService? Updater
+    {
+        get => _updater;
+        set
+        {
+            if (_updater is not null)
+            {
+                _updater.StatusChanged -= OnUpdateStatusChanged;
+            }
+            _updater = value;
+            if (_updater is not null)
+            {
+                _updater.StatusChanged += OnUpdateStatusChanged;
+            }
+        }
+    }
     private CloudControlService? _cloud;
     public CloudControlService? Cloud
     {
@@ -268,6 +286,24 @@ public sealed class BridgeService
                     ? await Cloud.SyncNowAsync()
                     : _database.GetSyncStatus();
 
+            case "getUpdateStatus":
+                return Updater?.GetUpdateStatus() ?? new UpdateStatusDto("idle", "1.0.0", null, 0, null, false);
+
+            case "checkForUpdate":
+            {
+                if (Updater is null) return new { success = false, message = "Updater unavailable" };
+                var targetVer = await Updater.CheckForUpdatesAsync(autoDownload: true);
+                return new { success = true, targetVersion = targetVer };
+            }
+
+            case "applyUpdateAndRestart":
+            {
+                if (Updater is null) throw new InvalidOperationException("Updater is not ready.");
+                var req = Deserialize<ApplyUpdateRequest>(payload);
+                Updater.ApplyUpdatesAndRestart(req?.Force ?? false);
+                return new { success = true };
+            }
+
             case "retryArchive":
             {
                 var archive = Archive
@@ -474,6 +510,16 @@ public sealed class BridgeService
         RunOnUi(() =>
         {
             var script = $"window.ScaleApp && window.ScaleApp.onSyncStatus && window.ScaleApp.onSyncStatus({json});";
+            _webView?.ExecuteScriptAsync(script);
+        });
+    }
+
+    private void OnUpdateStatusChanged(UpdateStatusDto status)
+    {
+        var json = JsonSerializer.Serialize(status, Json);
+        RunOnUi(() =>
+        {
+            var script = $"window.ScaleApp && window.ScaleApp.onUpdateStatus && window.ScaleApp.onUpdateStatus({json});";
             _webView?.ExecuteScriptAsync(script);
         });
     }

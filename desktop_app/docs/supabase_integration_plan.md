@@ -13,8 +13,8 @@ Integrate **Supabase Cloud** into the **Augment Scale** WPF desktop app to estab
 
 ## Confirmed Project Configuration
 
-* **Supabase Project URL**: `https://fydikuezxmbjnkjyskwi.supabase.co`
-* **Anon Public Key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78`
+* **Supabase Project URL**: `https://<PROJECT-REF>.supabase.co`
+* **Anon Public Key**: `<ANON-KEY>`
 * **Heartbeat Cadence**: `3600` seconds (1 hour)
 * **License Grace Period**: `30` days
 
@@ -39,7 +39,7 @@ Run this complete script in your **Supabase SQL Editor** (`service_role`):
 ```sql
 -- =====================================================
 -- Augment Scale — Supabase Cloud Schema (Full Mirror)
--- Project: fydikuezxmbjnkjyskwi
+-- Project: <PROJECT-REF>
 -- =====================================================
 
 -- ─── 1. SUPERADMIN CONTROL TABLE (Cloud → Workstation) ───────
@@ -540,8 +540,8 @@ Add `CloudSetup` to `SetupConfig`:
 ```csharp
 public sealed class CloudSetup
 {
-    public string SupabaseUrl { get; set; } = "https://fydikuezxmbjnkjyskwi.supabase.co";
-    public string SupabaseAnonKey { get; set; } = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78";
+    public string SupabaseUrl { get; set; } = "";
+    public string SupabaseAnonKey { get; set; } = "";
     public int HeartbeatIntervalSeconds { get; set; } = 3600; // 1 hour
     public int LicenseGraceDays { get; set; } = 30; // 30 days
 }
@@ -551,8 +551,8 @@ public sealed class CloudSetup
 Update template with real credentials:
 ```json
 "cloud": {
-  "supabaseUrl": "https://fydikuezxmbjnkjyskwi.supabase.co",
-  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78",
+  "supabaseUrl": "",
+  "supabaseAnonKey": "",
   "heartbeatIntervalSeconds": 3600,
   "licenseGraceDays": 30
 }

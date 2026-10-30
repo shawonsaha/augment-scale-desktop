@@ -17,10 +17,11 @@ public sealed class SetupConfig
 
 public sealed class CloudSetup
 {
-    public string SupabaseUrl { get; set; } = "https://fydikuezxmbjnkjyskwi.supabase.co";
-    public string SupabaseAnonKey { get; set; } = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78";
+    public string SupabaseUrl { get; set; } = "";
+    public string SupabaseAnonKey { get; set; } = "";
     public int HeartbeatIntervalSeconds { get; set; } = 3600; // 1 hour
     public int LicenseGraceDays { get; set; } = 30; // 30 days
+    public string UpdateUrl { get; set; } = "";
 }
 
 public sealed class OrganizationSetup
@@ -74,4 +75,6 @@ public sealed class AppSecrets
 {
     public string DatabaseKey { get; set; } = "";
     public Dictionary<string, string> PinHashes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string SupabaseUrl { get; set; } = "";
+    public string SupabaseAnonKey { get; set; } = "";
 }

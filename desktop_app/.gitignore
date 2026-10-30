@@ -1,1 +1,7 @@
 /.agents
+
+# Secrets & local overrides (never commit real credentials)
+setup.user.json
+*.secrets.json
+releases/
+publish/

@@ -9,7 +9,13 @@ param(
 
     [switch]$SelfContained,
 
-    [switch]$NoZip
+    [switch]$NoZip,
+
+    [string]$AppVersion = '1.0.0',
+
+    [switch]$Pack,
+
+    [switch]$CleanReleases
 )
 
 $ErrorActionPreference = 'Stop'
@@ -126,6 +132,41 @@ if (-not $NoZip) {
     }
 } else {
     Write-Host "`n[4/4] Skipping zip archive creation (-NoZip)." -ForegroundColor Gray
+}
+
+# 5. Velopack Release & Installer Generation
+if ($Pack) {
+    Write-Host "`n[5/5] Packaging Velopack release & installer..." -ForegroundColor Cyan
+    $releasesDir = Join-Path $root 'releases'
+    if ($CleanReleases -and (Test-Path -LiteralPath $releasesDir)) {
+        Write-Host "      Cleaning releases directory: $releasesDir..." -ForegroundColor Yellow
+        Remove-Item -LiteralPath $releasesDir -Recurse -Force
+    }
+    if (-not (Test-Path -LiteralPath $releasesDir)) {
+        New-Item -ItemType Directory -Path $releasesDir -Force | Out-Null
+    }
+    
+    $iconPath = Join-Path $root 'AugmentScale\Resources\app.ico'
+    $vpkArgs = @(
+        'pack',
+        '-u', 'AugmentScale',
+        '-v', $AppVersion,
+        '-p', $OutputDir,
+        '-e', 'AugmentScale.exe',
+        '-o', $releasesDir,
+        '-r', $Runtime,
+        '--packTitle', 'Augment Scale Workstation'
+    )
+    if (Test-Path -LiteralPath $iconPath) {
+        $vpkArgs += @('-i', $iconPath)
+    }
+
+    Write-Host "Running: vpk $($vpkArgs -join ' ')" -ForegroundColor Gray
+    & vpk @vpkArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "vpk pack failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "      Velopack packages created in: $releasesDir" -ForegroundColor Green
 }
 
 Write-Host "`n========================================" -ForegroundColor Green

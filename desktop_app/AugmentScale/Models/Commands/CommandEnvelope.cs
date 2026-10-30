@@ -23,3 +23,8 @@ public sealed class CommandResponse
     public static CommandResponse Fail(string requestId, string error) =>
         new() { RequestId = requestId, Success = false, Error = error };
 }
+
+public sealed class ApplyUpdateRequest
+{
+    public bool Force { get; set; } = false;
+}

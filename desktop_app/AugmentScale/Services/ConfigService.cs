@@ -82,6 +82,35 @@ public sealed class ConfigService
     }
 
     public string DatabaseKey => Secrets.DatabaseKey;
+    public string SupabaseUrl => Secrets.SupabaseUrl;
+    public string SupabaseAnonKey => Secrets.SupabaseAnonKey;
+
+    public string UpdateUrl
+    {
+        get
+        {
+            var configured = Setup.Cloud.UpdateUrl;
+            if (!string.IsNullOrWhiteSpace(configured))
+                return configured.Trim();
+
+            var baseUrl = SupabaseUrl;
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+                return $"{baseUrl.TrimEnd('/')}/storage/v1/object/public/releases";
+
+            return string.Empty;
+        }
+    }
+
+    public void SetCloudCredentials(string url, string anonKey)
+    {
+        lock (_gate)
+        {
+            var secrets = LoadOrCreateSecrets();
+            secrets.SupabaseUrl = url;
+            secrets.SupabaseAnonKey = anonKey;
+            SaveSecrets(secrets);
+        }
+    }
 
     public void EnsureInitialized()
     {
@@ -195,6 +224,7 @@ public sealed class ConfigService
                 if (existing is not null && !string.IsNullOrWhiteSpace(existing.DatabaseKey))
                 {
                     var changed = ProvisionMissingPins(existing);
+                    if (ProvisionCloudCredentials(existing)) changed = true;
                     if (changed) SaveSecrets(existing);
                     return existing;
                 }
@@ -222,6 +252,7 @@ public sealed class ConfigService
             DatabaseKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         };
         ProvisionMissingPins(secrets);
+        ProvisionCloudCredentials(secrets);
         SaveSecrets(secrets);
         return secrets;
     }
@@ -253,6 +284,42 @@ public sealed class ConfigService
         {
             _setup = setup;
             File.WriteAllText(_setupPath, JsonSerializer.Serialize(setup, _json), Encoding.UTF8);
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Migrates Supabase credentials from plaintext setup.json into DPAPI-encrypted secrets.dat,
+    /// then blanks them from setup.json. Same pattern as PIN provisioning.
+    /// </summary>
+    private bool ProvisionCloudCredentials(AppSecrets secrets)
+    {
+        var setup = _setup ?? LoadOrCreateSetup();
+        var changed = false;
+
+        // Migrate URL
+        if (!string.IsNullOrWhiteSpace(setup.Cloud.SupabaseUrl) && string.IsNullOrWhiteSpace(secrets.SupabaseUrl))
+        {
+            secrets.SupabaseUrl = setup.Cloud.SupabaseUrl;
+            changed = true;
+        }
+
+        // Migrate Anon Key
+        if (!string.IsNullOrWhiteSpace(setup.Cloud.SupabaseAnonKey) && string.IsNullOrWhiteSpace(secrets.SupabaseAnonKey))
+        {
+            secrets.SupabaseAnonKey = setup.Cloud.SupabaseAnonKey;
+            changed = true;
+        }
+
+        // Blank credentials from setup.json (same as PIN clearing)
+        if (!string.IsNullOrEmpty(setup.Cloud.SupabaseUrl) || !string.IsNullOrEmpty(setup.Cloud.SupabaseAnonKey))
+        {
+            setup.Cloud.SupabaseUrl = string.Empty;
+            setup.Cloud.SupabaseAnonKey = string.Empty;
+            _setup = setup;
+            File.WriteAllText(_setupPath, JsonSerializer.Serialize(setup, _json), Encoding.UTF8);
+            changed = true;
         }
 
         return changed;

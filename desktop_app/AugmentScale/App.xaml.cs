@@ -5,11 +5,16 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using AugmentScale.Services;
 using System.Runtime.InteropServices;
+using Velopack;
 
 namespace AugmentScale;
 
 public partial class App : Application
 {
+    public App()
+    {
+        VelopackApp.Build().Run();
+    }
     private Mutex? _singleInstance;
     private ConfigService? _config;
     private ScaleReaderService? _scale;
@@ -17,6 +22,7 @@ public partial class App : Application
     private BridgeService? _bridge;
     private PdfArchiveService? _archive;
     private CloudControlService? _cloud;
+    private UpdateService? _updater;
 
     [DllImport("shell32.dll", SetLastError = true)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(
@@ -101,6 +107,10 @@ public partial class App : Application
             _cloud = new CloudControlService(_database, _config);
             _bridge.Cloud = _cloud;
 
+            _updater = new UpdateService(_config, _scale);
+            _bridge.Updater = _updater;
+            _cloud.Updater = _updater;
+
             window.Show();
 
             // Show the window first so the splash mask paints immediately, then
@@ -108,6 +118,7 @@ public partial class App : Application
             _database.EnsureInitialized();
             _archive.Start();
             _cloud.Start();
+            _updater.Start();
         }
         catch (Exception ex)
         {
@@ -123,6 +134,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { _updater?.Dispose(); } catch (Exception ex) { AppLog.Error("Updater shutdown failed", ex); }
         try { _cloud?.Dispose(); } catch (Exception ex) { AppLog.Error("Cloud shutdown failed", ex); }
         try { _archive?.Dispose(); } catch (Exception ex) { AppLog.Error("Archive shutdown failed", ex); }
         try { _scale?.Dispose(); } catch (Exception ex) { AppLog.Error("Scale shutdown failed", ex); }

@@ -26,10 +26,11 @@
     "stabilityToleranceKg": 10
   },
   "cloud": {
-    "supabaseUrl": "https://fydikuezxmbjnkjyskwi.supabase.co",
-    "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78",
+    "supabaseUrl": "",
+    "supabaseAnonKey": "",
     "heartbeatIntervalSeconds": 3600,
-    "licenseGraceDays": 30
+    "licenseGraceDays": 30,
+    "updateUrl": ""
   },
   "operators": [
     {
