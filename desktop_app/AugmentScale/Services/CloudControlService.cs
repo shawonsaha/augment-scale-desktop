@@ -109,6 +109,47 @@ public sealed class CloudControlService : IDisposable
 
         // Instantly push outbox changes to cloud when new rows are enqueued
         _database.OutboxEnqueued += OnOutboxEnqueued;
+
+        // Initialize license & sync state from local SQLite cache on startup
+        InitializeCachedState();
+    }
+
+    private void InitializeCachedState()
+    {
+        try
+        {
+            _database.EnsureInitialized();
+            using var conn = _database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT license_active, enable_cloud_sync, last_cloud_success_at FROM license_cache WHERE id = 'current';";
+            using var reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                var cachedLicense = reader.GetInt32(0) == 1;
+                var cachedSync = reader.GetInt32(1) == 1;
+                DateTimeOffset? lastSuccess = null;
+                if (!reader.IsDBNull(2) && DateTimeOffset.TryParse(reader.GetString(2), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+                {
+                    lastSuccess = dt;
+                }
+
+                var inGrace = true;
+                if (lastSuccess.HasValue)
+                {
+                    inGrace = (DateTimeOffset.UtcNow - lastSuccess.Value).TotalDays <= _config.Setup.Cloud.LicenseGraceDays;
+                }
+
+                lock (_stateGate)
+                {
+                    LicenseActive = cachedLicense && inGrace;
+                    CloudSyncEnabled = cachedSync;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn($"Cloud: Could not initialize license cache: {ex.Message}");
+        }
     }
 
     private void OnOutboxEnqueued()
@@ -525,8 +566,9 @@ public sealed class CloudControlService : IDisposable
         }
 
         using var update = conn.CreateCommand();
-        update.CommandText = "UPDATE license_cache SET last_cloud_check_at = $now WHERE id = 'current';";
+        update.CommandText = "UPDATE license_cache SET last_cloud_check_at = $now, license_active = $active WHERE id = 'current';";
         update.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        update.Parameters.AddWithValue("$active", (inGracePeriod && cachedLicense) ? 1 : 0);
         update.ExecuteNonQuery();
 
         UpdateLocalCursorCloudStatus("offline");

@@ -53,6 +53,14 @@ export function initKeyboardShortcuts() {
   applyNavChordLabels();
 
   document.addEventListener('keydown', (e) => {
+    if (state.sync.licenseActive === false) {
+      if (e.target && e.target.id === 'btn-license-retry') {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'r') {
       e.preventDefault();
       if (document.querySelector('.modal-overlay.open')) {

@@ -45,3 +45,17 @@ This automatically generates in the `releases/` directory:
 3. Client workstations will automatically detect the new release, download the 59 KB delta package in the background, and apply it upon closing or restarting!
 
 *(All 119 unit tests passing)*
+
+### How to Upload Releases to Your Private Bucket
+
+Run the automated helper script with your `service_role` secret (from [Supabase API Settings](https://supabase.com/dashboard/project/fydikuezxmbjnkjyskwi/settings/api)):
+
+```powershell
+.\upload-releases.ps1 -ServiceRoleKey 'YOUR_SERVICE_ROLE_KEY'
+```
+
+*Or drag and drop the files from your local `releases/` folder directly into your private `releases` bucket in the Supabase Dashboard.*
+
+The release package build is complete and all 121 unit tests have passed. 
+
+The updated installer [`AugmentScale-win-Setup.exe`](file:///c:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/releases/AugmentScale-win-Setup.exe) and packages in `releases/` are ready. Once you upload them to your private `releases` bucket, clients will fetch and apply future updates securely through the authenticated endpoint.

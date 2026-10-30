@@ -54,7 +54,8 @@ export function initSyncEngine() {
             : 'No failed archives to retry.',
           retried > 0 ? 'success' : 'warning'
         );
-        triggerSync(false);
+        updateLicenseLockUI();
+  triggerSync(false);
       } catch (err) {
         showToast(err?.message || 'Could not retry the archive', 'error');
       } finally {
@@ -64,11 +65,53 @@ export function initSyncEngine() {
   }
 
   // Update relative time elapsed every second
+  const btnLicenseRetry = document.getElementById('btn-license-retry');
+  const retryFeedback = document.getElementById('license-retry-feedback');
+  if (btnLicenseRetry) {
+    btnLicenseRetry.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (btnLicenseRetry.disabled) return;
+
+      btnLicenseRetry.disabled = true;
+      btnLicenseRetry.classList.add('is-spinning');
+      if (retryFeedback) {
+        retryFeedback.className = 'license-retry-feedback is-info';
+        retryFeedback.textContent = 'Checking license status with Supabase Cloud...';
+      }
+
+      try {
+        const status = await sendCommand('syncNow');
+        applySyncStatus(status);
+
+        if (!status || status.licenseActive === false) {
+          if (retryFeedback) {
+            retryFeedback.className = 'license-retry-feedback is-error';
+            retryFeedback.textContent = 'License check completed: license remains inactive.';
+          }
+        } else {
+          if (retryFeedback) {
+            retryFeedback.className = 'license-retry-feedback is-success';
+            retryFeedback.textContent = 'License active! Unlocking workstation...';
+          }
+        }
+      } catch (err) {
+        if (retryFeedback) {
+          retryFeedback.className = 'license-retry-feedback is-error';
+          retryFeedback.textContent = err?.message || 'Connection failed. Please verify your internet network.';
+        }
+      } finally {
+        btnLicenseRetry.disabled = false;
+        btnLicenseRetry.classList.remove('is-spinning');
+      }
+    });
+  }
+
   setInterval(updateSyncUI, 1000);
 
   // Poll faster while the archive is working; otherwise use the normal heartbeat.
   scheduleHeartbeat();
   updateSyncUI();
+  updateLicenseLockUI();
   triggerSync(false);
 }
 
@@ -83,7 +126,8 @@ function scheduleHeartbeat() {
   clearTimeout(heartbeatTimer);
   heartbeatTimer = setTimeout(() => {
     if (state.sync.isHealthy && !state.sync.syncInProgress) {
-      triggerSync(false);
+      updateLicenseLockUI();
+  triggerSync(false);
     }
     scheduleHeartbeat();
   }, archiveIsActive() ? 5000 : 30000);
@@ -292,6 +336,7 @@ export function applySyncStatus(status) {
     ? new Date(status.lastCloudSyncTimestamp)
     : null;
   state.sync.archive = status.archive || null;
+  updateLicenseLockUI();
   updateSyncUI();
 }
 
@@ -339,4 +384,59 @@ export function triggerSync(isManual = false) {
       updateSyncUI();
       scheduleHeartbeat();
     });
+}
+
+let wasLicenseLocked = false;
+
+export function updateLicenseLockUI() {
+  const overlay = document.getElementById('license-lock-overlay');
+  if (!overlay) return;
+
+  const isLocked = state.sync.licenseActive === false;
+
+  if (isLocked) {
+    overlay.style.display = 'flex';
+    void overlay.offsetWidth;
+    overlay.classList.add('is-active');
+    document.body.classList.add('app-license-locked');
+
+    const lastCheckEl = document.getElementById('lock-telemetry-last-check');
+    const cloudEl = document.getElementById('lock-telemetry-cloud');
+    const statusEl = document.getElementById('lock-telemetry-status');
+    const descEl = document.getElementById('lock-desc');
+
+    if (statusEl) {
+      statusEl.textContent = 'License Inactive';
+    }
+    if (cloudEl) {
+      cloudEl.textContent = state.sync.cloudStatus === 'online' ? 'Online (Supabase Cloud)' : 'Offline / Unreachable';
+    }
+    if (lastCheckEl) {
+      lastCheckEl.textContent = state.sync.lastCloudSyncTimestamp
+        ? new Date(state.sync.lastCloudSyncTimestamp).toLocaleString()
+        : 'Never verified';
+    }
+    if (descEl) {
+      if (state.sync.cloudStatus === 'offline') {
+        descEl.textContent = 'This workstation has exceeded the offline grace period without connecting to Supabase Cloud. A cloud connection is required to validate your active subscription.';
+      } else {
+        descEl.textContent = "This workstation's license has been deactivated by your administrator in Supabase Cloud. All scale operations, ticket creation, and administrative functions are locked.";
+      }
+    }
+
+    wasLicenseLocked = true;
+  } else {
+    overlay.classList.remove('is-active');
+    document.body.classList.remove('app-license-locked');
+    setTimeout(() => {
+      if (state.sync.licenseActive !== false) {
+        overlay.style.display = 'none';
+      }
+    }, 300);
+
+    if (wasLicenseLocked) {
+      wasLicenseLocked = false;
+      showToast('License verified successfully. Workstation unlocked.', 'success');
+    }
+  }
 }

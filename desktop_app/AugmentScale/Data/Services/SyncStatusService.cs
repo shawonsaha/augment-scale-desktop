@@ -58,7 +58,7 @@ internal sealed class SyncStatusService : ISyncStatusService
         bool cloudSyncEnabled = true;
         using (var cmd = connection.CreateCommand())
         {
-            cmd.CommandText = "SELECT license_active, enable_cloud_sync FROM license_cache WHERE id = 'current';";
+            cmd.CommandText = "SELECT license_active, enable_cloud_sync, last_cloud_success_at FROM license_cache WHERE id = 'current';";
             try
             {
                 using var reader = cmd.ExecuteReader();
@@ -66,6 +66,13 @@ internal sealed class SyncStatusService : ISyncStatusService
                 {
                     licenseActive = reader.GetInt32(0) == 1;
                     cloudSyncEnabled = reader.GetInt32(1) == 1;
+                    if (!reader.IsDBNull(2) && DateTimeOffset.TryParse(reader.GetString(2), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+                    {
+                        if ((DateTimeOffset.UtcNow - dt).TotalDays > 30)
+                        {
+                            licenseActive = false;
+                        }
+                    }
                 }
             }
             catch (SqliteException)

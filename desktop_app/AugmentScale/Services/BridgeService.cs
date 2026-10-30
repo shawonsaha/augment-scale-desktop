@@ -174,7 +174,24 @@ public sealed class BridgeService
         }
     }
 
-    private async Task<object?> DispatchAsync(string command, JsonElement payload)
+    internal bool IsLicenseActive()
+    {
+        if (Cloud is not null)
+        {
+            return Cloud.LicenseActive;
+        }
+        return _database.GetSyncStatus().LicenseActive;
+    }
+
+    private void EnsureLicenseActive()
+    {
+        if (!IsLicenseActive())
+        {
+            throw new InvalidOperationException("The workstation license is inactive. Operations are locked.");
+        }
+    }
+
+    internal async Task<object?> DispatchAsync(string command, JsonElement payload)
     {
         switch (command)
         {
@@ -186,15 +203,18 @@ public sealed class BridgeService
 
             case "authenticatePin":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<PinAuthRequest>(payload);
                 return _database.AuthenticateOperator(request.OperatorId, request.Pin);
             }
 
             case "unlockProfileAdmin":
+                EnsureLicenseActive();
                 return UnlockProfileAdmin(Deserialize<ProfileAdminAuthRequest>(payload));
 
             case "createProfile":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<ProfileWriteRequest>(payload);
                 var actor = RequireProfileAdmin(request.Token);
                 return _database.CreateProfile(request, actor.Id, actor.Name);
@@ -202,6 +222,7 @@ public sealed class BridgeService
 
             case "updateProfile":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<ProfileWriteRequest>(payload);
                 var actor = RequireProfileAdmin(request.Token);
                 return _database.UpdateProfile(request, actor.Id, actor.Name);
@@ -209,6 +230,7 @@ public sealed class BridgeService
 
             case "setProfilePin":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<SetProfilePinRequest>(payload);
                 var actor = RequireProfileAdmin(request.Token);
                 return _database.SetProfilePin(request, actor.Id, actor.Name);
@@ -216,6 +238,7 @@ public sealed class BridgeService
 
             case "deactivateProfile":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<DeactivateProfileRequest>(payload);
                 var actor = RequireProfileAdmin(request.Token);
                 return _database.DeactivateProfile(request, actor.Id, actor.Name);
@@ -257,6 +280,7 @@ public sealed class BridgeService
                 return _database.VerifyHistoryReport(Deserialize<VerifyHistoryReportRequest>(payload));
 
             case "showSystemPrintDialog":
+                EnsureLicenseActive();
                 if (_webView is null)
                     throw new InvalidOperationException("The print dialog is unavailable.");
                 // ShowPrintUI must run on the UI thread, but the dispatch itself
@@ -273,7 +297,7 @@ public sealed class BridgeService
                 return Cloud?.GetCloudStatus() ?? new
                 {
                     status = "offline",
-                    licenseActive = true,
+                    licenseActive = _database.GetSyncStatus().LicenseActive,
                     cloudSyncEnabled = true,
                     lastHeartbeatAt = (string?)null,
                     lastSyncAt = (string?)null,
@@ -322,11 +346,13 @@ public sealed class BridgeService
                 };
 
             case "captureReading":
+                EnsureLicenseActive();
                 _capturedReading = _scale.LastReading;
                 return new { captured = _capturedReading is not null };
 
             case "createTicket":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<CreateTicketRequest>(payload);
                 AttachReading(reading => request.Reading = reading);
                 var ticket = _database.CreateTicket(request);
@@ -336,6 +362,7 @@ public sealed class BridgeService
 
             case "completeTicket":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<CompleteTicketRequest>(payload);
                 AttachReading(reading => request.Reading = reading);
                 var ticket = _database.CompleteTicket(request);
@@ -344,16 +371,20 @@ public sealed class BridgeService
             }
 
             case "voidTicket":
+                EnsureLicenseActive();
                 return _database.VoidTicket(Deserialize<TicketReasonRequest>(payload));
 
             case "deleteTicket":
+                EnsureLicenseActive();
                 return _database.SoftDeleteTicket(Deserialize<TicketReasonRequest>(payload));
 
             case "registerVehicle":
+                EnsureLicenseActive();
                 return _database.RegisterVehicle(Deserialize<VehicleRequest>(payload));
 
             case "archiveVehicle":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<ArchiveVehicleRequest>(payload);
                 var result = _database.ArchiveVehicle(request);
                 if (!result.Ok) throw new InvalidOperationException(result.Error ?? "Archive failed.");
@@ -362,6 +393,7 @@ public sealed class BridgeService
 
             case "restoreVehicle":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<ArchiveVehicleRequest>(payload);
                 return _database.RestoreVehicle(request)
                        ?? throw new InvalidOperationException("Vehicle not found.");
@@ -369,6 +401,7 @@ public sealed class BridgeService
 
             case "deleteVehicle":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<DeleteVehicleRequest>(payload);
                 var result = _database.DeleteVehicle(request);
                 if (!result.Ok) throw new InvalidOperationException(result.Error ?? "Delete failed.");
@@ -377,6 +410,7 @@ public sealed class BridgeService
 
             case "recordReprint":
             {
+                EnsureLicenseActive();
                 var request = Deserialize<ReprintRequest>(payload);
                 var result = _database.RecordReprint(request);
                 return new { ticket = result.Ticket, copyNumber = result.CopyNumber };

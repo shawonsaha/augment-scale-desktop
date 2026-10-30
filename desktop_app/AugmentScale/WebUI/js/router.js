@@ -14,6 +14,9 @@ const NAV_SCREENS = new Set([
 const WEIGH_SCREENS = new Set(['first-weigh-screen', 'second-weigh-screen']);
 
 export function showScreen(screenId) {
+  if (state.sync.licenseActive === false) {
+    return false;
+  }
   const current = document.getElementById(state.currentScreen);
   const target = document.getElementById(screenId);
 
@@ -78,6 +81,7 @@ export function isSupervisor(operator = state.activeOperator) {
 
 /** Nav buttons and chords route through here so weigh flows cannot be bypassed. */
 export function requestNavigation(screenId) {
+  if (state.sync.licenseActive === false) return false;
   if (!state.activeOperator) return false;
   if (isWeighScreen()) {
     showToast('Finish or discard the current weigh before leaving', 'warning');

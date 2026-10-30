@@ -20,6 +20,7 @@ const PARTIALS = [
   'partials/modals.html',
   'partials/history-report-modal.html',
   'partials/verify-report-modal.html',
+  'partials/screen-license-lock.html',
 ];
 
 export async function loadPartials() {

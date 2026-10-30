@@ -844,7 +844,7 @@ public class CloudControlServiceTests
         }
     }
 
-    private sealed class MockSupabaseHandler : HttpMessageHandler
+    internal sealed class MockSupabaseHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
 

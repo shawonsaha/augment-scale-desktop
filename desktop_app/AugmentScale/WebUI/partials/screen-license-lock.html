@@ -1,0 +1,69 @@
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCREEN / OVERLAY: WORKSTATION LICENSE LOCK (license_active is false)
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div
+  class="license-lock-overlay"
+  id="license-lock-overlay"
+  role="alertdialog"
+  aria-modal="true"
+  aria-labelledby="lock-title"
+  aria-describedby="lock-desc"
+  style="display: none"
+>
+  <div class="license-lock-card">
+    <div class="license-lock-header">
+      <div class="license-lock-icon-container">
+        <div class="license-lock-radar"></div>
+        <svg
+          class="license-lock-icon"
+          width="42"
+          height="42"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      </div>
+      <div class="license-badge-pill" id="lock-badge-pill">WORKSTATION LOCKED</div>
+    </div>
+
+    <h2 class="license-lock-title" id="lock-title">Application License Inactive</h2>
+    <p class="license-lock-description" id="lock-desc">
+      The license for this workstation is currently inactive or has exceeded the offline grace period. All scale operations, ticket creation, and administrative functions are locked.
+    </p>
+
+    <div class="license-telemetry-box">
+      <div class="license-telemetry-row">
+        <span class="license-telemetry-label">Status</span>
+        <span class="license-status-tag" id="lock-telemetry-status">License Inactive</span>
+      </div>
+      <div class="license-telemetry-row">
+        <span class="license-telemetry-label">Cloud Connectivity</span>
+        <span class="license-telemetry-val" id="lock-telemetry-cloud">Offline</span>
+      </div>
+      <div class="license-telemetry-row">
+        <span class="license-telemetry-label">Last Successful Check</span>
+        <span class="license-telemetry-val" id="lock-telemetry-last-check">—</span>
+      </div>
+    </div>
+
+    <div class="license-lock-actions">
+      <button class="btn-license-retry" id="btn-license-retry" type="button">
+        <span class="license-retry-icon" id="license-retry-icon">↻</span>
+        <span class="btn-text" id="license-retry-text">Re-check License</span>
+      </button>
+    </div>
+
+    <div class="license-retry-feedback" id="license-retry-feedback" aria-live="polite"></div>
+
+    <div class="license-lock-footer">
+      <span>Contact your system administrator or support to activate your license.</span>
+    </div>
+  </div>
+</div>
