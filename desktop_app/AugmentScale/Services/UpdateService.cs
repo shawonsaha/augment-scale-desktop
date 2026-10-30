@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Velopack;
@@ -209,6 +210,14 @@ public sealed class UpdateService : IDisposable
         catch (OperationCanceledException)
         {
             UpdateState("idle", TargetVersion, DownloadProgress, null);
+            return null;
+        }
+        catch (HttpRequestException ex)
+        {
+            // If the remote releases endpoint or bucket is not yet provisioned, log a clean warning
+            // instead of a full stack trace, and keep the updater in idle state so UI isn't alarmed.
+            AppLog.Warn($"[UpdateService] Update check skipped: Remote endpoint returned {(int?)ex.StatusCode} ({ex.Message}). Will retry next cycle.");
+            UpdateState("idle", TargetVersion, 0, null);
             return null;
         }
         catch (Exception ex)
