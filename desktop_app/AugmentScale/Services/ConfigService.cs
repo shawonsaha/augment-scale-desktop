@@ -91,11 +91,19 @@ public sealed class ConfigService
         {
             var configured = Setup.Cloud.UpdateUrl;
             if (!string.IsNullOrWhiteSpace(configured))
-                return configured.Trim();
+            {
+                var trimmed = configured.Trim();
+                // If pointing to Supabase releases bucket, ensure it targets the authenticated endpoint for private bucket support
+                if (trimmed.Contains("/storage/v1/object/public/releases", StringComparison.OrdinalIgnoreCase))
+                {
+                    return trimmed.Replace("/storage/v1/object/public/releases", "/storage/v1/object/authenticated/releases", StringComparison.OrdinalIgnoreCase);
+                }
+                return trimmed;
+            }
 
             var baseUrl = SupabaseUrl;
             if (!string.IsNullOrWhiteSpace(baseUrl))
-                return $"{baseUrl.TrimEnd('/')}/storage/v1/object/public/releases";
+                return $"{baseUrl.TrimEnd('/')}/storage/v1/object/authenticated/releases";
 
             return string.Empty;
         }

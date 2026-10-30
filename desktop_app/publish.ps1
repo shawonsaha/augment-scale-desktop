@@ -117,7 +117,7 @@ if ((Test-Path -LiteralPath $publishedSetup) -and (-not [string]::IsNullOrWhiteS
     if (-not [string]::IsNullOrWhiteSpace($UpdateUrl)) {
         $setupContent.cloud.updateUrl = $UpdateUrl
     } else {
-        $setupContent.cloud.updateUrl = "$($SupabaseUrl.TrimEnd('/'))/storage/v1/object/public/releases"
+        $setupContent.cloud.updateUrl = "$($SupabaseUrl.TrimEnd('/'))/storage/v1/object/authenticated/releases"
     }
     $setupJsonStr = $setupContent | ConvertTo-Json -Depth 10
     [System.IO.File]::WriteAllText($publishedSetup, $setupJsonStr, [System.Text.Encoding]::UTF8)

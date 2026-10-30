@@ -74,7 +74,9 @@ public sealed class UpdateService : IDisposable
 
         try
         {
-            _updateManager = new UpdateManager(url);
+            var downloader = new SupabaseAuthenticatedFileDownloader(_config.SupabaseAnonKey);
+            var source = new Velopack.Sources.SimpleWebSource(url, downloader);
+            _updateManager = new UpdateManager(source, options: null, locator: null);
             AppLog.Info($"[UpdateService] Initialized with endpoint '{url}'. Installed: {IsInstalled}, Version: {CurrentVersion}");
         }
         catch (Exception ex)

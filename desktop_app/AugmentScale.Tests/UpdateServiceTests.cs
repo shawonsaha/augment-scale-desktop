@@ -39,7 +39,18 @@ public sealed class UpdateServiceTests : IDisposable
 
         var updateUrl = _config.UpdateUrl;
 
-        Assert.Equal("https://example-project.supabase.co/storage/v1/object/public/releases", updateUrl);
+        Assert.Equal("https://example-project.supabase.co/storage/v1/object/authenticated/releases", updateUrl);
+    }
+
+    [Fact]
+    public void PublicUpdateUrl_NormalizesToAuthenticatedEndpoint()
+    {
+        _config.SetCloudCredentials("https://example-project.supabase.co", "anon-key-123");
+        _config.Setup.Cloud.UpdateUrl = "https://example-project.supabase.co/storage/v1/object/public/releases";
+
+        var updateUrl = _config.UpdateUrl;
+
+        Assert.Equal("https://example-project.supabase.co/storage/v1/object/authenticated/releases", updateUrl);
     }
 
     [Fact]
@@ -90,5 +101,12 @@ public sealed class UpdateServiceTests : IDisposable
         var ex = Assert.Throws<InvalidOperationException>(() => service.ApplyUpdatesAndRestart());
 
         Assert.Contains("No update has been downloaded", ex.Message);
+    }
+
+    [Fact]
+    public void SupabaseAuthenticatedFileDownloader_InitializesCleanly()
+    {
+        var downloader = new SupabaseAuthenticatedFileDownloader("test-key");
+        Assert.NotNull(downloader);
     }
 }
