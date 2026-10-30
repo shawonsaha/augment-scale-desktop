@@ -1,5 +1,6 @@
 param(
     [Parameter(Mandatory = $false)]
+    [Alias('SecretKey', 'ApiKey')]
     [string]$ServiceRoleKey = "",
     [string]$SupabaseUrl = "https://fydikuezxmbjnkjyskwi.supabase.co",
     [string]$Bucket = "releases",
@@ -17,6 +18,21 @@ if (-not (Test-Path -LiteralPath $ReleasesDir)) {
     throw "Releases directory not found at $ReleasesDir. Run .\publish.ps1 -Pack first."
 }
 
+# Auto-discover secret key from dashboard-web/.env.local if present
+if ([string]::IsNullOrWhiteSpace($ServiceRoleKey)) {
+    $envLocalPath = Join-Path $root '..\dashboard-web\.env.local'
+    if (Test-Path -LiteralPath $envLocalPath) {
+        $envLines = Get-Content -LiteralPath $envLocalPath
+        foreach ($line in $envLines) {
+            if ($line -match '^\s*(?:SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|SERVICE_ROLE_KEY)\s*=\s*(.+)$') {
+                $ServiceRoleKey = $matches[1].Trim().Trim('"').Trim("'")
+                Write-Host "Auto-detected secret key from dashboard-web/.env.local" -ForegroundColor Gray
+                break
+            }
+        }
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($ServiceRoleKey)) {
     Write-Host @"
 ========================================================================
@@ -24,13 +40,16 @@ Supabase Releases Upload Helper
 ========================================================================
 To automatically upload releases to Supabase Storage:
 1. Open https://supabase.com/dashboard/project/fydikuezxmbjnkjyskwi/settings/api
-2. Copy the 'service_role' secret (NOT the anon key).
-3. Re-run this script:
-   .\upload-releases.ps1 -ServiceRoleKey 'your-service-role-key-here'
+2. Copy the 'service_role' or 'secret' key (starts with sb_secret_ or eyJ...).
+3. Run this script:
+   .\upload-releases.ps1 -SecretKey 'your-secret-or-service-role-key'
+
+TIP: You can also add SUPABASE_SECRET_KEY=sb_secret_... to
+     dashboard-web\.env.local and run .\upload-releases.ps1 without arguments!
 
 OR, manually upload via Supabase Dashboard:
 1. Go to https://supabase.com/dashboard/project/fydikuezxmbjnkjyskwi/storage/buckets
-2. Create or verify a private bucket named 'releases' ('Public bucket' = OFF).
+2. Open the private bucket named 'releases'.
 3. Drag and drop all files from '$ReleasesDir' into the 'releases' bucket.
 ========================================================================
 "@ -ForegroundColor Yellow
