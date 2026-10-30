@@ -15,7 +15,13 @@ param(
 
     [switch]$Pack,
 
-    [switch]$CleanReleases
+    [switch]$CleanReleases,
+
+    [string]$SupabaseUrl = 'https://fydikuezxmbjnkjyskwi.supabase.co',
+
+    [string]$SupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78',
+
+    [string]$UpdateUrl = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -99,6 +105,23 @@ if (Test-Path -LiteralPath $launcherPs1) {
 }
 if (Test-Path -LiteralPath $launcherCmd) {
     Copy-Item -LiteralPath $launcherCmd -Destination $OutputDir -Force
+}
+
+# Provision Cloud Credentials in published Resources\setup.json
+$publishedSetup = Join-Path $OutputDir 'Resources\setup.json'
+if ((Test-Path -LiteralPath $publishedSetup) -and (-not [string]::IsNullOrWhiteSpace($SupabaseUrl))) {
+    Write-Host "`n      Injecting cloud credentials into published package..." -ForegroundColor Cyan
+    $setupContent = Get-Content -LiteralPath $publishedSetup -Raw | ConvertFrom-Json
+    $setupContent.cloud.supabaseUrl = $SupabaseUrl
+    $setupContent.cloud.supabaseAnonKey = $SupabaseAnonKey
+    if (-not [string]::IsNullOrWhiteSpace($UpdateUrl)) {
+        $setupContent.cloud.updateUrl = $UpdateUrl
+    } else {
+        $setupContent.cloud.updateUrl = "$($SupabaseUrl.TrimEnd('/'))/storage/v1/object/public/releases"
+    }
+    $setupJsonStr = $setupContent | ConvertTo-Json -Depth 10
+    [System.IO.File]::WriteAllText($publishedSetup, $setupJsonStr, [System.Text.Encoding]::UTF8)
+    Write-Host "      Cloud credentials provisioned successfully." -ForegroundColor Green
 }
 
 # 4. Create zip archive (unless -NoZip specified) with retry logic

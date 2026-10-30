@@ -299,14 +299,14 @@ public sealed class ConfigService
         var changed = false;
 
         // Migrate URL
-        if (!string.IsNullOrWhiteSpace(setup.Cloud.SupabaseUrl) && string.IsNullOrWhiteSpace(secrets.SupabaseUrl))
+        if (!string.IsNullOrWhiteSpace(setup.Cloud.SupabaseUrl) && !string.Equals(secrets.SupabaseUrl, setup.Cloud.SupabaseUrl, StringComparison.Ordinal))
         {
             secrets.SupabaseUrl = setup.Cloud.SupabaseUrl;
             changed = true;
         }
 
         // Migrate Anon Key
-        if (!string.IsNullOrWhiteSpace(setup.Cloud.SupabaseAnonKey) && string.IsNullOrWhiteSpace(secrets.SupabaseAnonKey))
+        if (!string.IsNullOrWhiteSpace(setup.Cloud.SupabaseAnonKey) && !string.Equals(secrets.SupabaseAnonKey, setup.Cloud.SupabaseAnonKey, StringComparison.Ordinal))
         {
             secrets.SupabaseAnonKey = setup.Cloud.SupabaseAnonKey;
             changed = true;
