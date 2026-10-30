@@ -1290,10 +1290,20 @@ public sealed class CloudControlService : IDisposable
         return _config.Setup.Cloud.LicenseGraceDays;
     }
 
-    private static void AddSupabaseHeaders(HttpRequestMessage request, string apiKey)
+    internal static void AddSupabaseHeaders(HttpRequestMessage request, string apiKey)
     {
         request.Headers.Add("apikey", apiKey);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        if (IsJwtToken(apiKey))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
+    }
+
+    internal static bool IsJwtToken(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return false;
+        if (key.StartsWith("sb_", StringComparison.OrdinalIgnoreCase)) return false;
+        return key.StartsWith("eyJ", StringComparison.OrdinalIgnoreCase) && key.Count(c => c == '.') == 2;
     }
 
     public void Dispose()

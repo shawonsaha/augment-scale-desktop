@@ -19,13 +19,36 @@ param(
 
     [string]$SupabaseUrl = 'https://fydikuezxmbjnkjyskwi.supabase.co',
 
-    [string]$SupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5ZGlrdWV6eG1iam5ranlza3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNTI5MzgsImV4cCI6MjEwODcyODkzOH0.mzqkNMSr1MhOsRAKK-CBMTzh59cZHJs7H6LTNxk2z78',
+    [Alias('SupabaseApiKey', 'SupabasePublishableKey')]
+    [string]$SupabaseAnonKey = '',
 
     [string]$UpdateUrl = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
+
+# Auto-discover Supabase credentials from dashboard-web/.env.local if not provided
+$envLocalPath = Join-Path $root '..\dashboard-web\.env.local'
+if (Test-Path -LiteralPath $envLocalPath) {
+    $envLines = Get-Content -LiteralPath $envLocalPath
+    foreach ($line in $envLines) {
+        if ($line -match '^\s*NEXT_PUBLIC_SUPABASE_URL\s*=\s*(.+)$' -and [string]::IsNullOrWhiteSpace($SupabaseUrl)) {
+            $SupabaseUrl = $matches[1].Trim().Trim('"').Trim("'")
+        }
+        if (($line -match '^\s*NEXT_PUBLIC_SUPABASE_ANON_KEY\s*=\s*(.+)$' -or $line -match '^\s*NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\s*=\s*(.+)$') -and [string]::IsNullOrWhiteSpace($SupabaseAnonKey)) {
+            $SupabaseAnonKey = $matches[1].Trim().Trim('"').Trim("'")
+        }
+    }
+}
+
+# Fallback project defaults if .env.local not found
+if ([string]::IsNullOrWhiteSpace($SupabaseUrl)) {
+    $SupabaseUrl = 'https://fydikuezxmbjnkjyskwi.supabase.co'
+}
+if ([string]::IsNullOrWhiteSpace($SupabaseAnonKey)) {
+    $SupabaseAnonKey = 'sb_publishable_T3J6isINyJ88kgJEkmv2-Q_NeEZY25t'
+}
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $OutputDir = Join-Path $root "publish\$Runtime"

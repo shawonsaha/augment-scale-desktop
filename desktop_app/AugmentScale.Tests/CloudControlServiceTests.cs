@@ -844,6 +844,46 @@ public class CloudControlServiceTests
         }
     }
 
+        [Fact]
+        public void AddSupabaseHeaders_WithPublishableKey_SetsOnlyApiKeyHeader()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://example.supabase.co/rest/v1/workstation_controls");
+            var publishableKey = "sb_publishable_T3J6isINyJ88kgJEkmv2-Q_NeEZY25t";
+
+            CloudControlService.AddSupabaseHeaders(request, publishableKey);
+
+            Assert.True(request.Headers.Contains("apikey"));
+            Assert.Equal(publishableKey, request.Headers.GetValues("apikey").Single());
+            Assert.Null(request.Headers.Authorization);
+        }
+
+        [Fact]
+        public void AddSupabaseHeaders_WithLegacyJwtKey_SetsBothApiKeyAndAuthorization()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://example.supabase.co/rest/v1/workstation_controls");
+            var jwtKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.signature";
+
+            CloudControlService.AddSupabaseHeaders(request, jwtKey);
+
+            Assert.True(request.Headers.Contains("apikey"));
+            Assert.Equal(jwtKey, request.Headers.GetValues("apikey").Single());
+            Assert.NotNull(request.Headers.Authorization);
+            Assert.Equal("Bearer", request.Headers.Authorization!.Scheme);
+            Assert.Equal(jwtKey, request.Headers.Authorization!.Parameter);
+        }
+
+        [Theory]
+        [InlineData("sb_publishable_12345", false)]
+        [InlineData("sb_secret_67890", false)]
+        [InlineData("", false)]
+        [InlineData(null, false)]
+        [InlineData("not-a-jwt", false)]
+        [InlineData("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.sig", true)]
+        public void IsJwtToken_DifferentiatesOpaqueKeysFromJwt(string? key, bool expectedJwt)
+        {
+            Assert.Equal(expectedJwt, CloudControlService.IsJwtToken(key));
+        }
+
     internal sealed class MockSupabaseHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;

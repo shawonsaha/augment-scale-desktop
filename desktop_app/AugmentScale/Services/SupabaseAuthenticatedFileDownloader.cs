@@ -30,7 +30,10 @@ internal sealed class SupabaseAuthenticatedFileDownloader : IFileDownloader
         if (!string.IsNullOrWhiteSpace(_apiKey))
         {
             headers["apikey"] = _apiKey;
-            headers["Authorization"] = $"Bearer {_apiKey}";
+            if (CloudControlService.IsJwtToken(_apiKey))
+            {
+                headers["Authorization"] = $"Bearer {_apiKey}";
+            }
         }
 
         return headers;

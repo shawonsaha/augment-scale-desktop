@@ -109,4 +109,37 @@ public sealed class UpdateServiceTests : IDisposable
         var downloader = new SupabaseAuthenticatedFileDownloader("test-key");
         Assert.NotNull(downloader);
     }
+
+    [Fact]
+    public void SetupConfig_DeserializesPublishableKeyAndApiKeyAliases()
+    {
+        var jsonWithPublishable = """
+            {
+                "cloud": {
+                    "supabaseUrl": "https://example.supabase.co",
+                    "supabasePublishableKey": "sb_publishable_1234567890"
+                }
+            }
+            """;
+
+        var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var config1 = System.Text.Json.JsonSerializer.Deserialize<SetupConfig>(jsonWithPublishable, options);
+        Assert.NotNull(config1);
+        Assert.Equal("sb_publishable_1234567890", config1.Cloud.SupabaseAnonKey);
+        Assert.Equal("sb_publishable_1234567890", config1.Cloud.SupabasePublishableKey);
+
+        var jsonWithApiKey = """
+            {
+                "cloud": {
+                    "supabaseUrl": "https://example.supabase.co",
+                    "supabaseApiKey": "sb_publishable_0987654321"
+                }
+            }
+            """;
+
+        var config2 = System.Text.Json.JsonSerializer.Deserialize<SetupConfig>(jsonWithApiKey, options);
+        Assert.NotNull(config2);
+        Assert.Equal("sb_publishable_0987654321", config2.Cloud.SupabaseAnonKey);
+        Assert.Equal("sb_publishable_0987654321", config2.Cloud.SupabaseApiKey);
+    }
 }

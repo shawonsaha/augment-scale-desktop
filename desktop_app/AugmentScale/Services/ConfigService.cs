@@ -84,6 +84,7 @@ public sealed class ConfigService
     public string DatabaseKey => Secrets.DatabaseKey;
     public string SupabaseUrl => Secrets.SupabaseUrl;
     public string SupabaseAnonKey => Secrets.SupabaseAnonKey;
+    public string SupabasePublishableKey => Secrets.SupabaseAnonKey;
 
     public string UpdateUrl
     {

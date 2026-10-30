@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AugmentScale.Models;
 
 public sealed class SetupConfig
@@ -18,7 +20,22 @@ public sealed class SetupConfig
 public sealed class CloudSetup
 {
     public string SupabaseUrl { get; set; } = "";
+    [JsonPropertyName("supabaseAnonKey")]
     public string SupabaseAnonKey { get; set; } = "";
+
+    [JsonPropertyName("supabasePublishableKey")]
+    public string? SupabasePublishableKey
+    {
+        get => SupabaseAnonKey;
+        set { if (!string.IsNullOrWhiteSpace(value)) SupabaseAnonKey = value; }
+    }
+
+    [JsonPropertyName("supabaseApiKey")]
+    public string? SupabaseApiKey
+    {
+        get => SupabaseAnonKey;
+        set { if (!string.IsNullOrWhiteSpace(value)) SupabaseAnonKey = value; }
+    }
     public int HeartbeatIntervalSeconds { get; set; } = 3600; // 1 hour
     public int LicenseGraceDays { get; set; } = 30; // 30 days
     public string UpdateUrl { get; set; } = "";
@@ -76,5 +93,20 @@ public sealed class AppSecrets
     public string DatabaseKey { get; set; } = "";
     public Dictionary<string, string> PinHashes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string SupabaseUrl { get; set; } = "";
+    [JsonPropertyName("supabaseAnonKey")]
     public string SupabaseAnonKey { get; set; } = "";
+
+    [JsonPropertyName("supabasePublishableKey")]
+    public string? SupabasePublishableKey
+    {
+        get => SupabaseAnonKey;
+        set { if (!string.IsNullOrWhiteSpace(value)) SupabaseAnonKey = value; }
+    }
+
+    [JsonPropertyName("supabaseApiKey")]
+    public string? SupabaseApiKey
+    {
+        get => SupabaseAnonKey;
+        set { if (!string.IsNullOrWhiteSpace(value)) SupabaseAnonKey = value; }
+    }
 }

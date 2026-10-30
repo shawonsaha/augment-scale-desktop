@@ -38,8 +38,10 @@ OR, manually upload via Supabase Dashboard:
 }
 
 $headers = @{
-    "apikey"        = $ServiceRoleKey
-    "Authorization" = "Bearer $ServiceRoleKey"
+    "apikey" = $ServiceRoleKey
+}
+if ($ServiceRoleKey.StartsWith("eyJ") -and ($ServiceRoleKey.Split('.').Count -eq 3)) {
+    $headers["Authorization"] = "Bearer $ServiceRoleKey"
 }
 
 # 1. Ensure bucket exists (Private for security)
@@ -77,10 +79,12 @@ foreach ($file in $files) {
     $uploadUrl = "$($SupabaseUrl.TrimEnd('/'))/storage/v1/object/$Bucket/$fileName"
 
     $uploadHeaders = @{
-        "apikey"        = $ServiceRoleKey
-        "Authorization" = "Bearer $ServiceRoleKey"
-        "x-upsert"      = "true"
-        "Content-Type"  = "application/octet-stream"
+        "apikey"       = $ServiceRoleKey
+        "x-upsert"     = "true"
+        "Content-Type" = "application/octet-stream"
+    }
+    if ($ServiceRoleKey.StartsWith("eyJ") -and ($ServiceRoleKey.Split('.').Count -eq 3)) {
+        $uploadHeaders["Authorization"] = "Bearer $ServiceRoleKey"
     }
 
     Write-Host "      Uploading $fileName ($([math]::Round($file.Length / 1MB, 2)) MB)..." -NoNewline
