@@ -66,21 +66,6 @@ public partial class App : Application
             args.SetObserved();
         };
 
-        if (e.Args.Length > 0 &&
-            string.Equals(e.Args[0], "--reset-pin", StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                ResetPin(e.Args.Length > 1 ? e.Args[1] : null);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message, "Reset PIN", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            Shutdown();
-            return;
-        }
-
         try
         {
             _config = new ConfigService();
@@ -152,40 +137,5 @@ public partial class App : Application
             MessageBoxButton.OK,
             MessageBoxImage.Error);
         e.Handled = true;
-    }
-
-    private static void ResetPin(string? operatorId)
-    {
-        var config = new ConfigService();
-        var database = new DatabaseService(config);
-        var operators = database.GetOperators();
-
-        if (string.IsNullOrWhiteSpace(operatorId))
-        {
-            var ids = string.Join(", ", operators.Select(op => op.Id));
-            MessageBox.Show(
-                $"Usage: AugmentScale.exe --reset-pin <operator-id>{Environment.NewLine}{Environment.NewLine}Operators: {ids}",
-                "Reset PIN", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var profile = operators.FirstOrDefault(op =>
-            string.Equals(op.Id, operatorId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(op.Code, operatorId, StringComparison.OrdinalIgnoreCase));
-        if (profile is null)
-        {
-            MessageBox.Show($"Operator '{operatorId}' was not found.", "Reset PIN",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var pinBox = new PasswordBox { MaxLength = 4, Margin = new Thickness(0, 8, 0, 0) };
-        var confirmBox = new PasswordBox { MaxLength = 4, Margin = new Thickness(0, 8, 0, 0) };
-        var resetButton = new Button
-        {
-            Content = "Reset PIN",
-            Padding = new Thickness(12, 6, 12, 6),
-            Margin = new Thickness(0, 16, 0, 0),
-        };
     }
 }

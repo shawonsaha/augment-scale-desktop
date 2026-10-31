@@ -307,7 +307,7 @@ Configuration is read from `%LOCALAPPDATA%\AugmentScale\setup.json`. On first la
 
 ### Important PIN warning
 
-Bootstrap PINs are only used when a profile has no stored hash. After the first run, editing `pin` in `setup.json` has no effect, and the `pin` field is cleared. Set the correct PINs **before** the first production login. To reset a PIN later, a supervisor can use Operators > Change PIN. If no supervisor can sign in, close the application and run `AugmentScale.exe --reset-pin <operator-id>` from the installation folder, then enter and confirm the new 4-digit PIN. The command only works while the application is closed and only for an active operator.
+Bootstrap PINs are only used when a profile has no stored hash. After the first run, editing `pin` in `setup.json` has no effect, and the `pin` field is cleared. Set the correct PINs **before** the first production login. To reset a PIN later, a supervisor can use Operators > Change PIN.
 
 ### Operators
 
@@ -814,7 +814,7 @@ An instance is already open, possibly on another desktop session. Close the exis
 
 - PINs are digits only; only digits are accepted.
 - After five failures, wait 60 seconds.
-- A supervisor can change a forgotten PIN from Operators > Change PIN. If no supervisor can sign in, close the application and run `AugmentScale.exe --reset-pin <operator-id>` from the installation folder. Do not reset the data directory; that destroys tickets.
+- A supervisor can change a forgotten PIN from Operators > Change PIN. Do not reset the data directory; that destroys tickets.
 - Confirm Caps Lock/Num Lock state; only the numeric row and keypad digits are accepted.
 
 ### Database or secrets were copied from another computer

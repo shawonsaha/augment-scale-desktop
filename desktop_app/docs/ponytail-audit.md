@@ -10,15 +10,11 @@
 
 ## Must fix
 
-### 1. `--reset-pin` does nothing, and the obvious workaround destroys the database
+### 1. [RESOLVED] `--reset-pin` does nothing, and the obvious workaround destroys the database
 
-**What this is:** `App.xaml.cs:157-190` builds a `PasswordBox` pair and a `Button`, then returns without ever showing a window, wiring `Click`, validating input, or calling `ConfigService.SetPin`.
+**What this was:** `App.xaml.cs:157-190` built a `PasswordBox` pair and a `Button`, then returned without ever showing a window, wiring `Click`, validating input, or calling `ConfigService.SetPin`.
 
-**Problem:** `AugmentScale.exe --reset-pin mr` prints no error and exits successfully, but the PIN is unchanged. An operator locked out of a 4-digit PIN has no supported recovery. The natural next step — deleting `secrets.dat` — also destroys `DatabaseKey` (`ConfigService.cs:261`), which is the SQLCipher key for the ticket database. That converts "forgot my PIN" into "all weigh tickets are now unreadable". The one recovery path in the product is the one that loses the data.
-
-**Fix:** Show a real dialog (`ShowDialog` + `PasswordBox` ×2), validate 4 digits and equality, call `ConfigService.SetPin(op.Id, pin)` or `DatabaseService.SetProfilePin` so the change is audited, then exit with a clear success message. Roughly 25 lines.
-
-**If we skip it:** A forgotten supervisor PIN means a reinstall and permanent loss of the encrypted history; no remote or phone support can fix it.
+**Resolution:** Removed the incomplete `--reset-pin` CLI flag and the dead `ResetPin` method from `App.xaml.cs`. An offline CLI PIN reset path is unnecessary because supervisors can change or reset any operator's PIN directly within the application UI (Operators / Profiles screen > Change PIN, invoking `SetProfilePin` and writing an audited event to `audit_events`). Documentation and manual references pointing to the CLI flag have been cleaned up.
 
 ### 2. DevTools is enabled in the shipping build
 
@@ -170,11 +166,11 @@
 
 ### 16. Test suite covers the happy paths, not the risky ones
 
-**What this is:** 135 tests pass, including ticket lifecycle, history, archives, cloud outbox, and protocol parsing. There is no test for: the reset-pin path, a renumber collision (`RenumberLocalTicket`), a non-local site time zone at a day boundary, late completion after an archive run, or DevTools/command authorization.
+**What this is:** 135 tests pass, including ticket lifecycle, history, archives, cloud outbox, and protocol parsing. There is no test for: a renumber collision (`RenumberLocalTicket`), a non-local site time zone at a day boundary, late completion after an archive run, or DevTools/command authorization.
 
-**Problem:** The four highest-consequence bugs in this report (#1, #4, #5, #7) are exactly the paths with no coverage. A green suite reads as "safe" when it is really "the ordinary flows work".
+**Problem:** The high-consequence bugs in this report (#4, #5, #7) are paths with no coverage. A green suite reads as "safe" when it is really "the ordinary flows work".
 
-**Fix:** Add one test each for renumbering with a higher local number, a report/archive window in `Asia/Dhaka` while the test host is UTC, and a ticket completed after its day was archived. The reset-pin dialog can be tested through `ConfigService.SetPin`.
+**Fix:** Add one test each for renumbering with a higher local number, a report/archive window in `Asia/Dhaka` while the test host is UTC, and a ticket completed after its day was archived.
 
 **If we skip it:** These will regress the first time someone refactors sync or archiving.
 
@@ -182,10 +178,10 @@
 
 ## Verdict
 
-Fix **#1–#6** before the next install: they are the ones that lose data or let an operator rewrite history. In order: reset-pin (#1), DevTools/session authorization (#2), default PIN (#3), renumber collision (#4), timezone (#5), PIN throttling (#6). Then **#7–#9** in the next maintenance window — the archive cutoff and the outbox index/retention are slow-growing but permanent. **#10–#16** are cheap and can ride along with the next touch of those files.
+Fix **#2–#6** before the next install: they are the ones that lose data or let an operator rewrite history (#1 is resolved). In order: DevTools/session authorization (#2), default PIN (#3), renumber collision (#4), timezone (#5), PIN throttling (#6). Then **#7–#9** in the next maintenance window — the archive cutoff and the outbox index/retention are slow-growing but permanent. **#10–#16** are cheap and can ride along with the next touch of those files.
 
 The core architecture is sound: transactions carry business data, audit, and outbox together; history queries are parameterized and allowlisted; vector/HTML output is mostly escaped; the workflow state machine is tested. The failures are at the edges — recovery, the browser surface, and time.
 
-**Lean:** ~50 lines deletable (#15) plus the ~9-line dead reset-pin dialog that gets replaced. No unnecessary dependencies found. Two generated `tools/*.js` scripts (2.7k lines) live outside the build and are not counted.
+**Lean:** ~50 lines deletable (#15) plus the removed ~45-line dead `--reset-pin` CLI handling (#1 resolved). No unnecessary dependencies found. Two generated `tools/*.js` scripts (2.7k lines) live outside the build and are not counted.
 
 **Not checked:** `AugmentScale.WebUI/css` and `partials/` in depth, `AugmentScale.ScaleSimulator`, `tools/*.ps1` and the two `tools/*.js` generators, `publish.ps1`/`upload-releases.ps1`, `docs/`, Supabase RLS policies and the live cloud schema, and live WebView2/manual UI flows (no running instance was driven). The dashboard-web project is outside this folder.

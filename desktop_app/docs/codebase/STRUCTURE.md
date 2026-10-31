@@ -22,7 +22,6 @@ List only meaningful top-level directories and files.
 - Main runtime entry: `AugmentScale.App.OnStartup` in [App.xaml.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale/App.xaml.cs#L27). Acquires named single-instance mutex, initializes configuration, logs, services, displays `MainWindow`, and starts background workers.
 - Secondary entry points:
   - Simulator GUI entry: `AugmentScale.ScaleSimulator.App.OnStartup` in [AugmentScale.ScaleSimulator/App.xaml.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale.ScaleSimulator/App.xaml.cs).
-  - CLI recovery command: `--reset-pin <operatorId>` handled in [App.xaml.cs](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale/App.xaml.cs#L64).
   - WebUI frontend entry: `index.html` and [main.js](file:///C:/Users/Shawon/Documents/MEGA/weight-scale/weight-scale-onsite-testing-report/prototype-to-production/desktop_app/AugmentScale/WebUI/js/main.js#L1).
 - How entry is selected: Executable launch args inspect `e.Args`. Default launch opens GUI shell.
 
