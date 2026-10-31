@@ -101,6 +101,7 @@ export async function registerTruck(truckData, operatorName = 'MD. RAJU') {
   const record = await sendCommand('registerVehicle', {
     plate,
     ...incoming,
+    token: state.activeOperator?.token || '',
     operatorId: state.activeOperator?.id || '',
     operatorName: operatorName || state.activeOperator?.name || 'Unknown',
   });
@@ -139,6 +140,7 @@ export async function archiveTruck(plate, reason, operatorName) {
     const record = await sendCommand('archiveVehicle', {
       plate: target,
       reason,
+      token: state.activeOperator?.token || '',
       operatorId: state.activeOperator?.id || '',
       operatorName: operatorName || state.activeOperator?.name || 'Unknown',
     });
@@ -167,6 +169,7 @@ export async function restoreTruck(plate, operatorName) {
   const record = await sendCommand('restoreVehicle', {
     plate: target,
     reason: '',
+    token: state.activeOperator?.token || '',
     operatorId: state.activeOperator?.id || '',
     operatorName: operatorName || state.activeOperator?.name || 'Unknown',
   });
@@ -196,6 +199,7 @@ export async function deleteVehicle(plate, reason, operatorName) {
     await sendCommand('deleteVehicle', {
       plate: target,
       reason,
+      token: state.activeOperator?.token || '',
       operatorId: state.activeOperator?.id || '',
       operatorName: operatorName || state.activeOperator?.name || 'Unknown',
     });
@@ -284,12 +288,26 @@ export async function authenticateOperator(operatorId, pin) {
  * Reloads the operator list and keeps the signed-in profile in sync.
  * @returns {Promise<ProfileDto[]>}
  */
+/**
+ * Signs out the active operator and revokes the session on the desktop host.
+ * @returns {Promise<void>}
+ */
+export async function signOutOperator() {
+  try {
+    await sendCommand('signOutOperator');
+  } catch {}
+  state.activeOperator = null;
+}
+
 export async function refreshOperators() {
   const operators = await sendCommand('getOperators');
   setOperators(operators || []);
   if (state.activeOperator) {
     const current = OPERATORS.find((op) => op.id === state.activeOperator?.id);
-    if (current) state.activeOperator = current;
+    if (current) {
+      const existingToken = state.activeOperator.token;
+      state.activeOperator = { ...current, token: existingToken };
+    }
   }
   document.dispatchEvent(new CustomEvent('operators:refresh'));
   return OPERATORS;
@@ -350,6 +368,7 @@ export async function captureReading() {
 export async function commitFirstWeigh(ticketData) {
   const saved = await sendCommand('createTicket', {
     ...ticketData,
+    token: state.activeOperator?.token || '',
     operatorId: state.activeOperator?.id || '',
     operatorName: state.activeOperator?.name || 'Unknown Operator',
     recordFirstPrint: true,
@@ -369,6 +388,7 @@ export async function commitFirstWeigh(ticketData) {
 export async function commitSecondWeigh(ticketData) {
   const completed = await sendCommand('completeTicket', {
     ...ticketData,
+    token: state.activeOperator?.token || '',
     operatorId: state.activeOperator?.id || '',
     operatorName: state.activeOperator?.name || 'Unknown Operator',
     recordCertificatePrint: true,
@@ -392,6 +412,7 @@ export async function deleteTicket(ticketId, reason, operatorName) {
   const updated = await sendCommand('deleteTicket', {
     ticketId,
     reason,
+    token: state.activeOperator?.token || '',
     operatorId: state.activeOperator?.id || '',
     operatorName: operatorName || state.activeOperator?.name || 'Unknown',
   });
@@ -498,6 +519,7 @@ export async function voidTicket(ticketId, reason, operatorName) {
   const updated = await sendCommand('voidTicket', {
     ticketId,
     reason,
+    token: state.activeOperator?.token || '',
     operatorId: state.activeOperator?.id || '',
     operatorName: operatorName || state.activeOperator?.name || 'Unknown',
   });
@@ -523,6 +545,7 @@ export async function recordReprint(ticket, reason, operatorName) {
   const result = await sendCommand('recordReprint', {
     ticketId: ticket.id,
     reason,
+    token: state.activeOperator?.token || '',
     operatorId: state.activeOperator?.id || '',
     operatorName: operatorName || state.activeOperator?.name || 'Unknown',
   });

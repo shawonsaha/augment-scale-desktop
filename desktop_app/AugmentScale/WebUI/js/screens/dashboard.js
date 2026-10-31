@@ -8,6 +8,7 @@ import {
   pendingTickets,
   completedTickets,
   deleteTicket,
+  signOutOperator,
   getTicketStatus,
   getTicketTimestamp,
 } from '../state.js';
@@ -475,8 +476,8 @@ export function initDashboard() {
   // Lock workstation button
   const lockBtn = document.getElementById('btn-lock-workstation');
   if (lockBtn) {
-    lockBtn.addEventListener('click', () => {
-      state.activeOperator = null;
+    lockBtn.addEventListener('click', async () => {
+      await signOutOperator();
       showToast('Workstation locked', 'info');
       showScreen('login-screen');
     });

@@ -100,7 +100,11 @@ public partial class MainWindow : Window
 
             var core = WebView.CoreWebView2;
             core.Settings.AreDefaultContextMenusEnabled = false;
+#if DEBUG
             core.Settings.AreDevToolsEnabled = true;
+#else
+            core.Settings.AreDevToolsEnabled = false;
+#endif
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
             core.Settings.AreDefaultScriptDialogsEnabled = true;
@@ -212,6 +216,7 @@ public partial class MainWindow : Window
             return;
         }
 
+#if DEBUG
         if (e.Key == Key.D &&
             Keyboard.Modifiers.HasFlag(ModifierKeys.Control) &&
             Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
@@ -219,6 +224,7 @@ public partial class MainWindow : Window
             try { WebView.CoreWebView2?.OpenDevToolsWindow(); } catch { /* not ready */ }
             e.Handled = true;
         }
+#endif
     }
 
     private void ToggleFullscreen()

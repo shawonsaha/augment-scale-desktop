@@ -16,6 +16,7 @@ export interface ProfileDto {
   avatar: string;
   color: string;
   pinSet: boolean;
+  token?: string;
 }
 
 export interface VehicleDto {

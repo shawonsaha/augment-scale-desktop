@@ -12,4 +12,5 @@ public sealed class ProfileDto
     public string Avatar { get; set; } = "avatars/frame-9.svg";
     public string Color { get; set; } = "#4C7875";
     public bool PinSet { get; set; }
+    public string? Token { get; set; }
 }

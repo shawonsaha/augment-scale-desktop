@@ -4,7 +4,7 @@
 
 **Assumed load:** One workstation, 1–5 operators, one scale connection, a few hundred tickets per day, one Supabase project, one Windows install. Not multi-tenant and not multi-process. Growth measured in years, not requests per second.
 
-**Verified:** `dotnet test AugmentScale.slnx --nologo -v q` → 135 passed, 0 failed, 0 skipped (2 × xUnit2013 warnings). Findings below were re-checked against current code; the previous version of this file was stale.
+**Verified:** `dotnet test AugmentScale.slnx --nologo -v q` → 140 passed, 0 failed, 0 skipped (2 × xUnit2013 warnings). Findings below were re-checked against current code; the previous version of this file was stale.
 
 ---
 
@@ -16,15 +16,16 @@
 
 **Resolution:** Removed the incomplete `--reset-pin` CLI flag and the dead `ResetPin` method from `App.xaml.cs`. An offline CLI PIN reset path is unnecessary because supervisors can change or reset any operator's PIN directly within the application UI (Operators / Profiles screen > Change PIN, invoking `SetProfilePin` and writing an audited event to `audit_events`). Documentation and manual references pointing to the CLI flag have been cleaned up.
 
-### 2. DevTools is enabled in the shipping build
+### 2. [RESOLVED] DevTools is enabled in the shipping build
 
-**What this is:** `MainWindow.xaml.cs:103` sets `AreDevToolsEnabled = true` unconditionally, and `MainWindow.xaml.cs:215-219` opens the DevTools window on Ctrl+Shift+D. Nothing disables either in Release.
+**What this was:** `MainWindow.xaml.cs:103` set `AreDevToolsEnabled = true` unconditionally, and `MainWindow.xaml.cs:215-219` opened the DevTools window on Ctrl+Shift+D. Nothing disabled either in Release. Bridge commands also trusted unverified `operatorId`/`operatorName` from client payloads.
 
-**Problem:** `BridgeService` trusts every command from the page; the only check is `EnsureLicenseActive()` (`BridgeService.cs:186-192`). `createTicket`, `completeTicket`, `voidTicket`, and `deleteTicket` (`BridgeService.cs:353-379`) accept `OperatorId`/`OperatorName` from the message and never verify that an operator is signed in. Any operator at the terminal can open DevTools (or Ctrl+Shift+D) and run `chrome.webview.postMessage({command:'deleteTicket', payload:{ticketId:42, reason:'x', operatorId:'mr', ...}})`, deleting or voiding tickets as the supervisor with a forged audit actor. No PIN is asked for. The audit trail the PDF archive exists to prove becomes advisory.
-
-**Fix:** Set `AreDevToolsEnabled = false` and remove the shortcut for release builds (gate both behind `#if DEBUG`), and add a per-session operator token to the mutating bridge commands, the same way `RequireProfileAdmin` already guards profile writes.
-
-**If we skip it:** "Who voided this ticket?" has no trustworthy answer; any operator can rewrite history in a browser console.
+**Resolution:**
+1. **WebView2 Hardening:** Gated `AreDevToolsEnabled = true` and the `Ctrl+Shift+D` shortcut in `MainWindow.xaml.cs` behind `#if DEBUG`. In Release builds, DevTools is disabled (`AreDevToolsEnabled = false`) and the shortcut is ignored.
+2. **Session Token Enforcement:** Added per-session operator tokens to `BridgeService`. Successful PIN authentication via `authenticatePin` issues a cryptographically random session token with a 12-hour sliding expiration matching yard gate shifts.
+3. **Bridge Mutation Guard:** Guarded all mutating bridge commands (`createTicket`, `completeTicket`, `voidTicket`, `deleteTicket`, `registerVehicle`, `archiveVehicle`, `restoreVehicle`, `deleteVehicle`, `recordReprint`) with `RequireOperator(token)`. Missing, invalid, or expired tokens reject the command.
+4. **Forged Actor Prevention:** `BridgeService` forces `OperatorId` and `OperatorName` on all incoming requests to match the validated session actor, making it impossible to forge audit trail actors via the console or IPC. Added `signOutOperator` on workstation lock.
+5. **Automated Testing:** Added unit tests in `BridgeSecurityTests.cs` verifying that unauthenticated mutating commands are rejected, valid tokens succeed, forged identities are overwritten, and sign-out invalidates sessions.
 
 ### 3. Every install ships with supervisor PIN `1234`
 

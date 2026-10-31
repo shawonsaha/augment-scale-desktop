@@ -5,7 +5,7 @@ public sealed class VehicleQueryRequest
     public bool IncludeArchived { get; set; }
 }
 
-public sealed class VehicleRequest
+public sealed class VehicleRequest : OperatorSessionRequest
 {
     public string Plate { get; set; } = string.Empty;
     public string Driver { get; set; } = string.Empty;
@@ -16,7 +16,7 @@ public sealed class VehicleRequest
     public string OperatorName { get; set; } = string.Empty;
 }
 
-public sealed class ArchiveVehicleRequest
+public sealed class ArchiveVehicleRequest : OperatorSessionRequest
 {
     public string Plate { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
@@ -24,7 +24,7 @@ public sealed class ArchiveVehicleRequest
     public string OperatorName { get; set; } = string.Empty;
 }
 
-public sealed class DeleteVehicleRequest
+public sealed class DeleteVehicleRequest : OperatorSessionRequest
 {
     public string Plate { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;

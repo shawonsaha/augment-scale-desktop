@@ -18,6 +18,12 @@ public sealed class BridgeService
     };
 
     private static readonly TimeSpan ProfileAdminSessionLifetime = TimeSpan.FromMinutes(15);
+    internal TimeSpan OperatorSessionLifetime { get; set; } = TimeSpan.FromHours(12);
+
+    private readonly object _operatorGate = new();
+    private string? _operatorSessionToken;
+    private ProfileDto? _activeOperatorActor;
+    private DateTimeOffset _operatorSessionExpiresAt;
 
     private readonly DatabaseService _database;
     private readonly ScaleReaderService _scale;
@@ -205,8 +211,12 @@ public sealed class BridgeService
             {
                 EnsureLicenseActive();
                 var request = Deserialize<PinAuthRequest>(payload);
-                return _database.AuthenticateOperator(request.OperatorId, request.Pin);
+                return AuthenticateOperator(request);
             }
+
+            case "signOutOperator":
+                SignOutOperator();
+                return true;
 
             case "unlockProfileAdmin":
                 EnsureLicenseActive();
@@ -354,6 +364,9 @@ public sealed class BridgeService
             {
                 EnsureLicenseActive();
                 var request = Deserialize<CreateTicketRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
                 AttachReading(reading => request.Reading = reading);
                 var ticket = _database.CreateTicket(request);
                 _capturedReading = null;
@@ -364,6 +377,13 @@ public sealed class BridgeService
             {
                 EnsureLicenseActive();
                 var request = Deserialize<CompleteTicketRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
+                if (request.Override is not null)
+                {
+                    request.Override.Operator = actor.Name;
+                }
                 AttachReading(reading => request.Reading = reading);
                 var ticket = _database.CompleteTicket(request);
                 _capturedReading = null;
@@ -371,21 +391,42 @@ public sealed class BridgeService
             }
 
             case "voidTicket":
+            {
                 EnsureLicenseActive();
-                return _database.VoidTicket(Deserialize<TicketReasonRequest>(payload));
+                var request = Deserialize<TicketReasonRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
+                return _database.VoidTicket(request);
+            }
 
             case "deleteTicket":
+            {
                 EnsureLicenseActive();
-                return _database.SoftDeleteTicket(Deserialize<TicketReasonRequest>(payload));
+                var request = Deserialize<TicketReasonRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
+                return _database.SoftDeleteTicket(request);
+            }
 
             case "registerVehicle":
+            {
                 EnsureLicenseActive();
-                return _database.RegisterVehicle(Deserialize<VehicleRequest>(payload));
+                var request = Deserialize<VehicleRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
+                return _database.RegisterVehicle(request);
+            }
 
             case "archiveVehicle":
             {
                 EnsureLicenseActive();
                 var request = Deserialize<ArchiveVehicleRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
                 var result = _database.ArchiveVehicle(request);
                 if (!result.Ok) throw new InvalidOperationException(result.Error ?? "Archive failed.");
                 return result.Vehicle;
@@ -395,6 +436,9 @@ public sealed class BridgeService
             {
                 EnsureLicenseActive();
                 var request = Deserialize<ArchiveVehicleRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
                 return _database.RestoreVehicle(request)
                        ?? throw new InvalidOperationException("Vehicle not found.");
             }
@@ -403,6 +447,9 @@ public sealed class BridgeService
             {
                 EnsureLicenseActive();
                 var request = Deserialize<DeleteVehicleRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
                 var result = _database.DeleteVehicle(request);
                 if (!result.Ok) throw new InvalidOperationException(result.Error ?? "Delete failed.");
                 return true;
@@ -412,12 +459,63 @@ public sealed class BridgeService
             {
                 EnsureLicenseActive();
                 var request = Deserialize<ReprintRequest>(payload);
+                var actor = RequireOperator(request.Token);
+                request.OperatorId = actor.Id;
+                request.OperatorName = actor.Name;
                 var result = _database.RecordReprint(request);
                 return new { ticket = result.Ticket, copyNumber = result.CopyNumber };
             }
 
             default:
                 throw new InvalidOperationException($"Unknown command '{command}'.");
+        }
+    }
+
+    private ProfileDto? AuthenticateOperator(PinAuthRequest request)
+    {
+        var profile = _database.AuthenticateOperator(request.OperatorId, request.Pin);
+        if (profile is null) return null;
+
+        var token = Guid.NewGuid().ToString("N");
+        var expiresAt = DateTimeOffset.Now.Add(OperatorSessionLifetime);
+        lock (_operatorGate)
+        {
+            _operatorSessionToken = token;
+            _activeOperatorActor = profile;
+            _operatorSessionExpiresAt = expiresAt;
+        }
+
+        profile.Token = token;
+        return profile;
+    }
+
+    private void SignOutOperator()
+    {
+        lock (_operatorGate)
+        {
+            _operatorSessionToken = null;
+            _activeOperatorActor = null;
+            _operatorSessionExpiresAt = DateTimeOffset.MinValue;
+        }
+    }
+
+    private ProfileDto RequireOperator(string? token)
+    {
+        lock (_operatorGate)
+        {
+            if (string.IsNullOrWhiteSpace(token) ||
+                _operatorSessionToken is null ||
+                !string.Equals(token, _operatorSessionToken, StringComparison.Ordinal) ||
+                DateTimeOffset.Now > _operatorSessionExpiresAt)
+            {
+                _operatorSessionToken = null;
+                _activeOperatorActor = null;
+                throw new InvalidOperationException(
+                    "No active operator session. Please sign in with your PIN.");
+            }
+
+            _operatorSessionExpiresAt = DateTimeOffset.Now.Add(OperatorSessionLifetime);
+            return _activeOperatorActor!;
         }
     }
 

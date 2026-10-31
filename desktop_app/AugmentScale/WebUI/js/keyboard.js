@@ -6,7 +6,7 @@
  * M (Material input), Ctrl+S (Register truck), Ctrl+Enter (Open pending ticket),
  * ? (Cheat Sheet modal), Ctrl+L (Lock workstation).
  */
-import { state, pendingTickets } from './state.js';
+import { state, pendingTickets, signOutOperator } from './state.js';
 import { showScreen, requestNavigation } from './router.js';
 import { showToast } from './toast.js';
 import { closePrintModal } from './print.js';
@@ -199,7 +199,7 @@ export function initKeyboardShortcuts() {
     if (e.ctrlKey && e.key.toLowerCase() === 'l') {
       e.preventDefault();
       if (state.currentScreen === 'login-screen') return;
-      state.activeOperator = null;
+      signOutOperator().catch(() => {});
       showToast('Workstation locked', 'info');
       showScreen('login-screen');
       return;

@@ -2,7 +2,12 @@ using System.Text.Json;
 
 namespace AugmentScale.Models.Commands;
 
-public sealed class CreateTicketRequest
+public class OperatorSessionRequest
+{
+    public string Token { get; set; } = string.Empty;
+}
+
+public sealed class CreateTicketRequest : OperatorSessionRequest
 {
     public long? TicketId { get; set; }
     public string TruckNo { get; set; } = string.Empty;
@@ -22,7 +27,7 @@ public sealed class CreateTicketRequest
     public WeightReading? Reading { get; set; }
 }
 
-public sealed class CompleteTicketRequest
+public sealed class CompleteTicketRequest : OperatorSessionRequest
 {
     public long TicketId { get; set; }
     public double WeightKg { get; set; }
@@ -42,7 +47,7 @@ public sealed class OverrideRequest
     public JsonElement? AnomalyDetails { get; set; }
 }
 
-public sealed class TicketReasonRequest
+public sealed class TicketReasonRequest : OperatorSessionRequest
 {
     public long TicketId { get; set; }
     public string Reason { get; set; } = string.Empty;
@@ -50,7 +55,7 @@ public sealed class TicketReasonRequest
     public string OperatorName { get; set; } = string.Empty;
 }
 
-public sealed class ReprintRequest
+public sealed class ReprintRequest : OperatorSessionRequest
 {
     public long TicketId { get; set; }
     public string Reason { get; set; } = string.Empty;
