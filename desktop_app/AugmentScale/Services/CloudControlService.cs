@@ -829,32 +829,37 @@ public sealed class CloudControlService : IDisposable
 
                             if (!success && entityType == "weigh_tickets" && errorMessage != null && errorMessage.Contains("idx_tickets_number"))
                             {
-                                AppLog.Warn($"Cloud: Conflict on idx_tickets_number detected for ticket {evt.EntityId}. Auto-resolving ticket number...");
-                                var cloudMax = await FetchCloudMaxTicketNumberAsync(baseUrl, apiKey, ct);
-                                long currentNum = 0;
-                                if (rowData.TryGetValue("ticket_number", out var numObj) && numObj != null)
+                                const int maxConflictResolutions = 3;
+                                int conflictAttempts = 0;
+                                while (!success && entityType == "weigh_tickets" && errorMessage != null && errorMessage.Contains("idx_tickets_number") && conflictAttempts < maxConflictResolutions)
                                 {
-                                    currentNum = Convert.ToInt64(numObj, CultureInfo.InvariantCulture);
-                                }
+                                    conflictAttempts++;
+                                    AppLog.Warn($"Cloud: Conflict on idx_tickets_number detected for ticket {evt.EntityId} (attempt {conflictAttempts}/{maxConflictResolutions}). Auto-resolving ticket number...");
+                                    var cloudMax = await FetchCloudMaxTicketNumberAsync(baseUrl, apiKey, ct);
+                                    long currentNum = 0;
+                                    if (rowData.TryGetValue("ticket_number", out var numObj) && numObj != null)
+                                    {
+                                        currentNum = Convert.ToInt64(numObj, CultureInfo.InvariantCulture);
+                                    }
 
-                                var newTicketNumber = Math.Max(cloudMax ?? 0, currentNum) + 1;
-                                RenumberLocalTicket(evt.EntityId, newTicketNumber);
+                                    var newTicketNumber = RenumberLocalTicket(evt.EntityId, currentNum, cloudMax);
 
-                                rowData["ticket_number"] = newTicketNumber;
-                                rowData["ticket_display_id"] = newTicketNumber.ToString(CultureInfo.InvariantCulture);
-                                UpdateOutboxEventPayload(evt.Id, rowData);
+                                    rowData["ticket_number"] = newTicketNumber;
+                                    rowData["ticket_display_id"] = newTicketNumber.ToString(CultureInfo.InvariantCulture);
+                                    UpdateOutboxEventPayload(evt.Id, rowData);
 
-                                upsertRes = await UpsertRowToSupabaseAsync(baseUrl, apiKey, entityType, rowData, ct);
-                                if (upsertRes.Success)
-                                {
-                                    AppLog.Info($"Cloud: Successfully healed ticket {evt.EntityId} with #{newTicketNumber} and synced to Supabase.");
-                                    success = true;
-                                    errorMessage = null;
-                                }
-                                else
-                                {
-                                    success = false;
-                                    errorMessage = upsertRes.ErrorMessage;
+                                    upsertRes = await UpsertRowToSupabaseAsync(baseUrl, apiKey, entityType, rowData, ct);
+                                    if (upsertRes.Success)
+                                    {
+                                        AppLog.Info($"Cloud: Successfully healed ticket {evt.EntityId} with #{newTicketNumber} and synced to Supabase.");
+                                        success = true;
+                                        errorMessage = null;
+                                    }
+                                    else
+                                    {
+                                        success = false;
+                                        errorMessage = upsertRes.ErrorMessage;
+                                    }
                                 }
                             }
                         }
@@ -889,7 +894,7 @@ public sealed class CloudControlService : IDisposable
                 }
                 else
                 {
-                    var deadLettered = MarkOutboxFailed(evt.Id, evt.Attempts, errorMessage ?? "HTTP error", nowStr);
+                    var deadLettered = MarkOutboxFailed(evt.Id, evt.EntityType, evt.Attempts, errorMessage ?? "HTTP error", nowStr);
                     if (deadLettered)
                     {
                         AppLog.Error($"Cloud: Outbox event #{evt.Sequence} ({evt.EntityType}) reached max retry attempts ({MaxOutboxAttempts}) and transitioned to 'dead_letter': {errorMessage}");
@@ -1013,43 +1018,118 @@ public sealed class CloudControlService : IDisposable
         return false;
     }
 
-    private void RenumberLocalTicket(string ticketId, long newNumber)
+    internal long RenumberLocalTicket(string ticketId, long currentNum, long? cloudMax)
     {
-        using var conn = _database.OpenConnection();
-        using var txn = conn.BeginTransaction();
-        var now = DateTimeOffset.UtcNow.ToString("O");
-
-        using (var cmd = conn.CreateCommand())
+        const int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            cmd.Transaction = txn;
-            cmd.CommandText = """
-                UPDATE weigh_tickets
-                SET ticket_number = $num,
-                    ticket_display_id = $display,
-                    updated_at = $now
-                WHERE id = $id;
-                """;
-            cmd.Parameters.AddWithValue("$num", newNumber);
-            cmd.Parameters.AddWithValue("$display", newNumber.ToString(CultureInfo.InvariantCulture));
-            cmd.Parameters.AddWithValue("$now", now);
-            cmd.Parameters.AddWithValue("$id", ticketId);
-            cmd.ExecuteNonQuery();
+            try
+            {
+                using var conn = _database.OpenConnection();
+                using var txn = conn.BeginTransaction();
+                var orgId = _database.OrganizationId;
+                var wsId = _database.WorkstationId;
+                var now = DateTimeOffset.UtcNow;
+                var nowStr = now.ToString("O");
+
+                // 1. Fetch local maximum ticket number and watermark
+                long localMax = 0;
+                using (var maxCmd = conn.CreateCommand())
+                {
+                    maxCmd.Transaction = txn;
+                    maxCmd.CommandText = """
+                        SELECT COALESCE(MAX(value), 0) FROM (
+                            SELECT COALESCE(MAX(ticket_number), 0) AS value FROM weigh_tickets WHERE organization_id = $org
+                            UNION ALL
+                            SELECT COALESCE(last_allocated_ticket_number, 0) AS value FROM sync_cursors WHERE id = 'local'
+                        );
+                        """;
+                    maxCmd.Parameters.AddWithValue("$org", orgId);
+                    var scalar = maxCmd.ExecuteScalar();
+                    if (scalar != null && scalar != DBNull.Value)
+                    {
+                        localMax = Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
+                    }
+                }
+
+                // 2. Allocate from all three maxima: cloud, local MAX(ticket_number), watermark
+                var maxKnown = Math.Max(cloudMax ?? 0, Math.Max(localMax, currentNum));
+                var newNumber = maxKnown + 1;
+
+                // 3. Update weigh_tickets
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = txn;
+                    cmd.CommandText = """
+                        UPDATE weigh_tickets
+                        SET ticket_number = $num,
+                            ticket_display_id = $display,
+                            updated_at = $now,
+                            updated_by = 'system'
+                        WHERE id = $id;
+                        """;
+                    cmd.Parameters.AddWithValue("$num", newNumber);
+                    cmd.Parameters.AddWithValue("$display", newNumber.ToString(CultureInfo.InvariantCulture));
+                    cmd.Parameters.AddWithValue("$now", nowStr);
+                    cmd.Parameters.AddWithValue("$id", ticketId);
+                    cmd.ExecuteNonQuery();
+                }
+
+                // 4. Update sync_cursors watermark
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = txn;
+                    cmd.CommandText = """
+                        UPDATE sync_cursors
+                        SET last_allocated_ticket_number = $num
+                        WHERE id = 'local' AND last_allocated_ticket_number < $num;
+                        """;
+                    cmd.Parameters.AddWithValue("$num", newNumber);
+                    cmd.ExecuteNonQuery();
+                }
+
+                // 5. Insert audit row
+                using (var auditCmd = conn.CreateCommand())
+                {
+                    auditCmd.Transaction = txn;
+                    auditCmd.CommandText = """
+                        INSERT INTO audit_events (
+                            id, organization_id, entity_type, entity_id, action,
+                            before_values, after_values, changed_fields,
+                            actor_user_id, actor_role, actor_display_name,
+                            source, workstation_id, change_reason, created_at
+                        ) VALUES (
+                            $id, $org, 'weigh_tickets', $entityId, 'ticket_number_change',
+                            $before, $after, $changed,
+                            'system', 'system', 'System',
+                            'workstation', $ws, $reason, $createdAt
+                        );
+                        """;
+                    var beforeObj = new { ticket_number = currentNum, ticket_display_id = currentNum.ToString(CultureInfo.InvariantCulture) };
+                    var afterObj = new { ticket_number = newNumber, ticket_display_id = newNumber.ToString(CultureInfo.InvariantCulture) };
+                    auditCmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+                    auditCmd.Parameters.AddWithValue("$org", orgId);
+                    auditCmd.Parameters.AddWithValue("$entityId", ticketId);
+                    auditCmd.Parameters.AddWithValue("$before", JsonSerializer.Serialize(beforeObj, JsonOptions));
+                    auditCmd.Parameters.AddWithValue("$after", JsonSerializer.Serialize(afterObj, JsonOptions));
+                    auditCmd.Parameters.AddWithValue("$changed", "[\"ticket_number\",\"ticket_display_id\"]");
+                    auditCmd.Parameters.AddWithValue("$ws", wsId);
+                    auditCmd.Parameters.AddWithValue("$reason", "Cloud conflict resolution on idx_tickets_number");
+                    auditCmd.Parameters.AddWithValue("$createdAt", nowStr);
+                    auditCmd.ExecuteNonQuery();
+                }
+
+                txn.Commit();
+                TicketSequenceSynchronized?.Invoke(newNumber);
+                return newNumber;
+            }
+            catch (SqliteException ex) when (attempt < maxRetries)
+            {
+                AppLog.Warn($"Cloud: Local renumber attempt {attempt} failed ({ex.Message}), retrying...");
+            }
         }
 
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.Transaction = txn;
-            cmd.CommandText = """
-                UPDATE sync_cursors
-                SET last_allocated_ticket_number = $num
-                WHERE id = 'local' AND last_allocated_ticket_number < $num;
-                """;
-            cmd.Parameters.AddWithValue("$num", newNumber);
-            cmd.ExecuteNonQuery();
-        }
-
-        txn.Commit();
-        TicketSequenceSynchronized?.Invoke(newNumber);
+        throw new InvalidOperationException($"Failed to renumber ticket {ticketId} locally after {maxRetries} attempts.");
     }
 
     private void UpdateOutboxEventPayload(string outboxId, Dictionary<string, object?> rowData)
@@ -1221,11 +1301,19 @@ public sealed class CloudControlService : IDisposable
         txn.Commit();
     }
 
-    private bool MarkOutboxFailed(string id, int currentAttempts, string error, string nowStr)
+    private bool MarkOutboxFailed(string id, string entityType, int currentAttempts, string error, string nowStr)
     {
         var newAttempts = currentAttempts + 1;
-        var deadLettered = newAttempts >= MaxOutboxAttempts;
+        // Authoritative fiscal records (weigh_tickets) must never be silently dead-lettered;
+        // they must remain pending so they stay visible in the queue and are never permanently lost.
+        // Auxiliary records (like vehicles) transition to dead_letter to prevent queue blockage.
+        var deadLettered = entityType != "weigh_tickets" && newAttempts >= MaxOutboxAttempts;
         var newStatus = deadLettered ? "dead_letter" : "pending";
+
+        if (entityType == "weigh_tickets" && newAttempts >= MaxOutboxAttempts)
+        {
+            AppLog.Error($"Cloud: Outbox ticket event #{id} reached max retry attempts ({newAttempts}) and remains 'pending' for resolution: {error}");
+        }
 
         using var conn = _database.OpenConnection();
         using var cmd = conn.CreateCommand();

@@ -4,7 +4,7 @@
 
 **Assumed load:** One workstation, 1–5 operators, one scale connection, a few hundred tickets per day, one Supabase project, one Windows install. Not multi-tenant and not multi-process. Growth measured in years, not requests per second.
 
-**Verified:** `dotnet test AugmentScale.slnx --nologo -v q` → 140 passed, 0 failed, 0 skipped (2 × xUnit2013 warnings). Findings below were re-checked against current code; the previous version of this file was stale.
+**Verified:** `dotnet test AugmentScale.slnx --nologo -v q` → 142 passed, 0 failed, 0 skipped (2 × xUnit2013 warnings). Findings below were re-checked against current code; the previous version of this file was stale.
 
 ---
 
@@ -37,15 +37,17 @@
 
 **If we skip it:** The weakest credential in the system is printed in the installer.
 
-### 4. Renumber-on-conflict can collide again and dead-letter the ticket
+### 4. [RESOLVED] Renumber-on-conflict can collide again and dead-letter the ticket
 
-**What this is:** `CloudControlService.cs:830-853` reacts to a duplicate `idx_tickets_number` by computing `newNumber = Math.Max(cloudMax ?? 0, currentNum) + 1`, writing it locally via `RenumberLocalTicket` (`CloudControlService.cs:1016-1053`), updating the outbox payload, and retrying. `RenumberLocalTicket` updates `weigh_tickets` and the sequence watermark but writes no `audit_events` row.
+**What this was:** `CloudControlService.cs:830-853` reacted to a duplicate `idx_tickets_number` by computing `newNumber = Math.Max(cloudMax ?? 0, currentNum) + 1`, writing it locally via `RenumberLocalTicket`, updating the outbox payload, and retrying. The formula ignored higher local ticket numbers (e.g. after restoring a database where local tickets reached 150 while cloud is at 100), renumbering ticket #120 to 121 which collided locally, failed repeatedly, and after 10 attempts transitioned to `dead_letter`—permanently losing the ticket from cloud sync. Furthermore, successful renumbering wrote no `audit_events` row.
 
-**Problem:** The formula ignores higher local ticket numbers. Concrete case: restore a backup whose local maximum is 150 while the cloud maximum is 100. Ticket #120 conflicts on upload; the code renumbers it to 121, which already exists locally, so the unique index (`V001_InitialSchema.sql:400`) throws again. That exception is caught at `CloudControlService.cs:875`, the event is marked failed, and after 10 attempts it becomes `dead_letter` (`CloudControlService.cs:1224-1243`). The retry recomputes 121 every time because the payload is only updated after the local write succeeds, so it never escapes. Even when renumbering works, the number changes with no audit record, which breaks the serial audit trail.
-
-**Fix:** Allocate from all three maxima (cloud, local `MAX(ticket_number)`, watermark), do the read and the update in one transaction or a bounded retry loop, and insert an audit row (`ticket_number_change`, before/after, actor = system) in the same transaction. On permanent failure, keep the ticket visible as pending rather than silently dead-lettering it.
-
-**If we skip it:** After any restore, reinstall, or second workstation, tickets can vanish from the cloud permanently; auditors see a renumbered ticket with no explanation.
+**Resolution:**
+1. **Three-Way Maxima Allocation:** `RenumberLocalTicket` now queries both local `MAX(ticket_number)` and `sync_cursors.last_allocated_ticket_number` along with `cloudMax` and `currentNum`, computing `newNumber = Math.Max(cloudMax ?? 0, Math.Max(localMax, currentNum)) + 1`. In a restore scenario (#150 local, #100 cloud), conflicting ticket #120 renumbers to #151 instead of colliding on #121.
+2. **Atomic Transaction & Audit Trail:** Local renumbering, watermark advance, and audit event insertion (`action: 'ticket_number_change'`, actor = system, recording before and after ticket numbers) execute in a single SQLite transaction with a bounded retry loop.
+3. **Bounded Conflict Loop:** `PushOutboxEventsAsync` incorporates a bounded retry loop (up to 3 attempts) for cloud conflict resolution in case of concurrent remote allocations.
+4. **Dead-Letter Prevention for Authoritative Records:** Business rule enforced in `MarkOutboxFailed`: `weigh_tickets` outbox events never transition to `dead_letter`; they remain `status = 'pending'`, preventing tickets from being dropped or pruned by maintenance routines.
+5. **Sync Health Visibility:** `SyncStatusService` and `SyncStatusDto` now track `DeadLetterQueue` and failing ticket events (`attempts >= 10`), setting `IsHealthy = false` whenever degraded.
+6. **Automated Testing:** Added integration tests in `CloudControlServiceTests.cs` verifying 3-way maxima allocation (#151), audit trail row generation, and ticket non-dead-lettering with health degradation.
 
 ### 5. `Site.Timezone` is stored but never read
 

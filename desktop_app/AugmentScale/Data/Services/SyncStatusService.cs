@@ -25,12 +25,41 @@ internal sealed class SyncStatusService : ISyncStatusService
 
     internal SyncStatusDto GetSyncStatus(SqliteConnection connection)
     {
-        int pending;
+        int pending = 0;
         using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = "SELECT COUNT(*) FROM outbox_events WHERE status = 'pending';";
             pending = Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
         }
+
+        int deadLetters = 0;
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM outbox_events WHERE status = 'dead_letter';";
+            try
+            {
+                deadLetters = Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+            catch (SqliteException)
+            {
+                // Fallback for pre-V006 schema
+            }
+        }
+
+        int failingTickets = 0;
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM outbox_events WHERE entity_type = 'weigh_tickets' AND status = 'pending' AND attempts >= 10;";
+            try
+            {
+                failingTickets = Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+            catch (SqliteException)
+            {
+            }
+        }
+
+        bool isHealthy = deadLetters == 0 && failingTickets == 0;
 
         string lastSync = DateTimeOffset.Now.ToString("O");
         string? lastCloudSync = null;
@@ -83,9 +112,10 @@ internal sealed class SyncStatusService : ISyncStatusService
 
         return new SyncStatusDto
         {
-            IsHealthy = true,
+            IsHealthy = isHealthy,
             PendingQueue = pending,
-            OutboxTotal = pending,
+            DeadLetterQueue = deadLetters,
+            OutboxTotal = pending + deadLetters,
             LastSyncTimestamp = lastSync,
             Archive = _archives.GetStatus(connection),
             CloudStatus = cloudStatus,

@@ -583,6 +583,255 @@ public class CloudControlServiceTests
 
         // Verify watermark updated to 2, next peek is 3
         Assert.Equal(3, temp.Database.PeekNextTicketNumber());
+
+        // Verify audit event was logged with before and after numbers
+        using (var conn = temp.Database.OpenConnection())
+        using (var auditCmd = conn.CreateCommand())
+        {
+            auditCmd.CommandText = "SELECT action, actor_user_id, before_values, after_values FROM audit_events WHERE entity_id = $id AND action = 'ticket_number_change';";
+            auditCmd.Parameters.AddWithValue("$id", ticket.TicketUuid);
+            using var reader = auditCmd.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal("ticket_number_change", reader.GetString(0));
+            Assert.Equal("system", reader.GetString(1));
+            Assert.Contains("\"ticket_number\":1", reader.GetString(2));
+            Assert.Contains("\"ticket_number\":2", reader.GetString(3));
+        }
+    }
+
+    [Fact]
+    public async Task OutboxConflict_RenumberAndRetry_AllocatesFromAllThreeMaxima_AndLogsAudit()
+    {
+        using var temp = new TempDatabase();
+
+        // 1. Create ticket #1 using CreateTicket
+        var t1 = temp.Database.CreateTicket(new CreateTicketRequest
+        {
+            TruckNo = "DHK-120",
+            WeightKg = 25000,
+            OperatorId = "mr",
+            OperatorName = "MD. RAJU",
+            Direction = "IN"
+        });
+
+        // 2. Set watermark to 149 and renumber t1 to 120, then create ticket #150
+        using (var conn = temp.Database.OpenConnection())
+        using (var txn = conn.BeginTransaction())
+        {
+            using var wmCmd = conn.CreateCommand();
+            wmCmd.Transaction = txn;
+            wmCmd.CommandText = "UPDATE sync_cursors SET last_allocated_ticket_number = 149 WHERE id = 'local';";
+            wmCmd.ExecuteNonQuery();
+
+            using var updateT120 = conn.CreateCommand();
+            updateT120.Transaction = txn;
+            updateT120.CommandText = "UPDATE weigh_tickets SET ticket_number = 120, ticket_display_id = '120' WHERE id = $id;";
+            updateT120.Parameters.AddWithValue("$id", t1.TicketUuid);
+            updateT120.ExecuteNonQuery();
+
+            using var updateOutbox = conn.CreateCommand();
+            updateOutbox.Transaction = txn;
+            updateOutbox.CommandText = "UPDATE outbox_events SET payload = '{\"ticket_number\":120,\"ticket_display_id\":\"120\"}' WHERE entity_id = $id;";
+            updateOutbox.Parameters.AddWithValue("$id", t1.TicketUuid);
+            updateOutbox.ExecuteNonQuery();
+
+            txn.Commit();
+        }
+
+        // Creating t2 now allocates 150 because watermark was 149
+        var t2 = temp.Database.CreateTicket(new CreateTicketRequest
+        {
+            TruckNo = "DHK-150",
+            WeightKg = 30000,
+            OperatorId = "mr",
+            OperatorName = "MD. RAJU",
+            Direction = "IN"
+        });
+        Assert.Equal(150, t2.Id);
+
+        // Also delete outbox event for t2 so only t1 (with number 120) is pushed in this test
+        using (var conn = temp.Database.OpenConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM outbox_events WHERE entity_id = $id;";
+            cmd.Parameters.AddWithValue("$id", t2.TicketUuid);
+            cmd.ExecuteNonQuery();
+        }
+
+        int postCount = 0;
+        long postedTicketNumber = 0;
+        var handler = new MockSupabaseHandler((req) =>
+        {
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("workstation_controls"))
+            {
+                var json = """[{"workstation_id": "test-ws", "license_active": true, "enable_cloud_sync": true}]""";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("weigh_tickets"))
+            {
+                // Cloud max is 100
+                var json = """[{"ticket_number": 100}]""";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.Contains("weigh_tickets"))
+            {
+                postCount++;
+                var body = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? "";
+                if (postCount == 1)
+                {
+                    // First attempt: simulate PostgreSQL 23505 unique constraint violation
+                    var conflictJson = """{"code":"23505","message":"duplicate key value violates unique constraint \"idx_tickets_number\""}""";
+                    return new HttpResponseMessage(HttpStatusCode.Conflict)
+                    {
+                        Content = new StringContent(conflictJson, Encoding.UTF8, "application/json")
+                    };
+                }
+
+                // Second attempt: capture posted ticket number and succeed
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("ticket_number", out var p))
+                {
+                    postedTicketNumber = p.GetInt64();
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var cloud = new CloudControlService(temp.Database, temp.Config, httpClient);
+
+        await cloud.SyncNowAsync();
+
+        Assert.Equal(2, postCount);
+        // Verified: posted ticket to cloud was #151 (NOT #121!)
+        Assert.Equal(151, postedTicketNumber);
+
+        // Verify local ticket was renumbered to #151
+        var updated = temp.Database.GetTicket(151);
+        Assert.NotNull(updated);
+        Assert.Equal(151, updated.Id);
+        Assert.Equal("151", updated.TicketDisplayId);
+
+        // Verify watermark updated to 151, next peek is 152
+        Assert.Equal(152, temp.Database.PeekNextTicketNumber());
+
+        // Verify audit event exists
+        using (var conn = temp.Database.OpenConnection())
+        using (var auditCmd = conn.CreateCommand())
+        {
+            auditCmd.CommandText = "SELECT action, actor_user_id, before_values, after_values FROM audit_events WHERE entity_id = $id AND action = 'ticket_number_change';";
+            auditCmd.Parameters.AddWithValue("$id", t1.TicketUuid);
+            using var reader = auditCmd.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal("ticket_number_change", reader.GetString(0));
+            Assert.Equal("system", reader.GetString(1));
+            Assert.Contains("\"ticket_number\":120", reader.GetString(2));
+            Assert.Contains("\"ticket_number\":151", reader.GetString(3));
+        }
+
+        // Verify outbox status is accepted
+        using (var conn = temp.Database.OpenConnection())
+        using (var checkOutbox = conn.CreateCommand())
+        {
+            checkOutbox.CommandText = "SELECT status FROM outbox_events WHERE entity_id = $id;";
+            checkOutbox.Parameters.AddWithValue("$id", t1.TicketUuid);
+            Assert.Equal("accepted", checkOutbox.ExecuteScalar() as string);
+        }
+    }
+
+    [Fact]
+    public async Task OutboxFailure_WeighTickets_NeverDeadLetters_RemainsPendingAndUnhealthy()
+    {
+        using var temp = new TempDatabase();
+
+        // Create a local ticket
+        var ticket = temp.Database.CreateTicket(new CreateTicketRequest
+        {
+            TruckNo = "FAIL-99",
+            WeightKg = 25000,
+            OperatorId = "mr",
+            OperatorName = "MD. RAJU",
+            Direction = "IN"
+        });
+
+        // Set its outbox event attempts to 9, mark bootstrap complete, and isolate it as the only pending outbox event
+        using (var conn = temp.Database.OpenConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                DELETE FROM outbox_events WHERE entity_id != $id;
+                UPDATE outbox_events SET attempts = 9 WHERE entity_id = $id;
+                UPDATE license_cache SET bootstrap_completed = 1 WHERE id = 'current';
+                """;
+            cmd.Parameters.AddWithValue("$id", ticket.TicketUuid);
+            cmd.ExecuteNonQuery();
+        }
+
+        var handler = new MockSupabaseHandler((req) =>
+        {
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsolutePath.Contains("workstation_controls"))
+            {
+                var json = """[{"workstation_id": "test-ws", "license_active": true, "enable_cloud_sync": true}]""";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.Contains("weigh_tickets"))
+            {
+                // Supabase returns 500 error
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent("{\"error\":\"Internal database error\"}", Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var cloud = new CloudControlService(temp.Database, temp.Config, httpClient);
+
+        await cloud.SyncNowAsync();
+
+        // Verify outbox row remains 'pending', attempts reached 10, NOT transitioned to 'dead_letter'
+        using (var conn = temp.Database.OpenConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT status, attempts FROM outbox_events WHERE entity_id = $id;";
+            cmd.Parameters.AddWithValue("$id", ticket.TicketUuid);
+            using var reader = cmd.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal("pending", reader.GetString(0));
+            Assert.Equal(10, reader.GetInt32(1));
+        }
+
+        // Verify GetSyncStatus flags degradation: IsHealthy is false, PendingQueue is preserved
+        var syncStatus = temp.Database.GetSyncStatus();
+        Assert.False(syncStatus.IsHealthy);
+        Assert.True(syncStatus.PendingQueue >= 1);
+        Assert.Equal(0, syncStatus.DeadLetterQueue);
     }
 
     [Fact]
