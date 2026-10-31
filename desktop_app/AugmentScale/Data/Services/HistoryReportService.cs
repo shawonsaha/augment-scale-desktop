@@ -40,8 +40,12 @@ internal sealed class HistoryReportService : IReportService
             .FirstOrDefault(op => op.Id.Equals(req.OperatorId, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException("The signed-in operator was not found.");
 
+        var siteNow = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, _db.Config.SiteTimeZone);
+        var today = DateOnly.FromDateTime(siteNow.DateTime);
+        var includePending = toDate >= today;
+
         return GenerateReport(fromDate, toDate, operatorProfile.Id, operatorProfile.Name,
-            auditEmpty: true) ?? throw new InvalidOperationException("The report could not be generated.");
+            auditEmpty: true, includePending: includePending) ?? throw new InvalidOperationException("The report could not be generated.");
     }
 
     public HistoryReportDto? GenerateArchiveReport(DateOnly fromDate, DateOnly toDate)
@@ -49,7 +53,7 @@ internal sealed class HistoryReportService : IReportService
         if (fromDate > toDate)
             throw new InvalidOperationException("The archive start date must be before the end date.");
 
-        return GenerateReport(fromDate, toDate, "system", "Automatic archive", auditEmpty: false);
+        return GenerateReport(fromDate, toDate, "system", "Automatic archive", auditEmpty: false, includePending: false);
     }
 
     public DateOnly? GetEarliestReportDate()
@@ -60,7 +64,7 @@ internal sealed class HistoryReportService : IReportService
         cmd.CommandText = """
             SELECT MIN(datetime(business_at))
             FROM ticket_history
-            WHERE organization_id = $org;
+            WHERE organization_id = $org AND status <> 'pending';
             """;
         cmd.Parameters.AddWithValue("$org", _db.OrganizationId);
 
@@ -74,7 +78,7 @@ internal sealed class HistoryReportService : IReportService
     }
 
     private HistoryReportDto? GenerateReport(DateOnly fromDate, DateOnly toDate,
-        string operatorId, string operatorName, bool auditEmpty)
+        string operatorId, string operatorName, bool auditEmpty, bool includePending = false)
     {
         _db.EnsureInitialized();
         var (fromUtc, toUtc) = HistoryRangeLimits.GetUtcDayRange(fromDate, toDate, _db.Config.SiteTimeZone);
@@ -82,7 +86,7 @@ internal sealed class HistoryReportService : IReportService
         using var connection = _db.OpenConnection();
         using var txn = connection.BeginTransaction();
 
-        var tickets = _tickets.ReadTicketsForReport(connection, txn, fromUtc, toUtc);
+        var tickets = _tickets.ReadTicketsForReport(connection, txn, fromUtc, toUtc, includePending);
         if (!auditEmpty && tickets.Count == 0)
         {
             txn.Rollback();

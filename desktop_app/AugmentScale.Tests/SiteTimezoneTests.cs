@@ -83,6 +83,13 @@ public sealed class SiteTimezoneTests
             OperatorName = "MD. RAJU",
             RecordFirstPrint = true,
         });
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = ticket.Id,
+            WeightKg = 10000,
+            SecondTime = "31-10-26 02:30:00 AM",
+            OperatorId = "mr",
+        });
 
         Assert.NotNull(ticket);
 
@@ -127,7 +134,7 @@ public sealed class SiteTimezoneTests
         var db = temp.Database;
 
         // Seed a ticket on 2026-10-30 at 10:00 AM Dhaka time
-        db.CreateTicket(new CreateTicketRequest
+        var tzTicket = db.CreateTicket(new CreateTicketRequest
         {
             TruckNo = "ARCH-TZ-1",
             Driver = "Day Driver",
@@ -140,6 +147,13 @@ public sealed class SiteTimezoneTests
             OperatorId = "mr",
             OperatorName = "MD. RAJU",
             RecordFirstPrint = true,
+        });
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = tzTicket.Id,
+            WeightKg = 5000,
+            SecondTime = "30-10-26 10:30:00 AM",
+            OperatorId = "mr",
         });
 
         var renderer = new TestArchiveRenderer();

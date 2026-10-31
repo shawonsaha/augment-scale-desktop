@@ -681,6 +681,13 @@ public class DatabaseServiceTests
         var request = NewTicket("TEST-RPT-YESTERDAY", 11000);
         request.FirstTime = yesterday.ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture);
         var oldTicket = db.CreateTicket(request);
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = oldTicket.Id,
+            WeightKg = 6000,
+            SecondTime = yesterday.ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture),
+            OperatorId = "mr",
+        });
 
         var todayReport = db.GenerateHistoryReport(TodayReportRequest());
         Assert.DoesNotContain(todayReport.Tickets, t => t.Id == oldTicket.Id);

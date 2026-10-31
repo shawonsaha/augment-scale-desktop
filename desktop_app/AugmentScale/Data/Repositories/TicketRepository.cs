@@ -526,7 +526,7 @@ internal sealed class TicketRepository : ITicketRepository
             throw new InvalidOperationException(
                 "Payload anomaly detected (gross is not greater than tare). Override reason is required.");
 
-        var completedAt = DateTimeOffset.Now;
+        var completedAt = SqliteHelpers.ParseTimestamp(req.SecondTime, _db.Config.SiteTimeZone) ?? DateTimeOffset.Now;
         var operatorName = OperatorRepository.ResolveOperatorName(connection, txn, req.OperatorId, req.OperatorName);
         var captureId = InsertCapture(connection, txn, ticketUuid, 2, true, req.WeightKg,
             req.Reading, req.OperatorId, completedAt, secondType);
@@ -759,15 +759,16 @@ internal sealed class TicketRepository : ITicketRepository
     }
 
     internal IReadOnlyList<TicketDto> ReadTicketsForReport(SqliteConnection connection,
-        SqliteTransaction txn, string fromUtc, string toUtc)
+        SqliteTransaction txn, string fromUtc, string toUtc, bool includePending = false)
     {
         using var cmd = connection.CreateCommand();
         cmd.Transaction = txn;
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             SELECT * FROM ticket_history
             WHERE organization_id = $org
               AND datetime(business_at) >= datetime($from)
               AND datetime(business_at) < datetime($to)
+              {(includePending ? "" : "AND status <> 'pending'")}
             ORDER BY datetime(business_at), ticket_number;
             """;
         cmd.Parameters.AddWithValue("$org", _db.OrganizationId);

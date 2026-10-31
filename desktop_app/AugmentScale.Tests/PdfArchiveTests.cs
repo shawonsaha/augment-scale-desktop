@@ -38,6 +38,13 @@ public sealed class PdfArchiveTests
         var db = temp.Database;
         var day = new DateTime(2026, 9, 14, 10, 0, 0);
         var ticket = db.CreateTicket(NewTicket("ARCH-REPORT", day));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = ticket.Id,
+            WeightKg = 5000,
+            SecondTime = day.AddMinutes(15).ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture),
+            OperatorId = "mr",
+        });
         var before = ReportAuditCount(db);
 
         var empty = db.Reports.GenerateArchiveReport(
@@ -105,7 +112,14 @@ public sealed class PdfArchiveTests
     {
         using var temp = new TempDatabase();
         var db = temp.Database;
-        db.CreateTicket(NewTicket("ARCH-BASELINE", new DateTime(2026, 9, 14, 10, 0, 0)));
+        var t1 = db.CreateTicket(NewTicket("ARCH-BASELINE", new DateTime(2026, 9, 14, 10, 0, 0)));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = t1.Id,
+            WeightKg = 5000,
+            SecondTime = "14-09-26 10:15:00 AM",
+            OperatorId = "mr",
+        });
 
         var renderer = new FakePdfArchiveRenderer();
         var baselineService = new PdfArchiveService(
@@ -125,7 +139,14 @@ public sealed class PdfArchiveTests
         await baselineService.RunOnceAsync();
         Assert.Single(renderer.Reports);
 
-        db.CreateTicket(NewTicket("ARCH-DAILY", new DateTime(2026, 9, 15, 10, 0, 0)));
+        var t2 = db.CreateTicket(NewTicket("ARCH-DAILY", new DateTime(2026, 9, 15, 10, 0, 0)));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = t2.Id,
+            WeightKg = 5000,
+            SecondTime = "15-09-26 10:15:00 AM",
+            OperatorId = "mr",
+        });
         var dailyService = new PdfArchiveService(
             db, renderer, temp.Config,
             () => LocalAt(new DateTime(2026, 9, 16, 0, 5, 0)));
@@ -156,7 +177,14 @@ public sealed class PdfArchiveTests
     {
         using var temp = new TempDatabase();
         var db = temp.Database;
-        db.CreateTicket(NewTicket("ARCH-FAIL", new DateTime(2026, 9, 14, 10, 0, 0)));
+        var tFail = db.CreateTicket(NewTicket("ARCH-FAIL", new DateTime(2026, 9, 14, 10, 0, 0)));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = tFail.Id,
+            WeightKg = 5000,
+            SecondTime = "14-09-26 10:15:00 AM",
+            OperatorId = "mr",
+        });
 
         var renderer = new FakePdfArchiveRenderer { FailuresRemaining = 1 };
         var service = new PdfArchiveService(
@@ -182,6 +210,66 @@ public sealed class PdfArchiveTests
         Assert.NotNull(succeeded);
         Assert.Equal("succeeded", succeeded!.Status);
         Assert.Equal(2, renderer.Attempts);
+    }
+
+    [Fact]
+    public async Task Service_MidnightCrossingTruck_ArchivedOnCompletionDayNotEntryDay()
+    {
+        using var temp = new TempDatabase();
+        var db = temp.Database;
+
+        var baselineTicket = db.CreateTicket(NewTicket("BASE-1", new DateTime(2026, 9, 13, 10, 0, 0)));
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = baselineTicket.Id,
+            WeightKg = 5000,
+            SecondTime = "13-09-26 10:30:00 AM",
+            OperatorId = "mr",
+        });
+
+        var renderer = new FakePdfArchiveRenderer();
+        var baselineService = new PdfArchiveService(
+            db, renderer, temp.Config,
+            () => LocalAt(new DateTime(2026, 9, 14, 10, 0, 0)));
+        await baselineService.RunOnceAsync();
+        Assert.Single(renderer.Reports);
+
+        var midnightTruck = db.CreateTicket(NewTicket("TRUCK-MIDNIGHT", new DateTime(2026, 9, 14, 23, 30, 0)));
+
+        var day1Service = new PdfArchiveService(
+            db, renderer, temp.Config,
+            () => LocalAt(new DateTime(2026, 9, 15, 0, 5, 0)));
+        await day1Service.RunOnceAsync();
+
+        var day1Run = db.ArchiveRuns.GetStatus().RecentRuns
+            .Single(run => run.Kind == "daily" && run.PeriodEnd == "2026-09-14");
+        Assert.Equal("skipped", day1Run.Status);
+
+        db.CompleteTicket(new CompleteTicketRequest
+        {
+            TicketId = midnightTruck.Id,
+            WeightKg = 5000,
+            SecondTime = "15-09-26 12:30:00 AM",
+            OperatorId = "mr",
+        });
+
+        var day2Service = new PdfArchiveService(
+            db, renderer, temp.Config,
+            () => LocalAt(new DateTime(2026, 9, 16, 0, 5, 0)));
+        await day2Service.RunOnceAsync();
+
+        var day2Run = db.ArchiveRuns.GetStatus().RecentRuns
+            .Single(run => run.Kind == "daily" && run.PeriodEnd == "2026-09-15");
+        Assert.Equal("succeeded", day2Run.Status);
+
+        var day2Report = renderer.Reports.Single(r => r.FromDate == "2026-09-15" && r.ToDate == "2026-09-15");
+        Assert.Single(day2Report.Tickets);
+        Assert.Equal(midnightTruck.Id, day2Report.Tickets[0].Id);
+        Assert.Equal("completed", day2Report.Tickets[0].Status);
+        Assert.Equal(7000, day2Report.Tickets[0].NetWeight);
+        Assert.Equal(7000, day2Report.Summary.NetKg);
+        Assert.Equal(1, day2Report.Summary.Completed);
+        Assert.Equal(0, day2Report.Summary.Pending);
     }
 
     private static CreateTicketRequest NewTicket(string plate, DateTime at) => new()
