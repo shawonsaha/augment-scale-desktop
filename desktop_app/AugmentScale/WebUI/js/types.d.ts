@@ -151,6 +151,7 @@ export interface BootStateDto {
   history: TicketDto[];
   nextTicketNumber: number;
   sync: SyncStatusDto;
+  siteTimezone?: string;
 }
 
 export interface HistoryFilterOptionsDto {

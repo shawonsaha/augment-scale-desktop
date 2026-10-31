@@ -49,15 +49,23 @@
 5. **Sync Health Visibility:** `SyncStatusService` and `SyncStatusDto` now track `DeadLetterQueue` and failing ticket events (`attempts >= 10`), setting `IsHealthy = false` whenever degraded.
 6. **Automated Testing:** Added integration tests in `CloudControlServiceTests.cs` verifying 3-way maxima allocation (#151), audit trail row generation, and ticket non-dead-lettering with health degradation.
 
-### 5. `Site.Timezone` is stored but never read
+### 5. [RESOLVED] `Site.Timezone` is stored but never read
 
-**What this is:** `Models/SetupConfig.cs:55` and the `sites.timezone` column hold `Asia/Dhaka`, but the only other use is `Provisioner.cs:40` writing it. `TicketRepository.cs:126-129` (history), `HistoryReportService.cs:79-82` (reports), `GetEarliestReportDate` (`HistoryReportService.cs:72`), and `PdfArchiveService.cs:121-125` (archive schedule) all use the OS local time zone.
+**What this was:** `Models/SetupConfig.cs:55` and the `sites.timezone` column held `Asia/Dhaka`, but the only other use was `Provisioner.cs:40` writing it. `TicketRepository.cs:126-129` (history), `HistoryReportService.cs:79-82` (reports), `GetEarliestReportDate` (`HistoryReportService.cs:72`), and `PdfArchiveService.cs:121-125` (archive schedule) all used the OS local time zone. On a site running UTC-configured Windows, tickets weighed 00:00–06:00 local were filed under the previous day, and the 00:05 daily archive triggered at 06:05 local.
 
-**Problem:** The business day is defined by Windows, not by the site. On a Dhaka site running a UTC-configured Windows (common on VPS/English installs), tickets weighed 00:00–06:00 local are filed under the previous day in history, in reports, and in the PDF archive; the 00:05 archive cutoff fires at 06:05 local. The frontend date helpers (`WebUI/js/screens/history.js:89-231`) also use browser-local dates, so the UI agrees with the bug.
-
-**Fix:** Resolve `TimeZoneInfo` from `setup.Site.Timezone` once and use it for every day boundary (`HistoryPage`, `GenerateReport`, `GetEarliestReportDate`, `PdfArchiveService`), or pass the site-local date from the host to the UI. Keep storing UTC.
-
-**If we skip it:** The compliance archive will look correct and file tickets under the wrong day whenever the OS zone differs from the site.
+**Resolution:**
+1. **Timezone Resolution & Caching:** Added `ConfigService.SiteTimeZone` and `ResolveSiteTimeZone` supporting both IANA (`Asia/Dhaka`) and Windows (`Bangladesh Standard Time`) identifiers with automatic fallback to `TimeZoneInfo.Local`. Caches the resolved `TimeZoneInfo` and refreshes if configuration changes.
+2. **Centralized UTC Day Range Translation:** Implemented `HistoryRangeLimits.GetUtcDayRange(fromDay, toDay, timeZone)` to translate calendar date ranges into exact UTC bounds (`[fromLocalStartUtc, toLocalNextDayStartUtc)`), keeping raw database timestamps stored strictly in UTC.
+3. **Repository & Report Service Integration:**
+   - `TicketRepository.HistoryPage` and `HistoryReportService.GenerateReport` now translate queried calendar ranges via `GetUtcDayRange` using `ConfigService.SiteTimeZone`.
+   - `HistoryReportService.GetEarliestReportDate` converts UTC timestamps to site-local time before determining `DateOnly`.
+   - `SqliteHelpers.ParseTimestamp` and `FormatTimestamp` respect `SiteTimeZone` for user-facing audit dates.
+4. **Site-Aware Archive Scheduler:** `PdfArchiveService.EnsureSchedule` now projects the clock into `_config.SiteTimeZone` before checking `TimeOfDay >= DailyCutoff` (00:05), firing accurately at 00:05 site-local time regardless of OS clock configuration.
+5. **WebUI Boot State & Date Helpers:**
+   - `BootStateDto` and `BootStateService` supply `SiteTimezone` to the frontend.
+   - `WebUI/js/utils.js` exposes `getSiteTodayDateValue(timeZone)` and updates `formatFullDateTime` using `Intl.DateTimeFormat`.
+   - `history.js` and `history-report.js` derive "Today", "Yesterday", "7days", "30days", and custom ranges from the site's local business day.
+6. **Automated Testing:** Added `SiteTimezoneTests.cs` verifying IANA/Windows timezone resolution, exact UTC boundary translations across midnight, early-morning ticket querying, site-local daily archive scheduling at 00:05, and boot state transmission.
 
 ### 6. PIN lockout lives only in `localStorage`
 

@@ -25,4 +25,16 @@ internal static class HistoryRangeLimits
         if (to.DayNumber - from.DayNumber + 1 > MaxDays)
             throw new InvalidOperationException($"Choose a {label} range of one year or less.");
     }
+
+    public static (string FromUtc, string ToUtc) GetUtcDayRange(DateOnly fromDay, DateOnly toDay, TimeZoneInfo timeZone)
+    {
+        var tz = timeZone ?? TimeZoneInfo.Local;
+        var fromLocal = fromDay.ToDateTime(TimeOnly.MinValue);
+        var toLocal = toDay.ToDateTime(TimeOnly.MinValue).AddDays(1);
+        var fromUtc = TimeZoneInfo.ConvertTimeToUtc(fromLocal, tz)
+            .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        var toUtc = TimeZoneInfo.ConvertTimeToUtc(toLocal, tz)
+            .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        return (fromUtc, toUtc);
+    }
 }

@@ -8,4 +8,5 @@ public sealed record BootStateDto
     public IReadOnlyList<TicketDto> History { get; init; } = Array.Empty<TicketDto>();
     public long NextTicketNumber { get; init; }
     public SyncStatusDto Sync { get; init; } = new();
+    public string SiteTimezone { get; init; } = "Asia/Dhaka";
 }

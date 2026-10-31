@@ -12,6 +12,7 @@ import {
   summarizeTickets,
 } from './history-report-document.js?v=prod17';
 import { openVerifyReportModal } from './verify-report.js';
+import { getSiteTodayDateValue } from './utils.js';
 
 const PAGE_STYLE_ID = 'history-report-page-style';
 const RANGE_VALUES = new Set(['today', 'yesterday', '7days', '30days', 'custom']);
@@ -64,7 +65,8 @@ function rangeLabel(fromDate, toDate) {
 function selectedRange() {
   const value =
     document.querySelector('input[name="history-report-range"]:checked')?.value || 'today';
-  const today = startOfDay(new Date());
+  const todayDateStr = getSiteTodayDateValue(state.siteTimezone);
+  const today = parseDateValue(todayDateStr) || startOfDay(new Date());
   let from = today;
   let to = today;
 
@@ -104,8 +106,12 @@ function setCustomDefaults() {
   const from = document.getElementById('history-report-from');
   const to = document.getElementById('history-report-to');
   if (!from || !to) return;
-  if (!from.value) from.value = toDateValue(addDays(new Date(), -29));
-  if (!to.value) to.value = toDateValue(new Date());
+  const todayDateStr = getSiteTodayDateValue(state.siteTimezone);
+  const today = parseDateValue(todayDateStr) || startOfDay(new Date());
+  if (!from.value) from.value = toDateValue(addDays(today, -29));
+  if (!to.value) to.value = todayDateStr;
+  from.max = todayDateStr;
+  to.max = todayDateStr;
 }
 
 function updateCustomVisibility() {

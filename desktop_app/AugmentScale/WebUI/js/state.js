@@ -249,6 +249,7 @@ export async function loadProductionData({ resetHistory = true } = {}) {
   setRegisteredTrucks(boot.vehicles || []);
   setPendingTickets(boot.pending || []);
   setNextTicketId(boot.nextTicketNumber);
+  state.siteTimezone = boot.siteTimezone || 'Asia/Dhaka';
 
   if (resetHistory) {
     const all = boot.history || [];
@@ -580,6 +581,7 @@ export function consumeTicketId(id) {
 
 export const state = {
   currentScreen: 'login-screen',
+  siteTimezone: 'Asia/Dhaka',
   /** @type {ProfileDto | null} */
   selectedOperator: null,
   /** @type {ProfileDto | null} */

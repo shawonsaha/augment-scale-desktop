@@ -162,15 +162,49 @@ export function formatShortDateWithSeconds(input = new Date()) {
  * Full timestamp for ledgers and reports: "22 Oct 2026 · 03:04:05 PM".
  * Accepts Date objects, ISO strings and "DD-MM-YY hh:mm:ss AM/PM" strings.
  */
-export function formatFullDateTime(input) {
+export function formatFullDateTime(input, timeZone = 'Asia/Dhaka') {
   if (!input) return '';
   const dt = input instanceof Date ? input : parseAppTimestamp(input);
   if (!dt || Number.isNaN(dt.getTime())) return String(input);
 
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || 'Asia/Dhaka',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    }).formatToParts(dt);
+    const get = (type) => parts.find((p) => p.type === type)?.value || '';
+    return `${get('day')} ${get('month')} ${get('year')} · ${get('hour')}:${get('minute')}:${get('second')} ${get('dayPeriod').toUpperCase()}`;
+  } catch {
+    const pad = (n) => String(n).padStart(2, '0');
+    const h = dt.getHours() % 12 || 12;
+    const ampm = dt.getHours() >= 12 ? 'PM' : 'AM';
+    return `${pad(dt.getDate())} ${MONTH_NAMES[dt.getMonth()]} ${dt.getFullYear()} · ${pad(h)}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())} ${ampm}`;
+  }
+}
+
+/** Returns YYYY-MM-DD for today in the given (or default site) timezone. */
+export function getSiteTodayDateValue(timeZone = 'Asia/Dhaka') {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || 'Asia/Dhaka',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const year = parts.find((p) => p.type === 'year')?.value;
+    const month = parts.find((p) => p.type === 'month')?.value;
+    const day = parts.find((p) => p.type === 'day')?.value;
+    if (year && month && day) return `${year}-${month}-${day}`;
+  } catch {}
+  const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  const h = dt.getHours() % 12 || 12;
-  const ampm = dt.getHours() >= 12 ? 'PM' : 'AM';
-  return `${pad(dt.getDate())} ${MONTH_NAMES[dt.getMonth()]} ${dt.getFullYear()} · ${pad(h)}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())} ${ampm}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /** Ensure timestamp is formatted or returns null if pending */

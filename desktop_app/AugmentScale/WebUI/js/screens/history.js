@@ -18,7 +18,7 @@ import { openHistoryReportModal } from '../history-report.js';
 import { openVerifyReportModal } from '../verify-report.js';
 import { showScreen } from '../router.js';
 import { showToast } from '../toast.js';
-import { escapeHtml, formatFullDateTime } from '../utils.js';
+import { escapeHtml, formatFullDateTime, getSiteTodayDateValue } from '../utils.js';
 
 const FALLBACK_ROW_HEIGHT = 68;
 const MIN_PAGE_SIZE = 5;
@@ -132,7 +132,7 @@ function directionOf(ticket) {
 
 function businessTimestamp(ticket) {
   const ms = getTicketTimestamp(ticket);
-  return ms ? formatFullDateTime(new Date(ms)) : '—';
+  return ms ? formatFullDateTime(new Date(ms), state.siteTimezone) : '—';
 }
 
 /** First/second weigh values, timestamps and operators for either ticket shape. */
@@ -189,28 +189,27 @@ function statusIcon(ticket) {
 /** Inclusive local-date bounds for the active date filter. */
 function dateFilterDates() {
   const history = state.history;
-  const today = startOfDay();
-  const todayValue = toDateInputValue(today);
+  const todayValue = getSiteTodayDateValue(state.siteTimezone);
 
   switch (history.dateFilter) {
     case 'yesterday': {
-      const value = toDateInputValue(new Date(today.getTime() - DAY_MS));
+      const value = addDaysToDateValue(todayValue, -1);
       return { fromDate: value, toDate: value };
     }
     case '7days':
       return {
-        fromDate: toDateInputValue(new Date(today.getTime() - 6 * DAY_MS)),
+        fromDate: addDaysToDateValue(todayValue, -6),
         toDate: todayValue,
       };
     case '30days':
       return {
-        fromDate: toDateInputValue(new Date(today.getTime() - 29 * DAY_MS)),
+        fromDate: addDaysToDateValue(todayValue, -29),
         toDate: todayValue,
       };
     case 'custom':
       return {
         fromDate:
-          history.customDateFrom || toDateInputValue(new Date(today.getTime() - 29 * DAY_MS)),
+          history.customDateFrom || addDaysToDateValue(todayValue, -29),
         toDate: history.customDateTo || todayValue,
       };
     case 'today':
@@ -985,7 +984,7 @@ export function initHistoryScreen() {
 
   if (!tbody) return;
 
-  const todayValue = toDateInputValue(new Date());
+  const todayValue = getSiteTodayDateValue(state.siteTimezone);
   if (dateFrom) dateFrom.max = todayValue;
   if (dateTo) dateTo.max = todayValue;
 
@@ -1009,14 +1008,14 @@ export function initHistoryScreen() {
     if (dateTo) dateTo.hidden = !custom;
 
     if (custom) {
-      const today = new Date();
-      const monthAgo = new Date(today.getTime() - 29 * DAY_MS);
+      const todayValue = getSiteTodayDateValue(state.siteTimezone);
+      const monthAgo = addDaysToDateValue(todayValue, -29);
       if (dateFrom && !dateFrom.value) {
-        dateFrom.value = toDateInputValue(monthAgo);
+        dateFrom.value = monthAgo;
         state.history.customDateFrom = dateFrom.value;
       }
       if (dateTo && !dateTo.value) {
-        dateTo.value = toDateInputValue(today);
+        dateTo.value = todayValue;
         state.history.customDateTo = dateTo.value;
       }
     }

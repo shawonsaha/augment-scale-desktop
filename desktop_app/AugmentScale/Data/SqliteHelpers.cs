@@ -57,13 +57,15 @@ internal static class SqliteHelpers
         return char.ToUpperInvariant(value[0]) + value[1..].ToLowerInvariant();
     }
 
-    public static DateTimeOffset? ParseTimestamp(string? value)
+    public static DateTimeOffset? ParseTimestamp(string? value, TimeZoneInfo? timeZone = null)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
-        if (DateTimeOffset.TryParseExact(value, WebUiTimestampFormats, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces, out var webUiParsed))
+        if (DateTime.TryParseExact(value, WebUiTimestampFormats, CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces, out var localParsed))
         {
-            return webUiParsed;
+            var tz = timeZone ?? TimeZoneInfo.Local;
+            var offset = tz.GetUtcOffset(localParsed);
+            return new DateTimeOffset(localParsed, offset);
         }
         if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind, out var parsed))
@@ -73,8 +75,13 @@ internal static class SqliteHelpers
         return null;
     }
 
-    public static string FormatTimestamp(DateTimeOffset? value) =>
-        value?.ToLocalTime().ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture) ?? "";
+    public static string FormatTimestamp(DateTimeOffset? value, TimeZoneInfo? timeZone = null)
+    {
+        if (value is null) return "";
+        var tz = timeZone ?? TimeZoneInfo.Local;
+        var converted = TimeZoneInfo.ConvertTime(value.Value, tz);
+        return converted.ToString("dd-MM-yy hh:mm:ss tt", CultureInfo.InvariantCulture);
+    }
 
     public static string FormatElapsed(DateTimeOffset? createdAt)
     {

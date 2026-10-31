@@ -119,9 +119,10 @@ public sealed class PdfArchiveService : IDisposable
     private void EnsureSchedule()
     {
         var now = _clock();
-        var today = DateOnly.FromDateTime(now.LocalDateTime);
+        var siteNow = TimeZoneInfo.ConvertTime(now, _config.SiteTimeZone);
+        var today = DateOnly.FromDateTime(siteNow.DateTime);
         var yesterday = today.AddDays(-1);
-        var includeYesterday = !_startupScheduleDone || now.LocalDateTime.TimeOfDay >= DailyCutoff;
+        var includeYesterday = !_startupScheduleDone || siteNow.TimeOfDay >= DailyCutoff;
         var through = includeYesterday ? yesterday : today.AddDays(-2);
 
         var baseline = _database.ArchiveRuns.GetBaseline();

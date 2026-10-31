@@ -26,16 +26,22 @@ internal sealed class BootStateService : IBootStateService
     public BootStateDto GetBootState()
     {
         _db.EnsureInitialized();
+        var siteNow = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, _db.Config.SiteTimeZone);
+        var siteToday = DateOnly.FromDateTime(siteNow.DateTime);
+        var siteTodayStart = siteToday.ToDateTime(TimeOnly.MinValue);
+        var siteTodayStartUtc = TimeZoneInfo.ConvertTimeToUtc(siteTodayStart, _db.Config.SiteTimeZone);
+        var since = new DateTimeOffset(siteTodayStartUtc, TimeSpan.Zero);
+
         using var connection = _db.OpenConnection();
         return new BootStateDto
         {
             Operators = _operators.GetOperators(connection),
             Vehicles = _vehicles.GetActiveVehicles(connection),
             Pending = _tickets.GetPendingTickets(connection),
-            History = _tickets.GetHistorySince(connection, new DateTimeOffset(DateTime.Today),
-                BootHistoryLimit),
+            History = _tickets.GetHistorySince(connection, since, BootHistoryLimit),
             NextTicketNumber = _tickets.PeekNextTicketNumber(connection, null),
             Sync = _sync.GetSyncStatus(connection),
+            SiteTimezone = _db.Config.Setup.Site.Timezone ?? "Asia/Dhaka",
         };
     }
 }

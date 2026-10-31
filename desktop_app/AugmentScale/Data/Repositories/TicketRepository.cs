@@ -123,10 +123,7 @@ internal sealed class TicketRepository : ITicketRepository
         var toDay = HistoryRangeLimits.ParseDate(req.ToDate, "history");
         HistoryRangeLimits.EnsureValidRange(fromDay, toDay, "history");
 
-        var fromUtc = fromDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local)
-            .ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-        var toUtc = toDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).AddDays(1)
-            .ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        var (fromUtc, toUtc) = HistoryRangeLimits.GetUtcDayRange(fromDay, toDay, _db.Config.SiteTimeZone);
 
         var pageSize = Math.Clamp(req.PageSize <= 0 ? DefaultHistoryPageSize : req.PageSize,
             1, MaxHistoryPageSize);
@@ -420,7 +417,7 @@ internal sealed class TicketRepository : ITicketRepository
         if (existingOpen is not null)
             throw new InvalidOperationException($"Truck {plate} already has open ticket #{existingOpen.Value}.");
 
-        var createdAt = SqliteHelpers.ParseTimestamp(req.FirstTime) ?? DateTimeOffset.Now;
+        var createdAt = SqliteHelpers.ParseTimestamp(req.FirstTime, _db.Config.SiteTimeZone) ?? DateTimeOffset.Now;
         var ticketId = Guid.NewGuid().ToString();
         var ticketNumber = PeekNextTicketNumber(connection, txn);
         var vehicle = _vehicles.UpsertForTicket(connection, txn, plate, normalized, req, operatorName);
@@ -995,7 +992,7 @@ internal sealed class TicketRepository : ITicketRepository
         ticket.LastWeighAt = at?.ToString("dd MMM", CultureInfo.InvariantCulture);
     }
 
-    private static TicketDto MapTicket(SqliteDataReader reader)
+    private TicketDto MapTicket(SqliteDataReader reader)
     {
         var direction = SqliteHelpers.Text(reader, "direction") ?? "IN";
         var createdAt = SqliteHelpers.ParseTimestamp(SqliteHelpers.Text(reader, "created_at"));
@@ -1025,12 +1022,13 @@ internal sealed class TicketRepository : ITicketRepository
             BusinessAt = SqliteHelpers.Text(reader, "business_at"),
             FirstWeight = firstWeight,
             FirstWeightType = SqliteHelpers.TitleCase(firstType),
-            FirstWeightTime = SqliteHelpers.FormatTimestamp(createdAt),
+            FirstWeightTime = SqliteHelpers.FormatTimestamp(createdAt, _db.Config.SiteTimeZone),
             FirstOperator = SqliteHelpers.Text(reader, "first_operator_name"),
             SecondWeight = SqliteHelpers.Number(reader, "second_weight_kg"),
             SecondWeightType = SqliteHelpers.TitleCase(SqliteHelpers.Text(reader, "second_weight_type")),
             SecondWeightTime = SqliteHelpers.FormatTimestamp(
-                SqliteHelpers.ParseTimestamp(SqliteHelpers.Text(reader, "second_weight_at"))),
+                SqliteHelpers.ParseTimestamp(SqliteHelpers.Text(reader, "second_weight_at")),
+                _db.Config.SiteTimeZone),
             SecondOperator = SqliteHelpers.Text(reader, "second_operator_name"),
             GrossWeight = SqliteHelpers.Number(reader, "gross_weight_kg"),
             TareWeight = SqliteHelpers.Number(reader, "tare_weight_kg"),
@@ -1051,7 +1049,8 @@ internal sealed class TicketRepository : ITicketRepository
                     Reason = SqliteHelpers.Text(reader, "override_reason") ?? "",
                     Operator = SqliteHelpers.Text(reader, "override_operator_name") ?? "",
                     Timestamp = SqliteHelpers.FormatTimestamp(
-                        SqliteHelpers.ParseTimestamp(SqliteHelpers.Text(reader, "override_at"))),
+                        SqliteHelpers.ParseTimestamp(SqliteHelpers.Text(reader, "override_at")),
+                        _db.Config.SiteTimeZone),
                     AnomalyDetails = overrideDetails,
                 }
                 : null,

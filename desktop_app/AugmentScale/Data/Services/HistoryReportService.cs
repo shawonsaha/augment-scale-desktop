@@ -69,17 +69,15 @@ internal sealed class HistoryReportService : IReportService
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var utc))
             return null;
 
-        return DateOnly.FromDateTime(utc.ToLocalTime());
+        var siteTime = TimeZoneInfo.ConvertTimeFromUtc(utc, _db.Config.SiteTimeZone);
+        return DateOnly.FromDateTime(siteTime);
     }
 
     private HistoryReportDto? GenerateReport(DateOnly fromDate, DateOnly toDate,
         string operatorId, string operatorName, bool auditEmpty)
     {
         _db.EnsureInitialized();
-        var fromLocal = fromDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
-        var toLocal = toDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).AddDays(1);
-        var fromUtc = fromLocal.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-        var toUtc = toLocal.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        var (fromUtc, toUtc) = HistoryRangeLimits.GetUtcDayRange(fromDate, toDate, _db.Config.SiteTimeZone);
 
         using var connection = _db.OpenConnection();
         using var txn = connection.BeginTransaction();

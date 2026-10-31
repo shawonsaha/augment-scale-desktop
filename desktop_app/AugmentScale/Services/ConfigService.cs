@@ -29,6 +29,7 @@ public sealed class ConfigService
 
     private SetupConfig? _setup;
     private AppSecrets? _secrets;
+    private TimeZoneInfo? _siteTimeZone;
 
     public ConfigService(string? dataDirectory = null)
     {
@@ -68,6 +69,38 @@ public sealed class ConfigService
                 return _setup ??= LoadOrCreateSetup();
             }
         }
+    }
+
+    public TimeZoneInfo SiteTimeZone
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _siteTimeZone ??= ResolveSiteTimeZone(Setup.Site.Timezone);
+            }
+        }
+    }
+
+    public static TimeZoneInfo ResolveSiteTimeZone(string? timeZoneId)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneId))
+            return TimeZoneInfo.Local;
+
+        var trimmed = timeZoneId.Trim();
+        if (TimeZoneInfo.TryFindSystemTimeZoneById(trimmed, out var tz))
+            return tz;
+
+        if (TimeZoneInfo.TryConvertIanaIdToWindowsId(trimmed, out var winId) &&
+            TimeZoneInfo.TryFindSystemTimeZoneById(winId, out tz))
+            return tz;
+
+        if (TimeZoneInfo.TryConvertWindowsIdToIanaId(trimmed, out var ianaId) &&
+            TimeZoneInfo.TryFindSystemTimeZoneById(ianaId, out tz))
+            return tz;
+
+        AppLog.Warn($"Could not resolve timezone '{timeZoneId}', falling back to local time zone: {TimeZoneInfo.Local.Id}");
+        return TimeZoneInfo.Local;
     }
 
     public AppSecrets Secrets
@@ -292,6 +325,7 @@ public sealed class ConfigService
         if (changed)
         {
             _setup = setup;
+            _siteTimeZone = null;
             File.WriteAllText(_setupPath, JsonSerializer.Serialize(setup, _json), Encoding.UTF8);
         }
 
@@ -327,6 +361,7 @@ public sealed class ConfigService
             setup.Cloud.SupabaseUrl = string.Empty;
             setup.Cloud.SupabaseAnonKey = string.Empty;
             _setup = setup;
+            _siteTimeZone = null;
             File.WriteAllText(_setupPath, JsonSerializer.Serialize(setup, _json), Encoding.UTF8);
             changed = true;
         }
